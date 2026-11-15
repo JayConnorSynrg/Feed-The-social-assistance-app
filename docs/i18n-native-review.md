@@ -4073,6 +4073,199 @@ step in that test, and the test fails until the list below is regenerated.
 | `FILTER_MATCHES.other` | am | {n} matches | {n} ውጤቶች | 2026-11-15 | machine-drafted, needs native review |
 | `FILTER_MATCHES.other` | hmn | {n} matches | {n} qhov phim | 2026-11-15 | machine-drafted, needs native review |
 
+### `lib/i18n-onboarding.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `roleSeeker` | ht | Seeker | Mwen bezwen èd | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeekerBody` | ht | Find food, housing, healthcare, jobs, and other resources near you | Jwenn manje, lojman, swen sante, travay ak lòt resous toupre w | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcer` | ht | Sourcer | Mwen ofri èd | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcerBody` | ht | Share resources, connect people with services, or offer direct support | Pataje resous, konekte moun ak sèvis, oswa bay sipò dirèk | 2026-11-15 | machine-drafted, needs native review |
+| `roleBoth` | ht | Both | Toude | 2026-11-15 | machine-drafted, needs native review |
+| `roleBothBody` | ht | I need help in some areas and can offer help in others | Mwen bezwen èd nan kèk domèn epi mwen ka ede nan lòt | 2026-11-15 | machine-drafted, needs native review |
+| `needFood` | ht | Food Assistance | Èd pou manje | 2026-11-15 | machine-drafted, needs native review |
+| `needHousing` | ht | Housing | Lojman | 2026-11-15 | machine-drafted, needs native review |
+| `needHealthcare` | ht | Healthcare | Swen sante | 2026-11-15 | machine-drafted, needs native review |
+| `needEmployment` | ht | Employment | Travay | 2026-11-15 | machine-drafted, needs native review |
+| `needChildcare` | ht | Childcare | Gadri timoun | 2026-11-15 | machine-drafted, needs native review |
+| `needLegal` | ht | Legal Aid | Èd legal | 2026-11-15 | machine-drafted, needs native review |
+| `needFinancial` | ht | Financial Help | Èd finansye | 2026-11-15 | machine-drafted, needs native review |
+| `needEducation` | ht | Education | Edikasyon | 2026-11-15 | machine-drafted, needs native review |
+| `locationFailed` | ht | Could not get your location. Please enter it manually. | Nou pa t ka jwenn kote ou ye. Tanpri antre l poukont ou. | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | ht | Could not save your profile. Please try again. | Nou pa t ka anrejistre pwofil ou. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `step1Title` | ht | I'm here to... | Mwen la pou... | 2026-11-15 | machine-drafted, needs native review |
+| `step2Title` | ht | Where are you located? | Ki kote ou ye? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleProviding` | ht | What can you help with? | Nan ki sa ou ka ede? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleSeeking` | ht | What do you need help with? | Nan ki sa ou bezwen èd? | 2026-11-15 | machine-drafted, needs native review |
+| `step4Title` | ht | How can we reach you? | Kijan nou ka kontakte w? | 2026-11-15 | machine-drafted, needs native review |
+| `step5Title` | ht | What language do you prefer? | Ki lang ou prefere? | 2026-11-15 | machine-drafted, needs native review |
+| `step1Body` | ht | Tell us how you want to use FEED | Di nou kijan ou vle itilize FEED | 2026-11-15 | machine-drafted, needs native review |
+| `step2Body` | ht | This helps us find resources near you | Sa ede nou jwenn resous toupre w | 2026-11-15 | machine-drafted, needs native review |
+| `step3Body` | ht | Select all that apply - you can change this later | Chwazi tout sa ki aplike - ou ka chanje sa pita | 2026-11-15 | machine-drafted, needs native review |
+| `step4Body` | ht | Optional - for appointment reminders and updates | Si ou vle - pou rapèl randevou ak nouvèl | 2026-11-15 | machine-drafted, needs native review |
+| `step5Body` | ht | The AI assistant will greet you in your language | Asistan IA a ap salye w nan lang ou | 2026-11-15 | machine-drafted, needs native review |
+| `skipForNow` | ht | Skip for now | Sote pou kounye a | 2026-11-15 | machine-drafted, needs native review |
+| `locating` | ht | Getting location... | N ap chèche kote ou ye... | 2026-11-15 | machine-drafted, needs native review |
+| `useLocation` | ht | Use my current location | Sèvi ak kote mwen ye kounye a | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetected` | ht | Location detected | Nou jwenn kote ou ye | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetectedAt` | ht | Location detected: {place} | Nou jwenn kote ou ye: {place} | 2026-11-15 | machine-drafted, needs native review |
+| `orEnterManually` | ht | Or enter manually | Oswa antre l poukont ou | 2026-11-15 | machine-drafted, needs native review |
+| `zipCode` | ht | ZIP Code | Kòd postal | 2026-11-15 | machine-drafted, needs native review |
+| `city` | ht | City | Vil | 2026-11-15 | machine-drafted, needs native review |
+| `phCity` | ht | Los Angeles | Los Angeles | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | ht | State | Eta | 2026-11-15 | machine-drafted, needs native review |
+| `phone` | ht | Phone Number | Nimewo telefòn | 2026-11-15 | machine-drafted, needs native review |
+| `optional` | ht | (optional) | (si ou vle) | 2026-11-15 | machine-drafted, needs native review |
+| `phoneHint` | ht | For appointment reminders and important updates only. Never shared. | Sèlman pou rapèl randevou ak nouvèl enpòtan. Nou pa janm pataje l. | 2026-11-15 | machine-drafted, needs native review |
+| `languageLabel` | ht | Preferred language | Lang ou prefere | 2026-11-15 | machine-drafted, needs native review |
+| `changeLater` | ht | You can change this at any time in Settings. | Ou ka chanje sa nenpòt ki lè nan Paramèt. | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | ht | Saving... | N ap anrejistre... | 2026-11-15 | machine-drafted, needs native review |
+| `getStarted` | ht | Get Started | Kòmanse | 2026-11-15 | machine-drafted, needs native review |
+| `chooseRole` | ht | Choose one option to continue. | Chwazi yon opsyon pou kontinye. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseLocation` | ht | Enter a 5-digit ZIP code or use your current location to continue. | Antre yon kòd postal 5 chif oswa sèvi ak kote ou ye kounye a pou kontinye. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseNeed` | ht | Choose at least one option to continue. | Chwazi omwen yon opsyon pou kontinye. | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeeker` | so | Seeker | Caawimo ayaan raadinayaa | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeekerBody` | so | Find food, housing, healthcare, jobs, and other resources near you | Hel cunto, guri, daryeel caafimaad, shaqo iyo kheyraad kale oo kuu dhow | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcer` | so | Sourcer | Caawimo ayaan bixiyaa | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcerBody` | so | Share resources, connect people with services, or offer direct support | La wadaag kheyraad, dadka ku xir adeegyo, ama bixi taageero toos ah | 2026-11-15 | machine-drafted, needs native review |
+| `roleBoth` | so | Both | Labadaba | 2026-11-15 | machine-drafted, needs native review |
+| `roleBothBody` | so | I need help in some areas and can offer help in others | Qaybaha qaar caawimo ayaan u baahanahay, qaar kalena waan caawin karaa | 2026-11-15 | machine-drafted, needs native review |
+| `needFood` | so | Food Assistance | Gargaar cunto | 2026-11-15 | machine-drafted, needs native review |
+| `needHousing` | so | Housing | Guri | 2026-11-15 | machine-drafted, needs native review |
+| `needHealthcare` | so | Healthcare | Daryeel caafimaad | 2026-11-15 | machine-drafted, needs native review |
+| `needEmployment` | so | Employment | Shaqo | 2026-11-15 | machine-drafted, needs native review |
+| `needChildcare` | so | Childcare | Xannaanada carruurta | 2026-11-15 | machine-drafted, needs native review |
+| `needLegal` | so | Legal Aid | Gargaar sharci | 2026-11-15 | machine-drafted, needs native review |
+| `needFinancial` | so | Financial Help | Gargaar dhaqaale | 2026-11-15 | machine-drafted, needs native review |
+| `needEducation` | so | Education | Waxbarasho | 2026-11-15 | machine-drafted, needs native review |
+| `locationFailed` | so | Could not get your location. Please enter it manually. | Lama helin goobtaada. Fadlan gacanta ku geli. | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | so | Could not save your profile. Please try again. | Lama kaydin karin astaantaada. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `step1Title` | so | I'm here to... | Waxaan halkan u joogaa... | 2026-11-15 | machine-drafted, needs native review |
+| `step2Title` | so | Where are you located? | Xaggee ayaad joogtaa? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleProviding` | so | What can you help with? | Maxaad ka caawin kartaa? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleSeeking` | so | What do you need help with? | Maxaad caawimo uga baahan tahay? | 2026-11-15 | machine-drafted, needs native review |
+| `step4Title` | so | How can we reach you? | Sidee kuu soo xiriiri karnaa? | 2026-11-15 | machine-drafted, needs native review |
+| `step5Title` | so | What language do you prefer? | Luuqaddee ayaad door bidaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `step1Body` | so | Tell us how you want to use FEED | Noo sheeg sida aad u rabto inaad u isticmaasho FEED | 2026-11-15 | machine-drafted, needs native review |
+| `step2Body` | so | This helps us find resources near you | Tani waxay naga caawinaysaa inaan helno kheyraad kuu dhow | 2026-11-15 | machine-drafted, needs native review |
+| `step3Body` | so | Select all that apply - you can change this later | Dooro dhammaan kuwa khuseeya - hadhow waad beddeli kartaa | 2026-11-15 | machine-drafted, needs native review |
+| `step4Body` | so | Optional - for appointment reminders and updates | Ikhtiyaari - xasuusinta ballamaha iyo warar | 2026-11-15 | machine-drafted, needs native review |
+| `step5Body` | so | The AI assistant will greet you in your language | Kaaliyaha AI wuxuu kugu salaami doonaa luuqaddaada | 2026-11-15 | machine-drafted, needs native review |
+| `skipForNow` | so | Skip for now | Hadda ka bood | 2026-11-15 | machine-drafted, needs native review |
+| `locating` | so | Getting location... | Goobta waa la raadinayaa... | 2026-11-15 | machine-drafted, needs native review |
+| `useLocation` | so | Use my current location | Isticmaal goobtayda hadda | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetected` | so | Location detected | Goobta waa la helay | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetectedAt` | so | Location detected: {place} | Goobta waa la helay: {place} | 2026-11-15 | machine-drafted, needs native review |
+| `orEnterManually` | so | Or enter manually | Ama gacanta ku geli | 2026-11-15 | machine-drafted, needs native review |
+| `zipCode` | so | ZIP Code | Koodhka boostada | 2026-11-15 | machine-drafted, needs native review |
+| `city` | so | City | Magaalada | 2026-11-15 | machine-drafted, needs native review |
+| `phCity` | so | Los Angeles | Los Angeles | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | so | State | Gobolka | 2026-11-15 | machine-drafted, needs native review |
+| `phone` | so | Phone Number | Lambarka taleefanka | 2026-11-15 | machine-drafted, needs native review |
+| `optional` | so | (optional) | (ikhtiyaari) | 2026-11-15 | machine-drafted, needs native review |
+| `phoneHint` | so | For appointment reminders and important updates only. Never shared. | Kaliya xasuusinta ballamaha iyo warar muhiim ah. Weligii lama wadaago. | 2026-11-15 | machine-drafted, needs native review |
+| `languageLabel` | so | Preferred language | Luuqadda aad door bidayso | 2026-11-15 | machine-drafted, needs native review |
+| `changeLater` | so | You can change this at any time in Settings. | Waqti kasta waad ka beddeli kartaa Dejinta. | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | so | Saving... | Waa la kaydinayaa... | 2026-11-15 | machine-drafted, needs native review |
+| `getStarted` | so | Get Started | Bilow | 2026-11-15 | machine-drafted, needs native review |
+| `chooseRole` | so | Choose one option to continue. | Dooro hal doorasho si aad u sii waddo. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseLocation` | so | Enter a 5-digit ZIP code or use your current location to continue. | Geli koodh boosto oo 5 god ah ama isticmaal goobtaada hadda si aad u sii waddo. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseNeed` | so | Choose at least one option to continue. | Dooro ugu yaraan hal doorasho si aad u sii waddo. | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeeker` | am | Seeker | እርዳታ እፈልጋለሁ | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeekerBody` | am | Find food, housing, healthcare, jobs, and other resources near you | በአቅራቢያዎ ምግብ፣ መኖሪያ፣ የጤና አገልግሎት፣ ሥራ እና ሌሎች ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcer` | am | Sourcer | እርዳታ እሰጣለሁ | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcerBody` | am | Share resources, connect people with services, or offer direct support | ሀብቶችን ያጋሩ፣ ሰዎችን ከአገልግሎቶች ጋር ያገናኙ ወይም ቀጥተኛ ድጋፍ ይስጡ | 2026-11-15 | machine-drafted, needs native review |
+| `roleBoth` | am | Both | ሁለቱንም | 2026-11-15 | machine-drafted, needs native review |
+| `roleBothBody` | am | I need help in some areas and can offer help in others | በአንዳንድ ጉዳዮች እርዳታ እፈልጋለሁ በሌሎች ደግሞ መርዳት እችላለሁ | 2026-11-15 | machine-drafted, needs native review |
+| `needFood` | am | Food Assistance | የምግብ እርዳታ | 2026-11-15 | machine-drafted, needs native review |
+| `needHousing` | am | Housing | መኖሪያ ቤት | 2026-11-15 | machine-drafted, needs native review |
+| `needHealthcare` | am | Healthcare | የጤና አገልግሎት | 2026-11-15 | machine-drafted, needs native review |
+| `needEmployment` | am | Employment | ሥራ | 2026-11-15 | machine-drafted, needs native review |
+| `needChildcare` | am | Childcare | የሕፃናት እንክብካቤ | 2026-11-15 | machine-drafted, needs native review |
+| `needLegal` | am | Legal Aid | የሕግ እርዳታ | 2026-11-15 | machine-drafted, needs native review |
+| `needFinancial` | am | Financial Help | የገንዘብ እርዳታ | 2026-11-15 | machine-drafted, needs native review |
+| `needEducation` | am | Education | ትምህርት | 2026-11-15 | machine-drafted, needs native review |
+| `locationFailed` | am | Could not get your location. Please enter it manually. | አካባቢዎን ማግኘት አልተቻለም። እባክዎ በእጅ ያስገቡት። | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | am | Could not save your profile. Please try again. | መገለጫዎን ማስቀመጥ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `step1Title` | am | I'm here to... | እዚህ የመጣሁት ለ... | 2026-11-15 | machine-drafted, needs native review |
+| `step2Title` | am | Where are you located? | የት ነው የሚገኙት? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleProviding` | am | What can you help with? | በምን መርዳት ይችላሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleSeeking` | am | What do you need help with? | በምን እርዳታ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `step4Title` | am | How can we reach you? | እንዴት ልናገኝዎ እንችላለን? | 2026-11-15 | machine-drafted, needs native review |
+| `step5Title` | am | What language do you prefer? | የትኛውን ቋንቋ ይመርጣሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `step1Body` | am | Tell us how you want to use FEED | FEEDን እንዴት መጠቀም እንደሚፈልጉ ይንገሩን | 2026-11-15 | machine-drafted, needs native review |
+| `step2Body` | am | This helps us find resources near you | ይህ በአቅራቢያዎ ያሉ ሀብቶችን እንድናገኝ ይረዳናል | 2026-11-15 | machine-drafted, needs native review |
+| `step3Body` | am | Select all that apply - you can change this later | የሚመለከቱትን ሁሉ ይምረጡ - በኋላ መቀየር ይችላሉ | 2026-11-15 | machine-drafted, needs native review |
+| `step4Body` | am | Optional - for appointment reminders and updates | አማራጭ - ለቀጠሮ ማስታወሻዎችና ዝማኔዎች | 2026-11-15 | machine-drafted, needs native review |
+| `step5Body` | am | The AI assistant will greet you in your language | የAI ረዳቱ በቋንቋዎ ሰላምታ ያቀርብልዎታል | 2026-11-15 | machine-drafted, needs native review |
+| `skipForNow` | am | Skip for now | ለአሁን ዝለል | 2026-11-15 | machine-drafted, needs native review |
+| `locating` | am | Getting location... | አካባቢ በመፈለግ ላይ... | 2026-11-15 | machine-drafted, needs native review |
+| `useLocation` | am | Use my current location | የአሁኑን አካባቢዬን ተጠቀም | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetected` | am | Location detected | አካባቢ ተገኝቷል | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetectedAt` | am | Location detected: {place} | አካባቢ ተገኝቷል፦ {place} | 2026-11-15 | machine-drafted, needs native review |
+| `orEnterManually` | am | Or enter manually | ወይም በእጅ ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `zipCode` | am | ZIP Code | የፖስታ ኮድ (ZIP) | 2026-11-15 | machine-drafted, needs native review |
+| `city` | am | City | ከተማ | 2026-11-15 | machine-drafted, needs native review |
+| `phCity` | am | Los Angeles | ሎስ አንጀለስ | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | am | State | ግዛት | 2026-11-15 | machine-drafted, needs native review |
+| `phone` | am | Phone Number | ስልክ ቁጥር | 2026-11-15 | machine-drafted, needs native review |
+| `optional` | am | (optional) | (አማራጭ) | 2026-11-15 | machine-drafted, needs native review |
+| `phoneHint` | am | For appointment reminders and important updates only. Never shared. | ለቀጠሮ ማስታወሻዎችና አስፈላጊ ዝማኔዎች ብቻ። ፈጽሞ አይጋራም። | 2026-11-15 | machine-drafted, needs native review |
+| `languageLabel` | am | Preferred language | የሚመርጡት ቋንቋ | 2026-11-15 | machine-drafted, needs native review |
+| `changeLater` | am | You can change this at any time in Settings. | ይህን በማንኛውም ጊዜ በቅንብሮች ውስጥ መቀየር ይችላሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | am | Saving... | በማስቀመጥ ላይ... | 2026-11-15 | machine-drafted, needs native review |
+| `getStarted` | am | Get Started | ጀምር | 2026-11-15 | machine-drafted, needs native review |
+| `chooseRole` | am | Choose one option to continue. | ለመቀጠል አንድ አማራጭ ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `chooseLocation` | am | Enter a 5-digit ZIP code or use your current location to continue. | ለመቀጠል ባለ 5 አሃዝ የፖስታ ኮድ ያስገቡ ወይም የአሁኑን አካባቢዎን ይጠቀሙ። | 2026-11-15 | machine-drafted, needs native review |
+| `chooseNeed` | am | Choose at least one option to continue. | ለመቀጠል ቢያንስ አንድ አማራጭ ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeeker` | hmn | Seeker | Kuv nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `roleSeekerBody` | hmn | Find food, housing, healthcare, jobs, and other resources near you | Nrhiav zaub mov, vaj tse, kev kho mob, haujlwm, thiab lwm yam kev pab ze koj | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcer` | hmn | Sourcer | Kuv muab kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `roleSourcerBody` | hmn | Share resources, connect people with services, or offer direct support | Qhia kev pab, txuas neeg rau cov kev pabcuam, lossis muab kev txhawb nqa ncaj qha | 2026-11-15 | machine-drafted, needs native review |
+| `roleBoth` | hmn | Both | Ob yam | 2026-11-15 | machine-drafted, needs native review |
+| `roleBothBody` | hmn | I need help in some areas and can offer help in others | Kuv xav tau kev pab rau qee yam thiab kuv pab tau rau lwm yam | 2026-11-15 | machine-drafted, needs native review |
+| `needFood` | hmn | Food Assistance | Kev pab zaub mov | 2026-11-15 | machine-drafted, needs native review |
+| `needHousing` | hmn | Housing | Vaj tse | 2026-11-15 | machine-drafted, needs native review |
+| `needHealthcare` | hmn | Healthcare | Kev kho mob | 2026-11-15 | machine-drafted, needs native review |
+| `needEmployment` | hmn | Employment | Haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `needChildcare` | hmn | Childcare | Kev zov menyuam | 2026-11-15 | machine-drafted, needs native review |
+| `needLegal` | hmn | Legal Aid | Kev pab txog kev cai lij choj | 2026-11-15 | machine-drafted, needs native review |
+| `needFinancial` | hmn | Financial Help | Kev pab nyiaj txiag | 2026-11-15 | machine-drafted, needs native review |
+| `needEducation` | hmn | Education | Kev kawm ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `locationFailed` | hmn | Could not get your location. Please enter it manually. | Nrhiav tsis tau koj qhov chaw. Thov ntaus nws rau koj tus kheej. | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | hmn | Could not save your profile. Please try again. | Khaws tsis tau koj daim ntawv qhia txog koj. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `step1Title` | hmn | I'm here to... | Kuv tuaj ntawm no los... | 2026-11-15 | machine-drafted, needs native review |
+| `step2Title` | hmn | Where are you located? | Koj nyob qhov twg? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleProviding` | hmn | What can you help with? | Koj pab tau dab tsi? | 2026-11-15 | machine-drafted, needs native review |
+| `step3TitleSeeking` | hmn | What do you need help with? | Koj xav tau kev pab dab tsi? | 2026-11-15 | machine-drafted, needs native review |
+| `step4Title` | hmn | How can we reach you? | Peb yuav tiv tauj koj li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `step5Title` | hmn | What language do you prefer? | Koj nyiam hom lus twg? | 2026-11-15 | machine-drafted, needs native review |
+| `step1Body` | hmn | Tell us how you want to use FEED | Qhia peb seb koj xav siv FEED li cas | 2026-11-15 | machine-drafted, needs native review |
+| `step2Body` | hmn | This helps us find resources near you | Qhov no pab peb nrhiav kev pab ze koj | 2026-11-15 | machine-drafted, needs native review |
+| `step3Body` | hmn | Select all that apply - you can change this later | Xaiv txhua yam uas haum - koj hloov tau tom qab | 2026-11-15 | machine-drafted, needs native review |
+| `step4Body` | hmn | Optional - for appointment reminders and updates | Tsis yuam - rau kev ceeb toom txog kev teem caij thiab xov xwm | 2026-11-15 | machine-drafted, needs native review |
+| `step5Body` | hmn | The AI assistant will greet you in your language | Tus pab AI yuav tos txais koj ua koj hom lus | 2026-11-15 | machine-drafted, needs native review |
+| `skipForNow` | hmn | Skip for now | Hla tam sim no | 2026-11-15 | machine-drafted, needs native review |
+| `locating` | hmn | Getting location... | Tab tom nrhiav qhov chaw... | 2026-11-15 | machine-drafted, needs native review |
+| `useLocation` | hmn | Use my current location | Siv kuv qhov chaw tam sim no | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetected` | hmn | Location detected | Nrhiav tau qhov chaw lawm | 2026-11-15 | machine-drafted, needs native review |
+| `locationDetectedAt` | hmn | Location detected: {place} | Nrhiav tau qhov chaw lawm: {place} | 2026-11-15 | machine-drafted, needs native review |
+| `orEnterManually` | hmn | Or enter manually | Lossis ntaus rau koj tus kheej | 2026-11-15 | machine-drafted, needs native review |
+| `zipCode` | hmn | ZIP Code | Tus lej ZIP | 2026-11-15 | machine-drafted, needs native review |
+| `city` | hmn | City | Lub nroog | 2026-11-15 | machine-drafted, needs native review |
+| `phCity` | hmn | Los Angeles | Los Angeles | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | hmn | State | Lub xeev | 2026-11-15 | machine-drafted, needs native review |
+| `phone` | hmn | Phone Number | Tus xov tooj | 2026-11-15 | machine-drafted, needs native review |
+| `optional` | hmn | (optional) | (tsis yuam) | 2026-11-15 | machine-drafted, needs native review |
+| `phoneHint` | hmn | For appointment reminders and important updates only. Never shared. | Tsuas yog rau kev ceeb toom txog kev teem caij thiab xov xwm tseem ceeb xwb. Yeej tsis qhia rau leej twg. | 2026-11-15 | machine-drafted, needs native review |
+| `languageLabel` | hmn | Preferred language | Hom lus koj nyiam | 2026-11-15 | machine-drafted, needs native review |
+| `changeLater` | hmn | You can change this at any time in Settings. | Koj hloov tau qhov no txhua lub sijhawm hauv Chaw Teeb Tsa. | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | hmn | Saving... | Tab tom khaws... | 2026-11-15 | machine-drafted, needs native review |
+| `getStarted` | hmn | Get Started | Pib | 2026-11-15 | machine-drafted, needs native review |
+| `chooseRole` | hmn | Choose one option to continue. | Xaiv ib qho kom mus ntxiv. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseLocation` | hmn | Enter a 5-digit ZIP code or use your current location to continue. | Ntaus tus lej ZIP 5 tus lossis siv koj qhov chaw tam sim no kom mus ntxiv. | 2026-11-15 | machine-drafted, needs native review |
+| `chooseNeed` | hmn | Choose at least one option to continue. | Xaiv tsawg kawg ib qho kom mus ntxiv. | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-org-admin.ts`
 
 | Key | Locale | English | Text | Added | Status |
@@ -4705,6 +4898,233 @@ step in that test, and the test fails until the list below is regenerated.
 | `savedDevice` | hmn | Language saved on this device | Tau khaws hom lus rau ntawm lub cuab yeej no | 2026-11-14 | machine-drafted, needs native review |
 | `deviceOnly` | hmn | Saved to this device only. Create an account to sync your preference. | Tsuas khaws rau ntawm lub cuab yeej no xwb. Tsim ib tug account kom sib txuas koj qhov kev nyiam. | 2026-11-14 | machine-drafted, needs native review |
 | `failed` | hmn | Your language could not be saved. FEED is still in {language}. Please try again. | Khaws tsis tau koj hom lus. FEED tseem yog {language}. Thov sim dua. | 2026-11-14 | machine-drafted, needs native review |
+
+### `lib/i18n-share.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `siteTitle` | ht | FEED - Mutual Aid Resource Sharing | FEED - Pataj resous pou èd mityèl | 2026-11-15 | machine-drafted, needs native review |
+| `siteDescription` | ht | Community-powered mutual aid. Share resources, find help, support your neighbors. | Èd mityèl kominote a fè. Pataje resous, jwenn èd, sipòte vwazen w. | 2026-11-15 | machine-drafted, needs native review |
+| `postNotFound` | ht | Post Not Found - FEED | Nou pa jwenn piblikasyon an - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotFound` | ht | Business Not Found - FEED | Nou pa jwenn biznis la - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationNotFound` | ht | Organization Not Found - FEED | Nou pa jwenn òganizasyon an - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceNotFound` | ht | Resource Not Found - FEED | Nou pa jwenn resous la - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `communityMember` | ht | Community Member | Manm kominote a | 2026-11-15 | machine-drafted, needs native review |
+| `aCommunityMember` | ht | a community member | yon manm kominote a | 2026-11-15 | machine-drafted, needs native review |
+| `onFeed` | ht | {name} on FEED | {name} sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `petitionOnFeed` | ht | {title} — FEED Community Petition | {title} — Petisyon kominotè FEED | 2026-11-15 | machine-drafted, needs native review |
+| `tagline` | ht | Mutual Aid Resource Sharing | Pataj resous pou èd mityèl | 2026-11-15 | machine-drafted, needs native review |
+| `poweredBy` | ht | Powered by FEED · Mutual Aid Resource Sharing | Se FEED ki fè l · Pataj resous pou èd mityèl | 2026-11-15 | machine-drafted, needs native review |
+| `postImage` | ht | Post image | Imaj piblikasyon an | 2026-11-15 | machine-drafted, needs native review |
+| `supportName` | ht | Support {name} | Sipòte {name} | 2026-11-15 | machine-drafted, needs native review |
+| `supportBody` | ht | Send direct support through their preferred payment method. | Voye sipò dirèk ak metòd peman li prefere a. | 2026-11-15 | machine-drafted, needs native review |
+| `joinFeed` | ht | Join FEED | Vin nan FEED | 2026-11-15 | machine-drafted, needs native review |
+| `joinBody` | ht | Find resources, share help, build community. | Jwenn resous, pataje èd, bati kominote. | 2026-11-15 | machine-drafted, needs native review |
+| `communityPetition` | ht | Community Petition | Petisyon kominotè | 2026-11-15 | machine-drafted, needs native review |
+| `signOnFeed` | ht | Sign on FEED | Siyen sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `optInOnFeed` | ht | Opt In on FEED | Enskri sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessDescFallback` | ht | {name} - Local business on FEED | {name} - Biznis lokal sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationDescFallback` | ht | {name} - Local organization on FEED | {name} - Òganizasyon lokal sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDescFallback` | ht | {name} - Community resource on FEED | {name} - Resous kominotè sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `localBusiness` | ht | Local business | Biznis lokal | 2026-11-15 | machine-drafted, needs native review |
+| `localOrganization` | ht | Local organization | Òganizasyon lokal | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | ht | Organization | Òganizasyon | 2026-11-15 | machine-drafted, needs native review |
+| `communityResource` | ht | Community resource | Resous kominotè | 2026-11-15 | machine-drafted, needs native review |
+| `coverAlt` | ht | {name} cover | Imaj kouvèti {name} | 2026-11-15 | machine-drafted, needs native review |
+| `logoAlt` | ht | {name} logo | Logo {name} | 2026-11-15 | machine-drafted, needs native review |
+| `mapAlt` | ht | Map showing {name} | Kat ki montre {name} | 2026-11-15 | machine-drafted, needs native review |
+| `photoAlt` | ht | {name} photo | Foto {name} | 2026-11-15 | machine-drafted, needs native review |
+| `visitWebsite` | ht | Visit website | Vizite sit entènèt la | 2026-11-15 | machine-drafted, needs native review |
+| `call` | ht | Call | Rele | 2026-11-15 | machine-drafted, needs native review |
+| `email` | ht | Email | Imèl | 2026-11-15 | machine-drafted, needs native review |
+| `businessFeatures` | ht | Business features | Karakteristik biznis la | 2026-11-15 | machine-drafted, needs native review |
+| `resourcesOffered` | ht | Resources offered | Resous yo ofri | 2026-11-15 | machine-drafted, needs native review |
+| `exploreMore` | ht | Explore More on FEED | Dekouvri plis sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `exploreBody` | ht | Find community resources and support near you. | Jwenn resous kominotè ak sipò toupre w. | 2026-11-15 | machine-drafted, needs native review |
+| `hoursInFeed` | ht | Hours available - see full details in FEED | Gen orè - gade tout detay yo nan FEED | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | ht | Eligibility | Kondisyon pou jwenn li | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetails` | ht | View Full Details in FEED | Gade tout detay yo nan FEED | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetailsBody` | ht | Find more resources and community support. | Jwenn plis resous ak sipò kominotè. | 2026-11-15 | machine-drafted, needs native review |
+| `supportTitle` | ht | Support {name} - FEED | Sipòte {name} - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `supportOnFeed` | ht | Support {name} on FEED | Sipòte {name} sou FEED | 2026-11-15 | machine-drafted, needs native review |
+| `donateDescription` | ht | Send direct support to {name} through FEED's mutual aid platform. | Voye sipò dirèk bay {name} atravè platfòm èd mityèl FEED la. | 2026-11-15 | machine-drafted, needs native review |
+| `mutualAid` | ht | Mutual Aid | Èd mityèl | 2026-11-15 | machine-drafted, needs native review |
+| `sendVia` | ht | Send via {service} | Voye ak {service} | 2026-11-15 | machine-drafted, needs native review |
+| `openFeed` | ht | Open FEED | Ouvri FEED | 2026-11-15 | machine-drafted, needs native review |
+| `donateCtaBody` | ht | Join the community. Share resources. Build mutual aid. | Vin nan kominote a. Pataje resous. Bati èd mityèl. | 2026-11-15 | machine-drafted, needs native review |
+| `open24h` | ht | Open 24 hours | Ouvri 24 è sou 24 | 2026-11-15 | machine-drafted, needs native review |
+| `nextDay` | ht | {hours} (next day) | {hours} (jou apre a) | 2026-11-15 | machine-drafted, needs native review |
+| `openNowCloses` | ht | Open now · closes {time} | Ouvri kounye a · fèmen a {time} | 2026-11-15 | machine-drafted, needs native review |
+| `closedOpens` | ht | Closed · opens {day} {time} | Fèmen · ouvri {day} a {time} | 2026-11-15 | machine-drafted, needs native review |
+| `siteTitle` | so | FEED - Mutual Aid Resource Sharing | FEED - Wadaagista kheyraadka is-caawinta | 2026-11-15 | machine-drafted, needs native review |
+| `siteDescription` | so | Community-powered mutual aid. Share resources, find help, support your neighbors. | Is-caawin ay bulshadu wado. La wadaag kheyraad, hel caawimo, taageer deriskaaga. | 2026-11-15 | machine-drafted, needs native review |
+| `postNotFound` | so | Post Not Found - FEED | Qoraalka lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotFound` | so | Business Not Found - FEED | Ganacsiga lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationNotFound` | so | Organization Not Found - FEED | Ururka lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceNotFound` | so | Resource Not Found - FEED | Kheyraadka lama helin - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `communityMember` | so | Community Member | Xubin bulshada ka mid ah | 2026-11-15 | machine-drafted, needs native review |
+| `aCommunityMember` | so | a community member | xubin bulshada ka mid ah | 2026-11-15 | machine-drafted, needs native review |
+| `onFeed` | so | {name} on FEED | {name} ee FEED | 2026-11-15 | machine-drafted, needs native review |
+| `petitionOnFeed` | so | {title} — FEED Community Petition | {title} — Codsiga bulshada ee FEED | 2026-11-15 | machine-drafted, needs native review |
+| `tagline` | so | Mutual Aid Resource Sharing | Wadaagista kheyraadka is-caawinta | 2026-11-15 | machine-drafted, needs native review |
+| `poweredBy` | so | Powered by FEED · Mutual Aid Resource Sharing | Waxaa sameeyay FEED · Wadaagista kheyraadka is-caawinta | 2026-11-15 | machine-drafted, needs native review |
+| `postImage` | so | Post image | Sawirka qoraalka | 2026-11-15 | machine-drafted, needs native review |
+| `supportName` | so | Support {name} | Taageer {name} | 2026-11-15 | machine-drafted, needs native review |
+| `supportBody` | so | Send direct support through their preferred payment method. | U dir taageero toos ah habka lacag bixinta ee uu door bido. | 2026-11-15 | machine-drafted, needs native review |
+| `joinFeed` | so | Join FEED | Ku biir FEED | 2026-11-15 | machine-drafted, needs native review |
+| `joinBody` | so | Find resources, share help, build community. | Hel kheyraad, wadaag caawimo, dhis bulsho. | 2026-11-15 | machine-drafted, needs native review |
+| `communityPetition` | so | Community Petition | Codsiga bulshada | 2026-11-15 | machine-drafted, needs native review |
+| `signOnFeed` | so | Sign on FEED | Ku saxiix FEED | 2026-11-15 | machine-drafted, needs native review |
+| `optInOnFeed` | so | Opt In on FEED | Iska diiwaangeli FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessDescFallback` | so | {name} - Local business on FEED | {name} - Ganacsi maxalli ah oo ku jira FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationDescFallback` | so | {name} - Local organization on FEED | {name} - Urur maxalli ah oo ku jira FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDescFallback` | so | {name} - Community resource on FEED | {name} - Kheyraad bulsheed oo ku jira FEED | 2026-11-15 | machine-drafted, needs native review |
+| `localBusiness` | so | Local business | Ganacsi maxalli ah | 2026-11-15 | machine-drafted, needs native review |
+| `localOrganization` | so | Local organization | Urur maxalli ah | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | so | Organization | Urur | 2026-11-15 | machine-drafted, needs native review |
+| `communityResource` | so | Community resource | Kheyraad bulsheed | 2026-11-15 | machine-drafted, needs native review |
+| `coverAlt` | so | {name} cover | Sawirka daboolka {name} | 2026-11-15 | machine-drafted, needs native review |
+| `logoAlt` | so | {name} logo | Astaanta {name} | 2026-11-15 | machine-drafted, needs native review |
+| `mapAlt` | so | Map showing {name} | Khariidad muujinaysa {name} | 2026-11-15 | machine-drafted, needs native review |
+| `photoAlt` | so | {name} photo | Sawirka {name} | 2026-11-15 | machine-drafted, needs native review |
+| `visitWebsite` | so | Visit website | Booqo bogga internetka | 2026-11-15 | machine-drafted, needs native review |
+| `call` | so | Call | Wac | 2026-11-15 | machine-drafted, needs native review |
+| `email` | so | Email | Iimayl | 2026-11-15 | machine-drafted, needs native review |
+| `businessFeatures` | so | Business features | Astaamaha ganacsiga | 2026-11-15 | machine-drafted, needs native review |
+| `resourcesOffered` | so | Resources offered | Kheyraadka la bixiyo | 2026-11-15 | machine-drafted, needs native review |
+| `exploreMore` | so | Explore More on FEED | Wax badan ka baadh FEED | 2026-11-15 | machine-drafted, needs native review |
+| `exploreBody` | so | Find community resources and support near you. | Hel kheyraad bulsheed iyo taageero kuu dhow. | 2026-11-15 | machine-drafted, needs native review |
+| `hoursInFeed` | so | Hours available - see full details in FEED | Saacadaha waa la heli karaa - faahfaahin buuxda ka eeg FEED | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | so | Eligibility | Shuruudaha | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetails` | so | View Full Details in FEED | Ka eeg faahfaahin buuxda FEED | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetailsBody` | so | Find more resources and community support. | Hel kheyraad dheeraad ah iyo taageero bulsheed. | 2026-11-15 | machine-drafted, needs native review |
+| `supportTitle` | so | Support {name} - FEED | Taageer {name} - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `supportOnFeed` | so | Support {name} on FEED | Taageer {name} ee FEED | 2026-11-15 | machine-drafted, needs native review |
+| `donateDescription` | so | Send direct support to {name} through FEED's mutual aid platform. | U dir taageero toos ah {name} adigoo adeegsanaya madalka is-caawinta ee FEED. | 2026-11-15 | machine-drafted, needs native review |
+| `mutualAid` | so | Mutual Aid | Is-caawin | 2026-11-15 | machine-drafted, needs native review |
+| `sendVia` | so | Send via {service} | Ku dir {service} | 2026-11-15 | machine-drafted, needs native review |
+| `openFeed` | so | Open FEED | Fur FEED | 2026-11-15 | machine-drafted, needs native review |
+| `donateCtaBody` | so | Join the community. Share resources. Build mutual aid. | Ku biir bulshada. Wadaag kheyraad. Dhis is-caawin. | 2026-11-15 | machine-drafted, needs native review |
+| `open24h` | so | Open 24 hours | Furan 24 saac | 2026-11-15 | machine-drafted, needs native review |
+| `nextDay` | so | {hours} (next day) | {hours} (maalinta xigta) | 2026-11-15 | machine-drafted, needs native review |
+| `openNowCloses` | so | Open now · closes {time} | Hadda furan · wuxuu xirmayaa {time} | 2026-11-15 | machine-drafted, needs native review |
+| `closedOpens` | so | Closed · opens {day} {time} | Xiran · wuxuu furmayaa {day} {time} | 2026-11-15 | machine-drafted, needs native review |
+| `siteTitle` | am | FEED - Mutual Aid Resource Sharing | FEED - የመረዳዳት ሀብቶችን መጋራት | 2026-11-15 | machine-drafted, needs native review |
+| `siteDescription` | am | Community-powered mutual aid. Share resources, find help, support your neighbors. | በማህበረሰብ የሚመራ መረዳዳት። ሀብቶችን ያጋሩ፣ እርዳታ ያግኙ፣ ጎረቤቶችዎን ይደግፉ። | 2026-11-15 | machine-drafted, needs native review |
+| `postNotFound` | am | Post Not Found - FEED | ልጥፉ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotFound` | am | Business Not Found - FEED | ንግዱ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationNotFound` | am | Organization Not Found - FEED | ድርጅቱ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceNotFound` | am | Resource Not Found - FEED | ሀብቱ አልተገኘም - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `communityMember` | am | Community Member | የማህበረሰብ አባል | 2026-11-15 | machine-drafted, needs native review |
+| `aCommunityMember` | am | a community member | አንድ የማህበረሰብ አባል | 2026-11-15 | machine-drafted, needs native review |
+| `onFeed` | am | {name} on FEED | {name} በFEED ላይ | 2026-11-15 | machine-drafted, needs native review |
+| `petitionOnFeed` | am | {title} — FEED Community Petition | {title} — የFEED ማህበረሰብ አቤቱታ | 2026-11-15 | machine-drafted, needs native review |
+| `tagline` | am | Mutual Aid Resource Sharing | የመረዳዳት ሀብቶችን መጋራት | 2026-11-15 | machine-drafted, needs native review |
+| `poweredBy` | am | Powered by FEED · Mutual Aid Resource Sharing | በFEED የቀረበ · የመረዳዳት ሀብቶችን መጋራት | 2026-11-15 | machine-drafted, needs native review |
+| `postImage` | am | Post image | የልጥፉ ምስል | 2026-11-15 | machine-drafted, needs native review |
+| `supportName` | am | Support {name} | {name}ን ይደግፉ | 2026-11-15 | machine-drafted, needs native review |
+| `supportBody` | am | Send direct support through their preferred payment method. | በሚመርጡት የክፍያ ዘዴ ቀጥተኛ ድጋፍ ይላኩ። | 2026-11-15 | machine-drafted, needs native review |
+| `joinFeed` | am | Join FEED | FEEDን ይቀላቀሉ | 2026-11-15 | machine-drafted, needs native review |
+| `joinBody` | am | Find resources, share help, build community. | ሀብቶችን ያግኙ፣ እርዳታ ያጋሩ፣ ማህበረሰብ ይገንቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `communityPetition` | am | Community Petition | የማህበረሰብ አቤቱታ | 2026-11-15 | machine-drafted, needs native review |
+| `signOnFeed` | am | Sign on FEED | በFEED ላይ ይፈርሙ | 2026-11-15 | machine-drafted, needs native review |
+| `optInOnFeed` | am | Opt In on FEED | በFEED ላይ ይመዝገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `businessDescFallback` | am | {name} - Local business on FEED | {name} - በFEED ላይ ያለ የአካባቢ ንግድ | 2026-11-15 | machine-drafted, needs native review |
+| `organizationDescFallback` | am | {name} - Local organization on FEED | {name} - በFEED ላይ ያለ የአካባቢ ድርጅት | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDescFallback` | am | {name} - Community resource on FEED | {name} - በFEED ላይ ያለ የማህበረሰብ ሀብት | 2026-11-15 | machine-drafted, needs native review |
+| `localBusiness` | am | Local business | የአካባቢ ንግድ | 2026-11-15 | machine-drafted, needs native review |
+| `localOrganization` | am | Local organization | የአካባቢ ድርጅት | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | am | Organization | ድርጅት | 2026-11-15 | machine-drafted, needs native review |
+| `communityResource` | am | Community resource | የማህበረሰብ ሀብት | 2026-11-15 | machine-drafted, needs native review |
+| `coverAlt` | am | {name} cover | የ{name} የሽፋን ምስል | 2026-11-15 | machine-drafted, needs native review |
+| `logoAlt` | am | {name} logo | የ{name} አርማ | 2026-11-15 | machine-drafted, needs native review |
+| `mapAlt` | am | Map showing {name} | {name}ን የሚያሳይ ካርታ | 2026-11-15 | machine-drafted, needs native review |
+| `photoAlt` | am | {name} photo | የ{name} ፎቶ | 2026-11-15 | machine-drafted, needs native review |
+| `visitWebsite` | am | Visit website | ድረ-ገጹን ይጎብኙ | 2026-11-15 | machine-drafted, needs native review |
+| `call` | am | Call | ይደውሉ | 2026-11-15 | machine-drafted, needs native review |
+| `email` | am | Email | ኢሜይል ይላኩ | 2026-11-15 | machine-drafted, needs native review |
+| `businessFeatures` | am | Business features | የንግዱ ባህሪያት | 2026-11-15 | machine-drafted, needs native review |
+| `resourcesOffered` | am | Resources offered | የሚቀርቡ ሀብቶች | 2026-11-15 | machine-drafted, needs native review |
+| `exploreMore` | am | Explore More on FEED | በFEED ላይ ተጨማሪ ያስሱ | 2026-11-15 | machine-drafted, needs native review |
+| `exploreBody` | am | Find community resources and support near you. | በአቅራቢያዎ የማህበረሰብ ሀብቶችንና ድጋፍ ያግኙ። | 2026-11-15 | machine-drafted, needs native review |
+| `hoursInFeed` | am | Hours available - see full details in FEED | የሥራ ሰዓት አለ - ሙሉ ዝርዝሩን በFEED ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | am | Eligibility | የብቁነት መስፈርቶች | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetails` | am | View Full Details in FEED | ሙሉ ዝርዝሩን በFEED ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetailsBody` | am | Find more resources and community support. | ተጨማሪ ሀብቶችንና የማህበረሰብ ድጋፍ ያግኙ። | 2026-11-15 | machine-drafted, needs native review |
+| `supportTitle` | am | Support {name} - FEED | {name}ን ይደግፉ - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `supportOnFeed` | am | Support {name} on FEED | {name}ን በFEED ላይ ይደግፉ | 2026-11-15 | machine-drafted, needs native review |
+| `donateDescription` | am | Send direct support to {name} through FEED's mutual aid platform. | በFEED የመረዳዳት መድረክ በኩል ለ{name} ቀጥተኛ ድጋፍ ይላኩ። | 2026-11-15 | machine-drafted, needs native review |
+| `mutualAid` | am | Mutual Aid | መረዳዳት | 2026-11-15 | machine-drafted, needs native review |
+| `sendVia` | am | Send via {service} | በ{service} ይላኩ | 2026-11-15 | machine-drafted, needs native review |
+| `openFeed` | am | Open FEED | FEEDን ክፈት | 2026-11-15 | machine-drafted, needs native review |
+| `donateCtaBody` | am | Join the community. Share resources. Build mutual aid. | ማህበረሰቡን ይቀላቀሉ። ሀብቶችን ያጋሩ። መረዳዳትን ይገንቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `open24h` | am | Open 24 hours | ለ24 ሰዓት ክፍት | 2026-11-15 | machine-drafted, needs native review |
+| `nextDay` | am | {hours} (next day) | {hours} (በሚቀጥለው ቀን) | 2026-11-15 | machine-drafted, needs native review |
+| `openNowCloses` | am | Open now · closes {time} | አሁን ክፍት · በ{time} ይዘጋል | 2026-11-15 | machine-drafted, needs native review |
+| `closedOpens` | am | Closed · opens {day} {time} | ዝግ · {day} በ{time} ይከፈታል | 2026-11-15 | machine-drafted, needs native review |
+| `siteTitle` | hmn | FEED - Mutual Aid Resource Sharing | FEED - Kev sib qhia kev pab sib pab | 2026-11-15 | machine-drafted, needs native review |
+| `siteDescription` | hmn | Community-powered mutual aid. Share resources, find help, support your neighbors. | Kev sib pab uas zej zog coj. Qhia kev pab, nrhiav kev pab, txhawb koj cov neeg zej zog. | 2026-11-15 | machine-drafted, needs native review |
+| `postNotFound` | hmn | Post Not Found - FEED | Nrhiav tsis tau tsab ntawv - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotFound` | hmn | Business Not Found - FEED | Nrhiav tsis tau lub lag luam - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationNotFound` | hmn | Organization Not Found - FEED | Nrhiav tsis tau lub koom haum - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceNotFound` | hmn | Resource Not Found - FEED | Nrhiav tsis tau qhov kev pab - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `communityMember` | hmn | Community Member | Tus tswv cuab hauv zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `aCommunityMember` | hmn | a community member | ib tus tswv cuab hauv zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `onFeed` | hmn | {name} on FEED | {name} hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `petitionOnFeed` | hmn | {title} — FEED Community Petition | {title} — Daim ntawv thov ntawm zej zog FEED | 2026-11-15 | machine-drafted, needs native review |
+| `tagline` | hmn | Mutual Aid Resource Sharing | Kev sib qhia kev pab sib pab | 2026-11-15 | machine-drafted, needs native review |
+| `poweredBy` | hmn | Powered by FEED · Mutual Aid Resource Sharing | FEED ua · Kev sib qhia kev pab sib pab | 2026-11-15 | machine-drafted, needs native review |
+| `postImage` | hmn | Post image | Duab ntawm tsab ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `supportName` | hmn | Support {name} | Txhawb {name} | 2026-11-15 | machine-drafted, needs native review |
+| `supportBody` | hmn | Send direct support through their preferred payment method. | Xa kev txhawb ncaj qha los ntawm txoj kev them nyiaj uas lawv nyiam. | 2026-11-15 | machine-drafted, needs native review |
+| `joinFeed` | hmn | Join FEED | Koom FEED | 2026-11-15 | machine-drafted, needs native review |
+| `joinBody` | hmn | Find resources, share help, build community. | Nrhiav kev pab, qhia kev pab, tsim zej zog. | 2026-11-15 | machine-drafted, needs native review |
+| `communityPetition` | hmn | Community Petition | Daim ntawv thov ntawm zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `signOnFeed` | hmn | Sign on FEED | Kos npe hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `optInOnFeed` | hmn | Opt In on FEED | Sau npe hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `businessDescFallback` | hmn | {name} - Local business on FEED | {name} - Lub lag luam hauv zos hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `organizationDescFallback` | hmn | {name} - Local organization on FEED | {name} - Lub koom haum hauv zos hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDescFallback` | hmn | {name} - Community resource on FEED | {name} - Kev pab rau zej zog hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `localBusiness` | hmn | Local business | Lub lag luam hauv zos | 2026-11-15 | machine-drafted, needs native review |
+| `localOrganization` | hmn | Local organization | Lub koom haum hauv zos | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | hmn | Organization | Lub koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `communityResource` | hmn | Community resource | Kev pab rau zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `coverAlt` | hmn | {name} cover | Duab npog ntawm {name} | 2026-11-15 | machine-drafted, needs native review |
+| `logoAlt` | hmn | {name} logo | Lub cim ntawm {name} | 2026-11-15 | machine-drafted, needs native review |
+| `mapAlt` | hmn | Map showing {name} | Daim ntawv qhia chaw uas qhia {name} | 2026-11-15 | machine-drafted, needs native review |
+| `photoAlt` | hmn | {name} photo | Duab ntawm {name} | 2026-11-15 | machine-drafted, needs native review |
+| `visitWebsite` | hmn | Visit website | Mus saib lub vev xaib | 2026-11-15 | machine-drafted, needs native review |
+| `call` | hmn | Call | Hu | 2026-11-15 | machine-drafted, needs native review |
+| `email` | hmn | Email | Xa email | 2026-11-15 | machine-drafted, needs native review |
+| `businessFeatures` | hmn | Business features | Cov yam ntxwv ntawm lub lag luam | 2026-11-15 | machine-drafted, needs native review |
+| `resourcesOffered` | hmn | Resources offered | Cov kev pab uas muaj | 2026-11-15 | machine-drafted, needs native review |
+| `exploreMore` | hmn | Explore More on FEED | Saib ntxiv hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `exploreBody` | hmn | Find community resources and support near you. | Nrhiav kev pab thiab kev txhawb hauv zej zog ze koj. | 2026-11-15 | machine-drafted, needs native review |
+| `hoursInFeed` | hmn | Hours available - see full details in FEED | Muaj sijhawm qhib - saib tag nrho cov ntsiab lus hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | hmn | Eligibility | Cov cai tsim nyog | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetails` | hmn | View Full Details in FEED | Saib tag nrho cov ntsiab lus hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `viewDetailsBody` | hmn | Find more resources and community support. | Nrhiav kev pab ntxiv thiab kev txhawb hauv zej zog. | 2026-11-15 | machine-drafted, needs native review |
+| `supportTitle` | hmn | Support {name} - FEED | Txhawb {name} - FEED | 2026-11-15 | machine-drafted, needs native review |
+| `supportOnFeed` | hmn | Support {name} on FEED | Txhawb {name} hauv FEED | 2026-11-15 | machine-drafted, needs native review |
+| `donateDescription` | hmn | Send direct support to {name} through FEED's mutual aid platform. | Xa kev txhawb ncaj qha rau {name} los ntawm FEED lub platform sib pab. | 2026-11-15 | machine-drafted, needs native review |
+| `mutualAid` | hmn | Mutual Aid | Kev sib pab | 2026-11-15 | machine-drafted, needs native review |
+| `sendVia` | hmn | Send via {service} | Xa los ntawm {service} | 2026-11-15 | machine-drafted, needs native review |
+| `openFeed` | hmn | Open FEED | Qhib FEED | 2026-11-15 | machine-drafted, needs native review |
+| `donateCtaBody` | hmn | Join the community. Share resources. Build mutual aid. | Koom zej zog. Qhia kev pab. Tsim kev sib pab. | 2026-11-15 | machine-drafted, needs native review |
+| `open24h` | hmn | Open 24 hours | Qhib 24 teev | 2026-11-15 | machine-drafted, needs native review |
+| `nextDay` | hmn | {hours} (next day) | {hours} (hnub tom qab) | 2026-11-15 | machine-drafted, needs native review |
+| `openNowCloses` | hmn | Open now · closes {time} | Qhib tam sim no · kaw thaum {time} | 2026-11-15 | machine-drafted, needs native review |
+| `closedOpens` | hmn | Closed · opens {day} {time} | Kaw lawm · qhib {day} thaum {time} | 2026-11-15 | machine-drafted, needs native review |
+| `LIKES_COUNT.other` | ht | {count} likes | {count} renmen | 2026-11-15 | machine-drafted, needs native review |
+| `LIKES_COUNT.other` | so | {count} likes | {count} jeclaysi | 2026-11-15 | machine-drafted, needs native review |
+| `LIKES_COUNT.one` | am | {count} like | {count} መውደድ | 2026-11-15 | machine-drafted, needs native review |
+| `LIKES_COUNT.other` | am | {count} likes | {count} መውደዶች | 2026-11-15 | machine-drafted, needs native review |
+| `LIKES_COUNT.other` | hmn | {count} likes | {count} tus nyiam | 2026-11-15 | machine-drafted, needs native review |
+| `COMMENTS_COUNT.other` | ht | {count} comments | {count} kòmantè | 2026-11-15 | machine-drafted, needs native review |
+| `COMMENTS_COUNT.other` | so | {count} comments | {count} faallo | 2026-11-15 | machine-drafted, needs native review |
+| `COMMENTS_COUNT.one` | am | {count} comment | {count} አስተያየት | 2026-11-15 | machine-drafted, needs native review |
+| `COMMENTS_COUNT.other` | am | {count} comments | {count} አስተያየቶች | 2026-11-15 | machine-drafted, needs native review |
+| `COMMENTS_COUNT.other` | hmn | {count} comments | {count} lus tawm tswv yim | 2026-11-15 | machine-drafted, needs native review |
 
 ### `lib/i18n-us-states.ts`
 

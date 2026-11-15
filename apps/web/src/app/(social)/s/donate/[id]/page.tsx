@@ -2,6 +2,10 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
+import { dir } from '@/lib/i18n'
+import { shareT } from '@/lib/i18n-share'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { requestPageLocale } from '@/lib/request-locale-server'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -17,20 +21,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('id', id)
     .single()
 
-  const name = profile?.first_name || 'a community member'
+  // FEED's own words in the visitor's language (the root layout's rule); the member's name as written.
+  const locale = await requestPageLocale()
+  const name = profile?.first_name || shareT(locale, 'aCommunityMember')
+  const description = formatMessage(shareT(locale, 'donateDescription'), { name })
+  const shareTitle = formatMessage(shareT(locale, 'supportOnFeed'), { name })
 
   return {
-    title: `Support ${name} - FEED`,
-    description: `Send direct support to ${name} through FEED's mutual aid platform.`,
+    title: formatMessage(shareT(locale, 'supportTitle'), { name }),
+    description,
     openGraph: {
-      title: `Support ${name} on FEED`,
-      description: `Send direct support to ${name} through FEED's mutual aid platform.`,
+      title: shareTitle,
+      description,
       siteName: 'FEED',
     },
     twitter: {
       card: 'summary',
-      title: `Support ${name} on FEED`,
-      description: `Send direct support to ${name} through FEED's mutual aid platform.`,
+      title: shareTitle,
+      description,
     },
   }
 }
@@ -61,11 +69,15 @@ export default async function DonatePage({ params }: Props) {
   const hasPayment = rawHandles.venmo_username || rawHandles.paypal_email
   if (!hasPayment) notFound()
 
-  const displayName = profile.first_name || 'Community Member'
+  const locale = await requestPageLocale()
+  const t = (key: Parameters<typeof shareT>[1]) => shareT(locale, key)
+  const displayName = profile.first_name || t('communityMember')
+  const [supportBefore, supportAfter] = splitMessage(t('supportName'), 'name')
+  const [viaBefore, viaAfter] = splitMessage(t('sendVia'), 'service')
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" lang={locale} dir={dir(locale)}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-lg bg-lime-600 flex items-center justify-center text-white font-bold text-lg">
@@ -73,7 +85,7 @@ export default async function DonatePage({ params }: Props) {
         </div>
         <div>
           <h1 className="text-lg font-bold text-stone-800">FEED</h1>
-          <p className="text-xs text-stone-500">Mutual Aid</p>
+          <p className="text-xs text-stone-600">{t('mutualAid')}</p>
         </div>
       </div>
 
@@ -93,32 +105,30 @@ export default async function DonatePage({ params }: Props) {
           </div>
         )}
         <div>
-          <h2 className="text-xl font-bold text-stone-800">{displayName}</h2>
+          <h2 className="text-xl font-bold text-stone-800 break-words" lang="" dir="auto">{displayName}</h2>
           {profile.username && (
-            <p className="text-stone-500">@{profile.username}</p>
+            <p className="text-stone-600" dir="ltr">@{profile.username}</p>
           )}
         </div>
         {profile.bio && (
-          <p className="text-stone-600 text-sm max-w-md mx-auto">{profile.bio}</p>
+          <p className="text-stone-700 text-sm max-w-md mx-auto break-words" lang="" dir="auto">{profile.bio}</p>
         )}
       </div>
 
       {/* Payment buttons */}
       <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 space-y-4">
         <h3 className="text-lg font-semibold text-stone-800 text-center">
-          Support {displayName}
+          {supportBefore}<span lang="" dir="auto">{displayName}</span>{supportAfter}
         </h3>
-        <p className="text-sm text-stone-500 text-center">
-          Send direct support through their preferred payment method.
-        </p>
+        <p className="text-sm text-stone-600 text-center">{t('supportBody')}</p>
         <div className="space-y-3">
           {rawHandles.venmo_username && (
             <a
               href={`venmo://paycharge?txn=pay&recipients=${encodeURIComponent(rawHandles.venmo_username)}`}
               className="flex items-center justify-center gap-3 w-full rounded-xl bg-[#008CFF] px-6 py-4 text-white text-lg font-semibold hover:bg-[#0070cc] transition-colors"
             >
-              Send via Venmo
-              <span className="text-sm font-normal opacity-80">
+              {viaBefore}Venmo{viaAfter}
+              <span className="text-sm font-normal" dir="ltr">
                 @{rawHandles.venmo_username}
               </span>
             </a>
@@ -130,7 +140,7 @@ export default async function DonatePage({ params }: Props) {
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-3 w-full rounded-xl bg-[#0070BA] px-6 py-4 text-white text-lg font-semibold hover:bg-[#005ea6] transition-colors"
             >
-              Send via PayPal
+              {viaBefore}PayPal{viaAfter}
             </a>
           )}
         </div>
@@ -142,11 +152,9 @@ export default async function DonatePage({ params }: Props) {
           href="/"
           className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
         >
-          Download FEED
+          {t('openFeed')}
         </a>
-        <p className="text-sm text-stone-500">
-          Join the community. Share resources. Build mutual aid.
-        </p>
+        <p className="text-sm text-stone-600">{t('donateCtaBody')}</p>
       </div>
     </div>
   )

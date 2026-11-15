@@ -4,7 +4,8 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // Display-only open/closed pill for the W3 public business profile. All the midnight-crossing math
-// lives in the pure computeOpenNow/formatOpenNow helpers (business.ts, unit-tested); this component
+// lives in the pure computeOpenNow helper (business.ts, unit-tested) and the line it shows in the
+// viewer's language comes from openNowText (lib/i18n-share.ts); this component
 // only supplies "now" as a minute-of-week computed in the VIEWER's local zone and re-renders the
 // label. There is no stored tz column, so this is best-effort for a local audience (accepted design
 // residual).
@@ -18,7 +19,9 @@
 
 import { useMemo, useSyncExternalStore } from 'react'
 import { Clock } from 'lucide-react'
-import { computeOpenNow, formatOpenNow, type BusinessHours } from '@/lib/business'
+import { computeOpenNow, type BusinessHours } from '@/lib/business'
+import { openNowText } from '@/lib/i18n-share'
+import type { Locale } from '@/lib/i18n'
 
 interface Snapshot {
   label: string | null
@@ -29,7 +32,7 @@ interface Snapshot {
 // returns a fresh object that would loop useSyncExternalStore.
 const EMPTY: Snapshot = { label: null, isOpen: false }
 
-function createOpenNowStore(hours: BusinessHours[]) {
+function createOpenNowStore(hours: BusinessHours[], locale: Locale) {
   let snapshot: Snapshot = EMPTY
 
   const compute = (): Snapshot => {
@@ -38,7 +41,7 @@ function createOpenNowStore(hours: BusinessHours[]) {
     // Minute-of-week in the viewer's local zone: getDay() 0=Sunday matches day_of_week.
     const minuteOfWeek = now.getDay() * 1440 + now.getHours() * 60 + now.getMinutes()
     const state = computeOpenNow(hours, minuteOfWeek)
-    return { label: formatOpenNow(state), isOpen: !!state && state.open }
+    return { label: openNowText(state, locale), isOpen: !!state && state.open }
   }
 
   return {
@@ -60,8 +63,8 @@ function createOpenNowStore(hours: BusinessHours[]) {
   }
 }
 
-export function OpenNowPill({ hours }: { hours: BusinessHours[] }) {
-  const store = useMemo(() => createOpenNowStore(hours), [hours])
+export function OpenNowPill({ hours, locale }: { hours: BusinessHours[]; locale: Locale }) {
+  const store = useMemo(() => createOpenNowStore(hours, locale), [hours, locale])
   const { label, isOpen } = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
@@ -73,10 +76,10 @@ export function OpenNowPill({ hours }: { hours: BusinessHours[] }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${
-        isOpen ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-600'
+        isOpen ? 'bg-lime-100 text-lime-800' : 'bg-stone-100 text-stone-700'
       }`}
     >
-      <Clock className="h-3.5 w-3.5" />
+      <Clock aria-hidden="true" className="h-3.5 w-3.5" />
       {label}
     </span>
   )

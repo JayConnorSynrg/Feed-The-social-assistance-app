@@ -17,6 +17,13 @@ import { createClient } from '@/lib/supabase/server'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { ogLocaleForLang } from '@/lib/og-locale'
 import { ogCardAlt, postCardKind } from '@/lib/og-card-kinds'
+import { dir } from '@/lib/i18n'
+import { shareT } from '@/lib/i18n-share'
+import { signatureCountMessage } from '@/lib/i18n-feed-petitions'
+import { optInsT, spotsLeftText } from '@/lib/i18n-feed-optins'
+import { formatCount, formatPercent } from '@/lib/i18n-intl'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { requestPageLocale } from '@/lib/request-locale-server'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -55,25 +62,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params
   const appUrl = await getAppUrlFromHeaders()
   const post = await readEmbedPost(id)
+  // FEED's own words in the visitor's language (the root layout's rule); member text as written.
+  const locale = await requestPageLocale()
 
   if (!post) {
-    return { title: 'Post Not Found - FEED' }
+    return { title: shareT(locale, 'postNotFound') }
   }
 
   const postType = (post.post_type as string | null) ?? 'feed'
   const petitionId = (post as { petition_id?: string | null }).petition_id ?? null
   const user = post.user as { first_name: string | null; username: string | null } | null
-  const authorName = user?.first_name || 'Community Member'
+  const authorName = user?.first_name || shareT(locale, 'communityMember')
 
   // For petitions, prefer the petition title as the og title if available
-  let title = `${authorName} on FEED`
+  let title = formatMessage(shareT(locale, 'onFeed'), { name: authorName })
   let rawDescription = post.content
 
   if (postType === 'petition' && petitionId) {
     const petition = await readApprovedPetition(petitionId)
 
     if (petition?.title) {
-      title = `${petition.title} — FEED Community Petition`
+      title = formatMessage(shareT(locale, 'petitionOnFeed'), { title: petition.title })
     }
     if (petition?.summary) {
       rawDescription = petition.summary
@@ -134,6 +143,9 @@ export default async function EmbedWidgetPage({ params }: Props) {
 
   if (!post) notFound()
 
+  const locale = await requestPageLocale()
+  const t = (key: Parameters<typeof shareT>[1]) => shareT(locale, key)
+
   // Language of member text. The page itself is lang="en", and text with no lang attribute inherits
   // that, so every piece of member text says what it is:
   //   - the post's own text carries posts.lang — the author's app language when they posted, the best
@@ -157,15 +169,22 @@ export default async function EmbedWidgetPage({ params }: Props) {
     const targetSignatures = petition?.target_signatures ?? 0
     const hasTarget = targetSignatures > 0
     const pct = hasTarget ? Math.min(100, Math.round((signatureCount / targetSignatures) * 100)) : 0
+    // The count keeps its own bold element; the sentence around it is the petitions sub-tab's own.
+    const [beforeCount, afterCount] = splitMessage(
+      formatMessage(signatureCountMessage(signatureCount, targetSignatures, locale), { target: formatCount(targetSignatures, locale) }),
+      'count',
+    )
 
     return (
       <div
         data-testid="embed-widget"
         className="p-3 rounded-xl border border-lime-200 bg-lime-50 font-sans text-sm"
+        lang={locale}
+        dir={dir(locale)}
       >
         {/* Label */}
-        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1">
-          Community Petition
+        <p className="text-xs font-semibold text-lime-800 uppercase tracking-wide mb-1">
+          {t('communityPetition')}
         </p>
 
         {/* Title */}
@@ -186,9 +205,10 @@ export default async function EmbedWidgetPage({ params }: Props) {
 
         {/* Signature count */}
         <p className="text-xs text-stone-600 mb-1">
-          <span className="font-semibold text-stone-800">{signatureCount.toLocaleString()}</span>
-          {hasTarget && <> of {targetSignatures.toLocaleString()} signatures &mdash; {pct}%</>}
-          {!hasTarget && <> verified signatures</>}
+          {beforeCount}
+          <span className="font-semibold text-stone-800">{formatCount(signatureCount, locale)}</span>
+          {afterCount}
+          {hasTarget && <> &mdash; {formatPercent(pct, locale)}</>}
         </p>
 
         {/* Progress bar */}
@@ -206,12 +226,10 @@ export default async function EmbedWidgetPage({ params }: Props) {
           rel="noopener"
           className="inline-block rounded-lg bg-lime-600 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-700 transition-colors"
         >
-          Sign on FEED
+          {t('signOnFeed')}
         </a>
 
-        <p className="mt-2 text-[10px] text-stone-400">
-          Powered by FEED · Mutual Aid Resource Sharing
-        </p>
+        <p className="mt-2 text-[10px] text-stone-600">{t('poweredBy')}</p>
       </div>
     )
   }
@@ -230,10 +248,12 @@ export default async function EmbedWidgetPage({ params }: Props) {
     <div
       data-testid="embed-widget"
       className="p-3 rounded-xl border border-stone-200 bg-white font-sans text-sm"
+      lang={locale}
+      dir={dir(locale)}
     >
       {/* Resource label */}
       {resource?.name && (
-        <p className="text-xs font-semibold text-lime-700 uppercase tracking-wide mb-1" lang="" dir="auto">
+        <p className="text-xs font-semibold text-lime-800 uppercase tracking-wide mb-1" lang="" dir="auto">
           {resource.name}
         </p>
       )}
@@ -247,11 +267,9 @@ export default async function EmbedWidgetPage({ params }: Props) {
       {!isUnlimited && (
         <p
           data-testid="embed-slot-count"
-          className={`text-xs mb-2 font-medium ${isFull ? 'text-red-600' : 'text-stone-500'}`}
+          className={`text-xs mb-2 font-medium ${isFull ? 'text-red-700' : 'text-stone-600'}`}
         >
-          {isFull
-            ? 'Full'
-            : `${post.slots_remaining} of ${post.max_seekers} spot${post.max_seekers === 1 ? '' : 's'} left`}
+          {isFull ? optInsT(locale, 'full') : spotsLeftText(post.slots_remaining ?? 0, post.max_seekers ?? 0, locale)}
         </p>
       )}
 
@@ -259,9 +277,9 @@ export default async function EmbedWidgetPage({ params }: Props) {
       {isFull ? (
         <span
           data-testid="embed-full"
-          className="inline-block rounded-lg bg-stone-100 px-4 py-2 text-xs font-semibold text-stone-400 cursor-not-allowed"
+          className="inline-block rounded-lg bg-stone-200 px-4 py-2 text-xs font-semibold text-stone-700 cursor-not-allowed"
         >
-          Full
+          {optInsT(locale, 'full')}
         </span>
       ) : (
         <a
@@ -271,14 +289,12 @@ export default async function EmbedWidgetPage({ params }: Props) {
           rel="noopener"
           className="inline-block rounded-lg bg-lime-600 px-4 py-2 text-xs font-semibold text-white hover:bg-lime-700 transition-colors"
         >
-          Opt In on FEED
+          {t('optInOnFeed')}
         </a>
       )}
 
       {/* Branding */}
-      <p className="mt-2 text-[10px] text-stone-400">
-        Powered by FEED · Mutual Aid Resource Sharing
-      </p>
+      <p className="mt-2 text-[10px] text-stone-600">{t('poweredBy')}</p>
     </div>
   )
 }

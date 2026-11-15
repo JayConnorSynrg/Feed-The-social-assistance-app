@@ -16,14 +16,20 @@ import {
 import { fetchBusinessHours, fetchBusinessPhotos } from '@/lib/business-data'
 import {
   parseGeographyPoint,
-  formatHoursInterval,
   schemaOrgTime,
-  DAY_NAMES_SHORT,
   type BusinessHours,
   type BusinessPhoto,
 } from '@/lib/business'
-import { ORG_TYPE_LABELS, isNonBusinessOrgType } from '@/lib/org-vocab'
+import { isNonBusinessOrgType } from '@/lib/org-vocab'
+import { orgTypeKey } from '@/components/org-form/org-labels'
+import { orgFormT } from '@/lib/i18n-org-forms'
+import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { OpenNowPill } from '@/components/business/open-now-pill'
+import { dir, type Locale } from '@/lib/i18n'
+import { hoursIntervalText, shareT, weekdayShortText } from '@/lib/i18n-share'
+import { businessesT } from '@/lib/i18n-feed-businesses'
+import { formatMessage } from '@/lib/format-message'
+import { requestPageLocale } from '@/lib/request-locale-server'
 import { ORG_MARKER_HEX } from '@/lib/map-marker-colors'
 
 interface Props {
@@ -39,15 +45,10 @@ function staticMapUrl(location: string | { coordinates?: [number, number] } | nu
   return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/${marker}/${pt.lng},${pt.lat},14/600x300@2x?access_token=${token}`
 }
 
-/** The stored org_type → its human label (org-vocab), or null when unknown/absent. */
-function orgTypeLabel(value: string | null): string | null {
+/** The stored org_type in the viewer's language, or null when unknown/absent. */
+function orgTypeLabel(value: string | null, locale: Locale): string | null {
   if (!value || !isNonBusinessOrgType(value)) return null
-  return ORG_TYPE_LABELS[value]
-}
-
-/** A linked resource's category string → a human label ("mental_health" → "Mental Health"). */
-function resourceCategoryLabel(value: string): string {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  return orgFormT(locale, orgTypeKey(value))
 }
 
 // schema.org day URLs indexed by day_of_week (0 = Sunday … 6 = Saturday).
@@ -137,15 +138,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const appUrl = await getAppUrlFromHeaders()
 
   const org = await fetchOrganizationById(supabase, id)
+  // FEED's own words in the visitor's language (the root layout's rule); member text as written.
+  const locale = await requestPageLocale()
   if (!org) {
-    return { title: 'Organization Not Found - FEED' }
+    return { title: shareT(locale, 'organizationNotFound') }
   }
 
   const description = org.description
     ? org.description.length > 160
       ? org.description.slice(0, 157) + '...'
       : org.description
-    : `${org.name} - Local organization on FEED`
+    : formatMessage(shareT(locale, 'organizationDescFallback'), { name: org.name })
 
   return {
     title: `${org.name} - FEED`,
@@ -183,6 +186,10 @@ export default async function SharedOrganizationPage({ params }: Props) {
   const org = await fetchOrganizationById(supabase, id)
   if (!org) notFound()
 
+  const locale = await requestPageLocale()
+  const t = (key: Parameters<typeof shareT>[1]) => shareT(locale, key)
+  const named = (key: Parameters<typeof shareT>[1]) => formatMessage(t(key), { name: org.name })
+
   // Parallelize the child reads — no N+1 waterfall (they are independent of one another). Hours and
   // photos live in the shared business_* child tables (keyed by org_id; their public_select policies
   // admit active non-business orgs); resources come via org_resources → resources.
@@ -200,7 +207,7 @@ export default async function SharedOrganizationPage({ params }: Props) {
   // Same helper as the intake-time write, so the CTA href is always absolute + external.
   const websiteHref = normalizeUrl(org.website)
 
-  const typeLabel = orgTypeLabel(org.org_type)
+  const typeLabel = orgTypeLabel(org.org_type, locale)
   const coverUrl = photos.find((p) => p.kind === 'cover')?.url ?? null
   const logoUrl = photos.find((p) => p.kind === 'logo')?.url ?? null
   const galleryPhotos = photos.filter((p) => p.kind === 'gallery')
@@ -208,7 +215,7 @@ export default async function SharedOrganizationPage({ params }: Props) {
   const jsonLd = buildJsonLd({ org, hours, photos, pageUrl, websiteHref })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" lang={locale} dir={dir(locale)}>
       {/* JSON-LD — server-rendered structured data for search engines. serializeJsonLd keeps
           member-written text (name, description, contact) from closing the script element. */}
       <script
@@ -223,10 +230,10 @@ export default async function SharedOrganizationPage({ params }: Props) {
         </div>
         <div>
           <h1 className="text-lg font-bold text-stone-800">FEED</h1>
-          <p className="text-xs text-stone-500">Local Organization</p>
+          <p className="text-xs text-stone-600">{t('localOrganization')}</p>
         </div>
         {/* Admins only, rendered in the browser after hydration — never part of this server HTML. */}
-        <div className="ml-auto">
+        <div className="ms-auto">
           <ClientAdminEditLink target={{ kind: 'organization', id: org.id }} itemName={org.name} source="organization_page" />
         </div>
       </div>
@@ -239,7 +246,7 @@ export default async function SharedOrganizationPage({ params }: Props) {
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={coverUrl}
-              alt={`${org.name} cover`}
+              alt={named('coverAlt')}
               className="aspect-[16/9] w-full object-cover"
             />
           ) : (
@@ -249,8 +256,8 @@ export default async function SharedOrganizationPage({ params }: Props) {
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={logoUrl}
-              alt={`${org.name} logo`}
-              className="absolute -bottom-8 left-5 h-20 w-20 rounded-xl border-4 border-white object-cover shadow-md"
+              alt={named('logoAlt')}
+              className="absolute -bottom-8 start-5 h-20 w-20 rounded-xl border-4 border-white object-cover shadow-md"
             />
           )}
         </div>
@@ -258,16 +265,16 @@ export default async function SharedOrganizationPage({ params }: Props) {
         <div className={`p-5 space-y-4 ${logoUrl ? 'pt-11' : ''}`}>
           {/* Type badge — from org_type, falls back to a neutral "Organization". */}
           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-teal-100 text-teal-800">
-            <Leaf className="h-3.5 w-3.5" />
-            {typeLabel ?? 'Organization'}
+            <Leaf aria-hidden="true" className="h-3.5 w-3.5" />
+            {typeLabel ?? t('organization')}
           </span>
 
           {/* Name */}
-          <h2 className="text-2xl font-bold text-stone-800">{org.name}</h2>
+          <h2 className="text-2xl font-bold text-stone-800 break-words" lang="" dir="auto">{org.name}</h2>
 
           {/* 2. OPEN-NOW */}
           <div className="flex flex-wrap items-center gap-2">
-            <OpenNowPill hours={hours} />
+            <OpenNowPill hours={hours} locale={locale} />
           </div>
 
           {/* 3. CONTACT — website CTA + call + email */}
@@ -281,26 +288,26 @@ export default async function SharedOrganizationPage({ params }: Props) {
                 rel="noopener noreferrer"
                 className="inline-flex flex-1 min-w-[10rem] items-center justify-center gap-2 rounded-lg bg-lime-600 px-6 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
               >
-                Visit website
-                <ExternalLink className="h-4 w-4" />
+                {t('visitWebsite')}
+                <ExternalLink aria-hidden="true" className="h-4 w-4" />
               </a>
             )}
             {org.phone && (
               <a
                 href={`tel:${org.phone}`}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-3 font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 py-3 font-medium text-stone-700 hover:bg-stone-50 transition-colors"
               >
-                <Phone className="h-4 w-4" />
-                Call
+                <Phone aria-hidden="true" className="h-4 w-4" />
+                {t('call')}
               </a>
             )}
             {org.email && (
               <a
                 href={`mailto:${org.email}`}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-3 font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stone-500 bg-white px-4 py-3 font-medium text-stone-700 hover:bg-stone-50 transition-colors"
               >
-                <Mail className="h-4 w-4" />
-                Email
+                <Mail aria-hidden="true" className="h-4 w-4" />
+                {t('email')}
               </a>
             )}
           </div>
@@ -310,7 +317,7 @@ export default async function SharedOrganizationPage({ params }: Props) {
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={mapUrl}
-              alt={`Map showing ${org.name}`}
+              alt={named('mapAlt')}
               width={600}
               height={300}
               className="w-full rounded-lg border border-stone-200"
@@ -318,21 +325,21 @@ export default async function SharedOrganizationPage({ params }: Props) {
           )}
           {address && (
             <div className="flex items-start gap-3 text-stone-600">
-              <MapPin className="h-5 w-5 mt-0.5 shrink-0 text-stone-400" />
-              <span>{address}</span>
+              <MapPin aria-hidden="true" className="h-5 w-5 mt-0.5 shrink-0 text-stone-600" />
+              <span lang="" dir="auto">{address}</span>
             </div>
           )}
 
           {/* 5. ABOUT */}
           {org.description && (
-            <p className="text-stone-600 leading-relaxed">{org.description}</p>
+            <p className="text-stone-700 leading-relaxed break-words" lang="" dir="auto">{org.description}</p>
           )}
 
           {/* 6. PHOTOS — gallery strip (hidden entirely when there are none) */}
           {galleryPhotos.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
-                Photos
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-600">
+                {businessesT(locale, 'sectionPhotos')}
               </h3>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {galleryPhotos.map((photo) => (
@@ -340,11 +347,11 @@ export default async function SharedOrganizationPage({ params }: Props) {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.url}
-                      alt={photo.caption ?? `${org.name} photo`}
+                      alt={photo.caption ?? named('photoAlt')}
                       className="aspect-square w-full rounded-lg border border-stone-200 object-cover"
                     />
                     {photo.caption && (
-                      <figcaption className="text-xs text-stone-500">{photo.caption}</figcaption>
+                      <figcaption className="text-xs text-stone-600" lang="" dir="auto">{photo.caption}</figcaption>
                     )}
                   </figure>
                 ))}
@@ -355,20 +362,20 @@ export default async function SharedOrganizationPage({ params }: Props) {
           {/* 7. HOURS — 7-day table (hidden when no hours) */}
           {hours.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
-                Hours
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-600">
+                {businessesT(locale, 'sectionHours')}
               </h3>
               <dl className="divide-y divide-stone-100 rounded-lg border border-stone-200">
-                {DAY_NAMES_SHORT.map((dayName, dayIndex) => {
+                {[0, 1, 2, 3, 4, 5, 6].map((dayIndex) => {
                   const intervals = hours
                     .filter((h) => h.day_of_week === dayIndex)
-                    .map(formatHoursInterval)
+                    .map((h) => hoursIntervalText(h, locale))
                     .filter((s): s is string => s !== null)
                   return (
-                    <div key={dayName} className="flex justify-between gap-4 px-3 py-2 text-sm">
-                      <dt className="font-medium text-stone-700">{dayName}</dt>
-                      <dd className="text-right text-stone-600">
-                        {intervals.length > 0 ? intervals.join(', ') : 'Closed'}
+                    <div key={dayIndex} className="flex flex-wrap justify-between gap-x-4 px-3 py-2 text-sm">
+                      <dt className="font-medium text-stone-800">{weekdayShortText(dayIndex, locale)}</dt>
+                      <dd className="text-end text-stone-700">
+                        {intervals.length > 0 ? intervals.join(', ') : businessesT(locale, 'hoursClosed')}
                       </dd>
                     </div>
                   )
@@ -381,8 +388,8 @@ export default async function SharedOrganizationPage({ params }: Props) {
               Hidden entirely when the org has no linked resources (no dangling empty section). */}
           {resources.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
-                Resources offered
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-600">
+                {t('resourcesOffered')}
               </h3>
               <ul className="space-y-2">
                 {resources.map((resource: OrgLinkedResource) => (
@@ -392,12 +399,12 @@ export default async function SharedOrganizationPage({ params }: Props) {
                       className="flex items-center justify-between gap-3 rounded-lg bg-stone-50 px-3 py-2 hover:bg-stone-100 transition-colors"
                     >
                       <span>
-                        <span className="block font-medium text-stone-800">{resource.name}</span>
-                        <span className="block text-xs text-stone-500">
-                          {resourceCategoryLabel(resource.category)}
+                        <span className="block font-medium text-stone-800 break-words" lang="" dir="auto">{resource.name}</span>
+                        <span className="block text-xs text-stone-600">
+                          {resourceCategoryLabel(resource.category, locale)}
                         </span>
                       </span>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-stone-400" />
+                      <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-stone-600 rtl:-scale-x-100" />
                     </a>
                   </li>
                 ))}
@@ -413,9 +420,9 @@ export default async function SharedOrganizationPage({ params }: Props) {
           href="/"
           className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
         >
-          Explore More on FEED
+          {t('exploreMore')}
         </a>
-        <p className="text-sm text-stone-500">Find community resources and support near you.</p>
+        <p className="text-sm text-stone-600">{t('exploreBody')}</p>
       </div>
     </div>
   )

@@ -5,6 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import { ClientAdminEditLink } from '@/components/admin/client-admin-edit-link'
 import { getAppUrlFromHeaders } from '@/lib/utils/url-server'
 import { ogCardAlt } from '@/lib/og-card-kinds'
+import { dir } from '@/lib/i18n'
+import { shareT } from '@/lib/i18n-share'
+import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
+import { formatMessage } from '@/lib/format-message'
+import { requestPageLocale } from '@/lib/request-locale-server'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -50,13 +55,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq('status', 'approved')
     .single()
 
+  // FEED's own words in the visitor's language (the root layout's rule); the resource's text as written.
+  const locale = await requestPageLocale()
   if (!resource) {
-    return { title: 'Resource Not Found - FEED' }
+    return { title: shareT(locale, 'resourceNotFound') }
   }
 
   const description = resource.description
     ? resource.description.length > 160 ? resource.description.slice(0, 157) + '...' : resource.description
-    : `${resource.name} - Community resource on FEED`
+    : formatMessage(shareT(locale, 'resourceDescFallback'), { name: resource.name })
 
   return {
     title: `${resource.name} - FEED`,
@@ -98,14 +105,16 @@ export default async function SharedResourcePage({ params }: Props) {
 
   if (!resource) notFound()
 
-  const categoryLabel = resource.category.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+  const locale = await requestPageLocale()
+  const t = (key: Parameters<typeof shareT>[1]) => shareT(locale, key)
+  const categoryLabel = resourceCategoryLabel(resource.category, locale)
   const categoryClasses = CATEGORY_COLORS[resource.category] || CATEGORY_COLORS.other
   const address = [resource.address_line1, resource.city, resource.state, resource.zip_code]
     .filter(Boolean)
     .join(', ')
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" lang={locale} dir={dir(locale)}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-lg bg-lime-600 flex items-center justify-center text-white font-bold text-lg">
@@ -113,10 +122,10 @@ export default async function SharedResourcePage({ params }: Props) {
         </div>
         <div>
           <h1 className="text-lg font-bold text-stone-800">FEED</h1>
-          <p className="text-xs text-stone-500">Community Resource</p>
+          <p className="text-xs text-stone-600">{t('communityResource')}</p>
         </div>
         {/* Admins only, rendered in the browser after hydration — never part of this server HTML. */}
-        <div className="ml-auto">
+        <div className="ms-auto">
           <ClientAdminEditLink target={{ kind: 'resource', id: resource.id }} itemName={resource.name} source="resource_page" />
         </div>
       </div>
@@ -130,44 +139,45 @@ export default async function SharedResourcePage({ params }: Props) {
           </span>
 
           {/* Name + description */}
-          <h2 className="text-2xl font-bold text-stone-800">{resource.name}</h2>
+          <h2 className="text-2xl font-bold text-stone-800 break-words" lang="" dir="auto">{resource.name}</h2>
           {resource.description && (
-            <p className="text-stone-600 leading-relaxed">{resource.description}</p>
+            <p className="text-stone-700 leading-relaxed break-words" lang="" dir="auto">{resource.description}</p>
           )}
 
           {/* Details */}
           <div className="space-y-3 pt-2">
             {address && (
-              <div className="flex items-start gap-3 text-stone-600">
-                <MapPin className="h-5 w-5 mt-0.5 shrink-0 text-stone-400" />
-                <span>{address}</span>
+              <div className="flex items-start gap-3 text-stone-700">
+                <MapPin aria-hidden="true" className="h-5 w-5 mt-0.5 shrink-0 text-stone-600" />
+                <span lang="" dir="auto">{address}</span>
               </div>
             )}
             {resource.phone && (
-              <div className="flex items-center gap-3 text-stone-600">
-                <Phone className="h-5 w-5 shrink-0 text-stone-400" />
-                <a href={`tel:${resource.phone}`} className="hover:underline text-lime-700">
+              <div className="flex items-center gap-3 text-stone-700">
+                <Phone aria-hidden="true" className="h-5 w-5 shrink-0 text-stone-600" />
+                <a href={`tel:${resource.phone}`} dir="ltr" className="inline-flex min-h-6 items-center underline text-lime-800">
                   {resource.phone}
                 </a>
               </div>
             )}
             {resource.website && (
-              <div className="flex items-center gap-3 text-stone-600">
-                <Globe className="h-5 w-5 shrink-0 text-stone-400" />
+              <div className="flex items-center gap-3 text-stone-700">
+                <Globe aria-hidden="true" className="h-5 w-5 shrink-0 text-stone-600" />
                 <a
                   href={resource.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:underline text-lime-700 truncate"
+                  dir="ltr"
+                  className="inline-flex min-h-6 items-center min-w-0 underline text-lime-800 break-all"
                 >
                   {resource.website.replace(/^https?:\/\//, '')}
                 </a>
               </div>
             )}
             {resource.hours_of_operation && (
-              <div className="flex items-start gap-3 text-stone-600">
-                <Clock className="h-5 w-5 mt-0.5 shrink-0 text-stone-400" />
-                <span className="text-sm">Hours available - see full details in FEED</span>
+              <div className="flex items-start gap-3 text-stone-700">
+                <Clock aria-hidden="true" className="h-5 w-5 mt-0.5 shrink-0 text-stone-600" />
+                <span className="text-sm">{t('hoursInFeed')}</span>
               </div>
             )}
           </div>
@@ -175,8 +185,8 @@ export default async function SharedResourcePage({ params }: Props) {
           {/* Eligibility */}
           {resource.eligibility_requirements && (
             <div className="pt-2 border-t border-stone-100">
-              <h3 className="text-sm font-semibold text-stone-700 mb-1">Eligibility</h3>
-              <p className="text-sm text-stone-600">{resource.eligibility_requirements}</p>
+              <h3 className="text-sm font-semibold text-stone-800 mb-1">{t('eligibility')}</h3>
+              <p className="text-sm text-stone-700 break-words" lang="" dir="auto">{resource.eligibility_requirements}</p>
             </div>
           )}
         </div>
@@ -188,11 +198,9 @@ export default async function SharedResourcePage({ params }: Props) {
           href="/"
           className="inline-flex items-center justify-center rounded-lg bg-lime-600 px-8 py-3 text-white font-semibold hover:bg-lime-700 transition-colors"
         >
-          View Full Details in FEED
+          {t('viewDetails')}
         </a>
-        <p className="text-sm text-stone-500">
-          Find more resources and community support.
-        </p>
+        <p className="text-sm text-stone-600">{t('viewDetailsBody')}</p>
       </div>
     </div>
   )
