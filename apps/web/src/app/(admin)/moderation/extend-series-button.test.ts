@@ -8,6 +8,7 @@
 // from the event's stored series, and the org Overview's ending-soon list offers Extend per row.
 
 import { describe, it, expect, vi } from 'vitest'
+import { NO_ANNOUNCEMENT } from './row-focus'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -123,8 +124,9 @@ describe('org Overview: repeating events ending within 30 days', () => {
           { eventId: 'e-2', title: 'Clinic', lastDate: '2026-09-30', remaining: 0 },
         ],
         state: 'ready',
-        notice: '',
+        notice: NO_ANNOUNCEMENT,
         orgId: 'org-1',
+        locale: 'en',
         onRetry: () => {},
         onExtended: () => {},
       }),
@@ -140,7 +142,7 @@ describe('org Overview: repeating events ending within 30 days', () => {
 
   it('a failed load is an error with Try again, not an empty list', () => {
     const html = renderToStaticMarkup(
-      h(EndingSoonView, { series: null, state: 'error', notice: '', orgId: 'org-1', onRetry: () => {}, onExtended: () => {} }),
+      h(EndingSoonView, { series: null, state: 'error', notice: NO_ANNOUNCEMENT, orgId: 'org-1', locale: 'en', onRetry: () => {}, onExtended: () => {} }),
     )
     expect(html).toContain('role="alert"')
     expect(html).toContain('Try again')

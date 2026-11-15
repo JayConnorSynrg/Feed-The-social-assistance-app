@@ -113,8 +113,8 @@ async function followShellLink(url: string, tier: typeof PA, org = { isOrgAdmin:
   const shell = mount(() => AdminShell())
   let tree = await shell.flush()
   const shown = findAll(tree, (el) => el.type === Tabs)[0]?.props.value
-  if (shown === 'manage') await mount(() => ManageResourcesTab()).flush()
-  if (shown === 'businesses') await mount(() => BusinessesTab()).flush()
+  if (shown === 'manage') await mount(() => ManageResourcesTab({ locale: 'en' })).flush()
+  if (shown === 'businesses') await mount(() => BusinessesTab({ locale: 'en' })).flush()
   tree = await shell.flush()
   return { shell, tree: () => shell.tree(), shown, initialTree: tree }
 }

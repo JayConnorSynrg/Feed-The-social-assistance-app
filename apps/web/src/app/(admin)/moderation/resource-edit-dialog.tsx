@@ -14,6 +14,9 @@ import { logger } from '@/lib/logger'
 import { privilegedRpc } from '@/lib/privileged-action'
 import type { Database } from '@feed/database'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
+import { dir, type Locale } from '@/lib/i18n'
+import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
+import { adminResourcesT, resourceStatusLabel, serviceModeLabel } from '@/lib/i18n-admin-resources'
 
 type AdminUpdateResourceRows = Database['public']['Functions']['admin_update_resource']['Returns']
 import { resolveGeoPointV6, type GeocodeMatch, type AddressSuggestion } from '@/lib/mapbox-geocode-v6'
@@ -32,8 +35,8 @@ import {
 
 // resource_category enum values — MUST mirror the resource_category enum in
 // packages/database/types.ts exactly (all 25 values). An opened resource always
-// shows its true category rather than silently defaulting to 'food'. Human labels
-// are derived from each value via .replace(/_/g, ' '), matching the existing style.
+// shows its true category rather than silently defaulting to 'food'. Each option's
+// value is the enum; its text is resourceCategoryLabel() in the admin's language.
 const CATEGORIES = [
   'food', 'housing', 'healthcare', 'employment', 'education', 'legal',
   'transportation', 'utilities', 'clothing', 'financial', 'mental_health',
@@ -49,12 +52,6 @@ const STATUSES = ['approved', 'pending', 'rejected', 'archived'] as const
 // Fixed 3-option selector per INV B (not the hand-maintained CATEGORIES pattern).
 const SERVICE_MODES = ['physical', 'online', 'hybrid'] as const
 type ServiceMode = (typeof SERVICE_MODES)[number]
-
-const SERVICE_MODE_LABELS: Record<ServiceMode, string> = {
-  physical: 'Physical location',
-  online: 'Online only',
-  hybrid: 'Hybrid (physical + online)',
-}
 
 // Normalized input shape both tabs map their row shape into before opening this
 // dialog — see toDialogInputFromManageRow (manage-resources-tab.tsx) and
@@ -175,12 +172,15 @@ export interface ResourceEditDialogProps {
   /** Where focus goes when the dialog closes (Radix onCloseAutoFocus). A dialog opened by a link has
    *  no trigger to return to, so the caller decides instead of focus dropping to <body>. */
   onCloseAutoFocus?: (event: Event) => void
+  /** The admin's language: the dialog is portalled to <body>, so it carries its own lang / dir. */
+  locale: Locale
 }
 
 export function ResourceEditDialog({
-  open, resource, mode, onOpenChange, onSaved, onConfirm, onCloseAutoFocus,
+  open, resource, mode, onOpenChange, onSaved, onConfirm, onCloseAutoFocus, locale,
 }: ResourceEditDialogProps) {
   const supabase = createClient()
+  const t = (key: Parameters<typeof adminResourcesT>[1]) => adminResourcesT(locale, key)
   // Label ↔ field pairing: each Label's htmlFor names its control's id.
   const fieldId = useId()
   const idOf = (field: string) => `${fieldId}-${field}`
@@ -241,9 +241,9 @@ export function ResourceEditDialog({
   const handleSave = useCallback(async () => {
     if (!resource || !form || saving) return
 
-    if (!form.name.trim()) { setSaveError('Name is required.'); return }
-    if (!form.category) { setSaveError('Category is required.'); return }
-    if (!form.status) { setSaveError('Status is required.'); return }
+    if (!form.name.trim()) { setSaveError(adminResourcesT(locale, 'nameRequired')); return }
+    if (!form.category) { setSaveError(adminResourcesT(locale, 'categoryRequired')); return }
+    if (!form.status) { setSaveError(adminResourcesT(locale, 'statusRequired')); return }
 
     setSaving(true)
     setSaveError(null)
@@ -345,66 +345,76 @@ export function ResourceEditDialog({
         },
       )
       onOpenChange(false)
-    } catch (err) {
-      const msg = err instanceof Error
-        ? err.message
-        : `Failed to ${mode === 'approve' ? 'confirm' : 'save'} resource`
-      setSaveError(msg)
+    } catch {
+      // runResourceSave has already written the admin.resource.save error row (with its code); the
+      // server's message is never shown.
+      setSaveError(adminResourcesT(locale, mode === 'approve' ? 'confirmFailed' : 'saveFailed'))
     } finally {
       setSaving(false)
     }
-  }, [resource, form, saving, selectedSuggestion, supabase, mode, onConfirm, onSaved, onOpenChange])
+  }, [resource, form, saving, selectedSuggestion, supabase, mode, onConfirm, onSaved, onOpenChange, locale])
 
   const isApprove = mode === 'approve'
 
+  const LABEL = 'text-xs text-stone-600'
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close() }}>
-      <DialogContent disableOutsideClose onCloseAutoFocus={onCloseAutoFocus} className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        disableOutsideClose
+        onCloseAutoFocus={onCloseAutoFocus}
+        lang={locale}
+        dir={dir(locale)}
+        closeLabel={adminResourcesT(locale, 'close')}
+        className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
-          <DialogTitle>{isApprove ? 'Review and confirm resource' : 'Edit resource'}</DialogTitle>
-          <DialogDescription>
-            {isApprove
-              ? 'Edit any field before approving. Confirm saves your changes and publishes this resource in one step.'
-              : 'Changes persist to the resources table and are recorded with your admin identity.'}
+          <DialogTitle>{isApprove ? t('dialogTitleApprove') : t('dialogTitleEdit')}</DialogTitle>
+          <DialogDescription className="text-stone-600">
+            {isApprove ? t('dialogDescApprove') : t('dialogDescEdit')}
           </DialogDescription>
         </DialogHeader>
 
         {form && (
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor={idOf('name')} className="text-xs text-stone-500">Name</Label>
+              <Label htmlFor={idOf('name')} className={LABEL}>
+                {t('fieldName')} <span>({t('required')})</span>
+              </Label>
               <Input id={idOf('name')} value={form.name} onChange={(e) => setField('name', e.target.value)}
+                required aria-required="true" lang="" dir="auto"
                 className="text-stone-900" />
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor={idOf('description')} className="text-xs text-stone-500">Description</Label>
+              <Label htmlFor={idOf('description')} className={LABEL}>{t('fieldDescription')}</Label>
               <Textarea id={idOf('description')} value={form.description} onChange={(e) => setField('description', e.target.value)}
+                lang="" dir="auto"
                 className="text-stone-900 min-h-[80px]" />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label htmlFor={idOf('category')} className="text-xs text-stone-500">Category</Label>
+                <Label htmlFor={idOf('category')} className={LABEL}>{t('fieldCategory')}</Label>
                 <select id={idOf('category')}
                   value={form.category}
                   onChange={(e) => setField('category', e.target.value)}
-                  className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  className="w-full text-sm border border-stone-500 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+                    <option key={c} value={c}>{resourceCategoryLabel(c, locale)}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor={idOf('status')} className="text-xs text-stone-500">Status</Label>
+                <Label htmlFor={idOf('status')} className={LABEL}>{t('fieldStatus')}</Label>
                 <select id={idOf('status')}
                   value={form.status}
                   onChange={(e) => setField('status', e.target.value)}
-                  className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  className="w-full text-sm border border-stone-500 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
                 >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                  {STATUSES.map((st) => (
+                    <option key={st} value={st}>{resourceStatusLabel(st, locale)}</option>
                   ))}
                 </select>
               </div>
@@ -412,18 +422,18 @@ export function ResourceEditDialog({
 
             {/* Service mode — INV B: fixed 3-option selector, plain select. */}
             <div className="space-y-1">
-              <Label htmlFor={idOf('service_mode')} className="text-xs text-stone-500">Service mode</Label>
+              <Label htmlFor={idOf('service_mode')} className={LABEL}>{t('fieldServiceMode')}</Label>
               <select id={idOf('service_mode')}
                 value={form.service_mode}
                 onChange={(e) => setField('service_mode', e.target.value)}
-                className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                className="w-full text-sm border border-stone-500 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
               >
                 {SERVICE_MODES.map((m) => (
-                  <option key={m} value={m}>{SERVICE_MODE_LABELS[m]}</option>
+                  <option key={m} value={m}>{serviceModeLabel(m, locale)}</option>
                 ))}
               </select>
               {form.service_mode === 'online' && (
-                <p className="text-xs text-stone-400">Online resources are not geocoded or placed on the map.</p>
+                <p className="text-xs text-stone-600">{t('onlineHint')}</p>
               )}
             </div>
 
@@ -431,14 +441,14 @@ export function ResourceEditDialog({
                 editor so an admin knows to give it a locatable address; the row
                 stays off the map and findable in search until then. */}
             {resource && needsLocation(resource.geocode_accuracy) && (
-              <div className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                Needs location — not shown on the map. Enter an address and pick a suggestion to place it.
+              <div className="flex items-center gap-1.5 rounded-lg border border-amber-700 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {t('needsLocationLong')}
               </div>
             )}
 
             <div className="space-y-1">
-              <Label htmlFor={idOf('address')} className="text-xs text-stone-500">Address</Label>
+              <Label htmlFor={idOf('address')} className={LABEL}>{t('fieldAddress')}</Label>
               {/* W2: live Mapbox v6 autocomplete. Typing shows suggestions;
                   picking one autofills City/State/ZIP below and stamps coords
                   on a strong match. Free typing still saves via on-save geocode. */}
@@ -447,78 +457,85 @@ export function ResourceEditDialog({
                 onChange={(v) => setAddressField('address_line1', v)}
                 onSelect={handleSelectSuggestion}
                 disabled={saving}
+                locale={locale}
               />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label htmlFor={idOf('city')} className="text-xs text-stone-500">City</Label>
+                <Label htmlFor={idOf('city')} className={LABEL}>{t('fieldCity')}</Label>
                 <Input id={idOf('city')} value={form.city} onChange={(e) => setAddressField('city', e.target.value)}
+                  lang="" dir="auto"
                   className="text-stone-900" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor={idOf('state')} className="text-xs text-stone-500">State</Label>
+                <Label htmlFor={idOf('state')} className={LABEL}>{t('fieldState')}</Label>
                 <select id={idOf('state')}
                   value={normalizeState(form.state) ?? ''}
                   onChange={(e) => setAddressField('state', e.target.value)}
-                  className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  className="w-full text-sm border border-stone-500 rounded-lg px-3 py-2 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
                 >
                   <option value="">—</option>
-                  {US_STATES.map((s) => (
-                    <option key={s} value={STATE_TO_ABBR[s]}>{STATE_TO_ABBR[s]}</option>
+                  {US_STATES.map((st) => (
+                    <option key={st} value={STATE_TO_ABBR[st]}>{STATE_TO_ABBR[st]}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor={idOf('zip')} className="text-xs text-stone-500">ZIP</Label>
+                <Label htmlFor={idOf('zip')} className={LABEL}>{t('fieldZip')}</Label>
                 <Input id={idOf('zip')} value={form.zip_code} onChange={(e) => setAddressField('zip_code', e.target.value)}
+                  dir="ltr"
                   className="text-stone-900" />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <Label htmlFor={idOf('phone')} className="text-xs text-stone-500">Phone</Label>
+                <Label htmlFor={idOf('phone')} className={LABEL}>{t('fieldPhone')}</Label>
                 <Input id={idOf('phone')} value={form.phone} onChange={(e) => setField('phone', e.target.value)}
+                  type="tel" dir="ltr"
                   className="text-stone-900" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor={idOf('email')} className="text-xs text-stone-500">Email</Label>
+                <Label htmlFor={idOf('email')} className={LABEL}>{t('fieldEmail')}</Label>
                 <Input id={idOf('email')} value={form.email} onChange={(e) => setField('email', e.target.value)}
+                  dir="ltr"
                   className="text-stone-900" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor={idOf('website')} className="text-xs text-stone-500">Website</Label>
+              <Label htmlFor={idOf('website')} className={LABEL}>{t('fieldWebsite')}</Label>
               <Input id={idOf('website')} value={form.website} onChange={(e) => setField('website', e.target.value)}
+                dir="ltr"
                 className="text-stone-900" />
             </div>
-
-            {saveError && (
-              <p className="text-sm text-red-600 flex items-center gap-1.5">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {saveError}
-              </p>
-            )}
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={close} disabled={saving}>
-            <X className="h-4 w-4 mr-1" /> Cancel
+        {/* Inside the dialog (the page behind it is aria-hidden) and always mounted, so a failed
+            save is announced when its line appears. */}
+        <p role="alert" data-testid="resource-edit-alert" className={saveError ? 'text-sm text-red-700 flex items-center gap-1.5' : 'sr-only'}>
+          {saveError && <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />}
+          {saveError ?? ''}
+        </p>
+
+        <DialogFooter className="flex-wrap gap-2">
+          {/* aria-disabled while saving (not disabled): the pressed button keeps focus. */}
+          <Button variant="outline" className="border-stone-500" onClick={close} aria-disabled={saving || undefined}>
+            <X className="h-4 w-4 me-1" aria-hidden="true" /> {t('cancel')}
           </Button>
           <Button
             onClick={() => void handleSave()}
-            disabled={saving}
-            className="bg-lime-600 hover:bg-lime-700 text-white"
+            aria-disabled={saving || undefined}
+            className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             {saving ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{isApprove ? 'Confirming…' : 'Saving…'}</>
+              <><Loader2 className="h-4 w-4 me-2 animate-spin" aria-hidden="true" />{isApprove ? t('confirming') : t('saving')}</>
             ) : isApprove ? (
-              <><CheckCheck className="h-4 w-4 mr-2" />Confirm</>
+              <><CheckCheck className="h-4 w-4 me-2" aria-hidden="true" />{t('confirm')}</>
             ) : (
-              <><Save className="h-4 w-4 mr-2" />Save changes</>
+              <><Save className="h-4 w-4 me-2" aria-hidden="true" />{t('saveChanges')}</>
             )}
           </Button>
         </DialogFooter>

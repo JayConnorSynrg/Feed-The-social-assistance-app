@@ -11,13 +11,15 @@
 // for organization admins; platform admins keep add / role / remove). Deactivate / Reactivate stays
 // in the platform Organizations list.
 //
-// Language: the root carries the viewer's lang/dir; the shell's own copy is English for now and is
-// marked lang="en" dir="ltr" where it appears (same convention as the roster in orgs-section.tsx).
+// Language: the viewer's locale (useProfileLocale: the cookie the server rendered with, then the
+// profile and the device choice); the root carries its lang/dir and every word of the shell is
+// lib/i18n-org-admin.ts (P6 W4). The organization's name keeps its own (lang="" dir="auto").
+// The saved notice is set once the setup panel has fully closed (while open it hides the page).
 //
 // The open tab is in the URL (`?tab=overview|events|profile|members`, replaced on each switch) so a
 // reload or a shared link lands on the same tab; an unknown value opens Overview.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Building2, Calendar, ExternalLink, LayoutDashboard, Map as MapIcon, Pencil, Users } from 'lucide-react'
@@ -25,9 +27,12 @@ import { MemberViewLink } from '@/components/admin/member-view-link'
 import { organizationMapVisibility, organizationVisibility, showsMapControl } from '@/lib/member-visibility'
 import { adminNavT } from '@/lib/i18n-admin-nav'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAuth } from '@/hooks/use-auth'
-import { dir, resolveProfileLocale, type Locale } from '@/lib/i18n'
-import { orgFormT, formatMessage } from '@/lib/i18n-org-forms'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { orgFormT } from '@/lib/i18n-org-forms'
+import { formatMessage, isolate } from '@/lib/format-message'
+import { AnnouncementText, NO_ANNOUNCEMENT, announce, type Announcement } from '../../row-focus'
+import { orgAdminT } from '@/lib/i18n-org-admin'
 import { ORG_ADMIN_INDEX } from '@/lib/org-admin-paths'
 import { orgTypeKey } from '@/components/org-form/org-labels'
 import { OrgFormPanel } from '@/components/org-form/org-form-panel'
@@ -68,11 +73,7 @@ const SECONDARY =
 
 export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
   const router = useRouter()
-  const { profile } = useAuth()
-  const locale: Locale = useMemo(
-    () => resolveProfileLocale(profile),
-    [profile]
-  )
+  const locale = useProfileLocale()
 
   const [tab, setTab] = useState<OrgAdminTab>('overview')
   // Deep link: window.location exists only after mount, so setState in this effect is the idiom
@@ -92,12 +93,14 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
   }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Announcement>(NO_ANNOUNCEMENT)
   const editButtonRef = useRef<HTMLButtonElement>(null)
+  // "<name> was saved.", announced once the panel has fully closed.
+  const savedNotice = useRef<string | null>(null)
 
   const handleSaved = useCallback(
     (result: { id: string; created: boolean; name: string }) => {
-      setNotice(formatMessage(orgFormT(locale, 'savedUpdated'), { name: result.name }))
+      savedNotice.current = formatMessage(orgFormT(locale, 'savedUpdated'), { name: isolate(result.name) })
       setPanelOpen(false)
       // Re-run the server page so the header shows the saved name.
       router.refresh()
@@ -106,10 +109,11 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
   )
 
   const tr = (key: Parameters<typeof orgFormT>[1]) => orgFormT(locale, key)
+  const t = (key: Parameters<typeof orgAdminT>[1]) => orgAdminT(locale, key)
   const where = [org.city, org.state].filter(Boolean).join(', ')
   const back = isPlatformAdmin
-    ? { href: '/moderation?tab=organizations', label: 'All organizations' }
-    : { href: ORG_ADMIN_INDEX, label: 'Your organizations' }
+    ? { href: '/moderation?tab=organizations', label: t('backAll') }
+    : { href: ORG_ADMIN_INDEX, label: t('backYours') }
 
   return (
     <div className="min-h-screen bg-stone-100" lang={locale} dir={dir(locale)}>
@@ -118,8 +122,6 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
         style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}
       >
         <Link
-          lang="en"
-          dir="ltr"
           href={back.href}
           className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-stone-700 hover:bg-stone-100 ${FOCUS_RING}`}
           aria-label={back.label}
@@ -127,7 +129,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
           <ArrowLeft className="h-5 w-5 rtl:rotate-180" aria-hidden="true" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-semibold text-stone-900 sm:text-base">{org.name}</h1>
+          <h1 lang="" dir="auto" className="truncate text-sm font-semibold text-stone-900 sm:text-base">{org.name}</h1>
           <p className="truncate text-xs text-stone-600">
             {[tr(orgTypeKey(org.org_type)), where, tr(org.is_active ? 'statusActive' : 'statusInactive')]
               .filter(Boolean)
@@ -140,36 +142,34 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
         <AdminFocusGateStatus row={focusGateRow} locale={locale} />
         {/* Always rendered (no empty:hidden) so screen readers announce the saved notice. */}
         <p aria-live="polite" className="mb-3 min-h-5 text-sm font-medium text-brand">
-          {notice}
+          <AnnouncementText announcement={notice} />
         </p>
-        <Tabs value={tab} onValueChange={handleTabChange}>
+        <Tabs value={tab} onValueChange={handleTabChange} dir={dir(locale)}>
           <div className="-mx-2 overflow-x-auto px-2 pb-1">
             <TabsList
-              lang="en"
-              dir="ltr"
-              aria-label="Organization admin sections"
+              aria-label={t('sections')}
               className="inline-flex w-auto min-w-full flex-nowrap gap-1 rounded-xl border border-stone-200 bg-white p-1">
               <TabsTrigger value="overview" className={TRIGGER_CLASS}>
                 <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
-                Overview
+                {t('tabOverview')}
               </TabsTrigger>
               <TabsTrigger value="events" className={TRIGGER_CLASS}>
                 <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                Events
+                {t('tabEvents')}
               </TabsTrigger>
               <TabsTrigger value="profile" className={TRIGGER_CLASS}>
                 <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Profile
+                {t('tabProfile')}
               </TabsTrigger>
               <TabsTrigger value="members" className={TRIGGER_CLASS}>
                 <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                Members
+                {t('tabMembers')}
               </TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent value="overview" className="mt-4">
-            <OrgOverview orgId={org.id} />
+            <OrgOverview orgId={org.id} locale={locale} />
           </TabsContent>
           <TabsContent value="events" className="mt-4">
             <OrgEventsTab orgId={org.id} />
@@ -177,18 +177,15 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
           <TabsContent value="profile" className="mt-4">
             {/* "Edit in admin" for this organization (?tab=profile&focus=organization:<id>): one resolve row. */}
             <OrgProfileFocus orgId={org.id} />
-            <section lang="en" dir="ltr" aria-labelledby="org-profile-heading" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <section aria-labelledby="org-profile-heading" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
               <h2 id="org-profile-heading" className="text-base font-semibold text-stone-900">
-                Public profile
+                {t('profileTitle')}
               </h2>
-              <p className="mt-1 text-sm text-stone-600">
-                Name, description, contact details, hours, map pin, photos and linked resources shown on this
-                organization’s public page.
-              </p>
+              <p className="mt-1 text-sm text-stone-600">{t('profileIntro')}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" ref={editButtonRef} className={SECONDARY} onClick={() => setPanelOpen(true)}>
                   <Pencil className="h-4 w-4" aria-hidden="true" />
-                  Edit profile
+                  {t('editProfile')}
                 </button>
                 {/* Members see the public page only while the org is active; otherwise the reason shows. */}
                 <MemberViewLink
@@ -224,7 +221,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
             </section>
           </TabsContent>
           <TabsContent value="members" className="mt-4">
-            <OrgMembers orgId={org.id} readOnly={!isPlatformAdmin} />
+            <OrgMembers orgId={org.id} readOnly={!isPlatformAdmin} locale={locale} />
           </TabsContent>
         </Tabs>
       </main>
@@ -241,7 +238,12 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
           if (!open) setPanelOpen(false)
         }}
         onSaved={handleSaved}
-        onCloseAutoFocus={(e) => restoreFocusAfterPanel(e, editButtonRef.current)}
+        onCloseAutoFocus={(e) => {
+          restoreFocusAfterPanel(e, editButtonRef.current)
+          const text = savedNotice.current
+          savedNotice.current = null
+          if (text) announce(setNotice, text)
+        }}
       />
     </div>
   )

@@ -8,6 +8,7 @@
 // and write is filtered by the organization id.
 
 import { describe, it, expect, vi } from 'vitest'
+import { NO_ANNOUNCEMENT } from './row-focus'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import fs from 'node:fs'
@@ -87,10 +88,13 @@ const MEMBERS = [
 const view = (readOnly: boolean) =>
   renderToStaticMarkup(
     h(OrgMembersView, {
+      orgId: ORG,
+      locale: 'en',
       members: MEMBERS,
       loading: false,
       loadError: null,
       rosterError: null,
+      status: NO_ANNOUNCEMENT,
       readOnly,
       add: { userId: '', role: 'member', adding: false, error: null },
       onAddUserIdChange: () => {},
@@ -108,16 +112,16 @@ describe('Members roster', () => {
     expect(html).toContain('u-member')
     expect(html).toContain('>Admin<')
     expect(html).toContain('>Member<')
-    expect(html).not.toContain('Add Member')
-    expect(html).not.toContain('User UUID')
+    expect(html).not.toContain('Add member')
+    expect(html).not.toContain(`id="roster-${ORG}-user-id"`)
     expect(html).not.toContain('Remove')
     expect(html).not.toContain('role="combobox"')
   })
 
   it('platform admin: keeps add, a role picker per member, and remove', () => {
     const html = view(false)
-    expect(html).toContain('Add Member')
-    expect((html.match(/aria-label="Remove member /g) ?? []).length).toBe(2)
+    expect(html).toContain('Add member')
+    expect((html.match(/aria-label="Remove: /g) ?? []).length).toBe(2)
     // One role picker per member plus the add-row picker.
     expect((html.match(/role="combobox"/g) ?? []).length).toBe(3)
   })
@@ -169,8 +173,9 @@ describe('roster reads and writes are scoped to the organization', () => {
 
   it('a write that matches no row (another org, or refused) reports failure', async () => {
     const { client } = fakeSupabase({ data: [], error: null })
-    await expect(removeOrgMember(client, ORG, 'foreign')).resolves.toMatch(/Could not remove/)
-    await expect(changeOrgMemberRole(client, ORG, 'foreign', 'member')).resolves.toMatch(/Could not change/)
+    // A code, never server text: the roster maps it to a sentence in the admin's language.
+    await expect(removeOrgMember(client, ORG, 'foreign')).resolves.toBe('no_rows')
+    await expect(changeOrgMemberRole(client, ORG, 'foreign', 'member')).resolves.toBe('no_rows')
   })
 
   it('adding a member writes this org id', async () => {

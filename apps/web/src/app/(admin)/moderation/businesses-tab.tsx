@@ -31,8 +31,16 @@
 //
 // Saves fail loudly: an UPDATE that RLS filtered to zero rows is an error (business-data.ts), never
 // a success, so the edit form stays open with the reason and the toggle reverts.
+//
+// P6 W4: the admin's language throughout (lib/i18n-admin-resources.ts; Active / Edit / Deactivate
+// and the toggle lines are the Organizations tab's, lib/i18n-org-forms.ts). Business names,
+// descriptions and addresses keep their own (lang="" dir="auto"). A failure shows a translated line,
+// never the server's text (the data layer's withMetric / logger.error rows already record it). Each
+// result is announced in an always-mounted status line; when a row or a button leaves, focus moves
+// to the next row (else the section heading) or to the control that replaces it; a busy button is
+// aria-disabled, so it keeps focus.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, X, Loader2, Leaf, MapPin, Pencil } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -46,6 +54,7 @@ import { adminNavT } from '@/lib/i18n-admin-nav'
 import { parseGeographyPoint } from '@/lib/business'
 import { privilegedRpc } from '@/lib/privileged-action'
 import {
+  BUSINESS_NOT_SAVED_MESSAGE,
   fetchPendingBusinesses,
   fetchAdminBusinessList,
   adminSetBusinessActive,
@@ -57,8 +66,15 @@ import {
 import type { Business } from '@/lib/business'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { canEditBusinesses } from '@/lib/admin-tier'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, isolate } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { orgFormT } from '@/lib/i18n-org-forms'
+import { adminResourcesT, namedControl } from '@/lib/i18n-admin-resources'
+import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 import { useAdminFocusSession } from './use-admin-focus'
 import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, focusAfterRowRemoval, type Announcement } from './row-focus'
 
 // The editable-field draft the inline edit form holds while open (mirrors AdminBusinessEdit; empty
 // strings in the inputs, coerced to the null/trimmed shape by adminUpdateBusiness at write time).
@@ -80,10 +96,17 @@ function toDraft(b: Business): EditDraft {
   }
 }
 
-const inputClass = 'text-stone-900 placeholder:text-stone-400'
+const inputClass = 'text-stone-900 placeholder:text-stone-500'
+const FOCUS_RING = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-700 focus-visible:ring-offset-1'
+const HEADING = `rounded-sm text-base font-semibold text-[#4a5d23] ${FOCUS_RING}`
+/** Stable element ids focus returns to. */
+export const pendingApproveId = (id: string) => `business-approve-${id}`
+export const editButtonId = (id: string) => `business-edit-${id}`
 
-export function BusinessesTab() {
+export function BusinessesTab({ locale }: { locale: Locale }) {
   const supabase = createClient()
+  const t = (key: Parameters<typeof adminResourcesT>[1]) => adminResourcesT(locale, key)
+  const tr = (key: Parameters<typeof orgFormT>[1]) => orgFormT(locale, key)
 
   // Section 1 — pending queue.
   const [pending, setPending] = useState<PendingBusiness[]>([])
@@ -99,36 +122,68 @@ export function BusinessesTab() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<EditDraft | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [togglingId, setTogglingId] = useState<string | null>(null)
+  // Rows whose Deactivate / Reactivate is running: each row blocks only its own second press.
+  const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(() => new Set())
+
+  // The result of the last action (always mounted, so each one is announced).
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const pendingHeading = useRef<HTMLHeadingElement | null>(null)
+  const approvedHeading = useRef<HTMLHeadingElement | null>(null)
+  // Where focus goes once the list it waits for has re-rendered (an element id, or the heading).
+  const pendingFocus = useRef<{ id: string | null } | null>(null)
+  const approvedFocus = useRef<{ id: string } | null>(null)
 
   const loadPending = useCallback(async () => {
     setLoading(true)
     setQueueError(null)
     try {
       setPending(await fetchPendingBusinesses(supabase))
-    } catch (err) {
-      setQueueError(err instanceof Error ? err.message : 'Failed to load pending businesses')
+    } catch {
+      // business.pending.fetch (withMetric) has recorded the failure with its error class.
+      setQueueError(adminResourcesT(locale, 'pendingLoadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, locale])
 
   const loadApproved = useCallback(async () => {
     setLoadingApproved(true)
     setApprovedError(null)
     try {
       setApproved(await fetchAdminBusinessList(supabase))
-    } catch (err) {
-      setApprovedError(err instanceof Error ? err.message : 'Failed to load approved businesses')
+    } catch {
+      // business.admin.list.fetch (withMetric) has recorded the failure with its error class.
+      setApprovedError(adminResourcesT(locale, 'approvedLoadFailed'))
     } finally {
       setLoadingApproved(false)
     }
-  }, [supabase])
+  }, [supabase, locale])
 
   useEffect(() => {
     loadPending()
     loadApproved()
-  }, [loadPending, loadApproved])
+    // The first load only; actions reload explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase])
+
+  useEffect(() => {
+    const target = pendingFocus.current
+    if (!target) return
+    pendingFocus.current = null
+    afterLayout(() => {
+      const node = target.id ? document.getElementById(pendingApproveId(target.id)) : null
+      ;(node ?? pendingHeading.current)?.focus()
+    })
+  }, [pending])
+
+  useEffect(() => {
+    const target = approvedFocus.current
+    if (!target || loadingApproved) return
+    approvedFocus.current = null
+    afterLayout(() => {
+      ;(document.getElementById(editButtonId(target.id)) ?? approvedHeading.current)?.focus()
+    })
+  }, [approved, loadingApproved, editingId])
 
   const handleApprove = useCallback(
     async (item: PendingBusiness) => {
@@ -142,17 +197,19 @@ export function BusinessesTab() {
           { action: 'business.approve', target_id: item.id }
         )
         if (error) throw error
+        pendingFocus.current = { id: focusAfterRowRemoval(pending.map((p) => p.id), item.id) }
+        announce(setStatus, formatMessage(adminResourcesT(locale, 'approvedStatus'), { name: isolate(item.name) }))
         setPending((prev) => prev.filter((p) => p.id !== item.id))
         // The row moves from pending -> approved; refresh the approved list so it appears there.
         await loadApproved()
       } catch (err) {
         logger.error('admin.business.approve', err, { org_id: item.id, outcome: 'error' })
-        setQueueError(`Approve failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+        setQueueError(formatMessage(adminResourcesT(locale, 'businessApproveFailed'), { name: isolate(item.name) }))
       } finally {
         setProcessingId(null)
       }
     },
-    [supabase, loadApproved]
+    [supabase, loadApproved, pending, locale]
   )
 
   const handleReject = useCallback(
@@ -168,16 +225,22 @@ export function BusinessesTab() {
           { action: 'business.reject', target_id: item.id }
         )
         if (error) throw error
+        pendingFocus.current = { id: focusAfterRowRemoval(pending.map((p) => p.id), item.id) }
+        announce(setStatus, formatMessage(adminResourcesT(locale, 'rejectedStatus'), { name: isolate(item.name) }))
         setPending((prev) => prev.filter((p) => p.id !== item.id))
       } catch (err) {
         logger.error('admin.business.reject', err, { org_id: item.id, outcome: 'error' })
-        setQueueError(`Reject failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+        setQueueError(formatMessage(adminResourcesT(locale, 'businessRejectFailed'), { name: isolate(item.name) }))
       } finally {
         setProcessingId(null)
       }
     },
-    [supabase, reasons]
+    [supabase, reasons, pending, locale]
   )
+
+  // The row a followed link opened, or whose Edit was pressed: scrolled into view and its Name field
+  // focused once rendered (Edit itself leaves while the form is open).
+  const [revealId, setRevealId] = useState<string | null>(null)
 
   const startEdit = useCallback((item: Business) => {
     setApprovedError(null)
@@ -186,9 +249,11 @@ export function BusinessesTab() {
   }, [])
 
   const cancelEdit = useCallback(() => {
+    // Cancel leaves with the form: focus returns to the row's Edit button.
+    if (editingId) approvedFocus.current = { id: editingId }
     setEditingId(null)
     setDraft(null)
-  }, [])
+  }, [editingId])
 
   const setDraftField = useCallback((key: keyof EditDraft, value: string) => {
     setDraft((d) => (d ? { ...d, [key]: value } : d))
@@ -196,8 +261,6 @@ export function BusinessesTab() {
 
   // "Edit in admin" landing. The tier is the shell's shared lookup (useAdminTier: no extra RPC).
   const { tier, loading: tierLoading } = useAdminTier()
-  // The row a followed link opened: scrolled into view and its Name field focused once rendered.
-  const [revealId, setRevealId] = useState<string | null>(null)
   // This tab claims ?focus=business:<uuid> (useAdminFocusSession) and, once the tier and the approved
   // list are known, writes found (that row opens in edit mode) or not_found; invalid / forbidden are
   // the shell's gate. The tab is shown to resource admins, but only a platform admin can save a
@@ -240,23 +303,34 @@ export function BusinessesTab() {
           website: draft.website,
         }
         await adminUpdateBusiness(supabase, item.id, fields)
+        // The form and the list leave while the list reloads: hold focus on the section heading,
+        // then return it to the row's Edit button.
+        approvedHeading.current?.focus()
+        approvedFocus.current = { id: item.id }
+        announce(setStatus, formatMessage(orgFormT(locale, 'savedUpdated'), { name: isolate(draft.name.trim()) }))
         setEditingId(null)
         setDraft(null)
         await loadApproved()
       } catch (err) {
         logger.error('admin.business.update', err, { org_id: item.id, outcome: 'error' })
-        setApprovedError(`Save failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+        const notSaved = err instanceof Error && err.message === BUSINESS_NOT_SAVED_MESSAGE
+        setApprovedError(
+          notSaved
+            ? adminResourcesT(locale, 'businessNotSaved')
+            : formatMessage(adminResourcesT(locale, 'businessSaveFailed'), { name: isolate(item.name) })
+        )
       } finally {
         setSavingId(null)
       }
     },
-    [supabase, draft, savingId, loadApproved]
+    [supabase, draft, savingId, loadApproved, locale]
   )
 
   const handleToggleActive = useCallback(
     async (item: AdminBusiness) => {
+      if (togglingIds.has(item.id)) return
       const next = !item.is_active
-      setTogglingId(item.id)
+      setTogglingIds((ids) => new Set(ids).add(item.id))
       setApprovedError(null)
       // Truthful optimistic toggle: flip is_active in place (badge + button update, the row STAYS in
       // the list so both directions stay visible), then AWAIT the persist and revert on failure. The
@@ -264,85 +338,94 @@ export function BusinessesTab() {
       setApproved((prev) => prev.map((b) => (b.id === item.id ? { ...b, is_active: next } : b)))
       try {
         await adminSetBusinessActive(supabase, item.id, next)
+        announce(setStatus, formatMessage(orgFormT(locale, next ? 'orgReactivated' : 'orgDeactivated'), { name: isolate(item.name) }))
       } catch (err) {
         setApproved((prev) => prev.map((b) => (b.id === item.id ? { ...b, is_active: item.is_active } : b)))
         logger.error('admin.business.set_active', err, { org_id: item.id, active: next, outcome: 'error' })
-        setApprovedError(
-          `${next ? 'Reactivate' : 'Deactivate'} failed: ${err instanceof Error ? err.message : 'unknown error'}`
-        )
+        setApprovedError(formatMessage(orgFormT(locale, 'toggleFailed'), { name: isolate(item.name) }))
       } finally {
-        setTogglingId(null)
+        setTogglingIds((ids) => {
+          const left = new Set(ids)
+          left.delete(item.id)
+          return left
+        })
       }
     },
-    [supabase]
+    [supabase, togglingIds, locale]
   )
 
-  // "Edit in admin" link that opened nothing. Rendered from the first render — through the loading
-  // spinner too — so its live region exists before a notice arrives and is announced. Both returns put
-  // it first inside the same root <div>, so React keeps the same DOM node when loading ends.
-  const focusNoticeLine = (
-    <AdminFocusNoticeLine notice={focusNotice} kind="business" onDismiss={() => setFocusNotice(null)} />
+  // "Edit in admin" link that opened nothing, and the action result line. Rendered from the first
+  // render — through the loading spinner too — so their live regions exist before a notice arrives
+  // and are announced. Both returns put them first inside the same root <div>, so React keeps the
+  // same DOM nodes when loading ends.
+  const liveLines = (
+    <>
+      <AdminFocusNoticeLine notice={focusNotice} kind="business" locale={locale} onDismiss={() => setFocusNotice(null)} />
+      <p role="status" data-testid="businesses-status" className="sr-only"><AnnouncementText announcement={status} /></p>
+    </>
   )
 
   if (loading) {
     return (
-      <div className="space-y-8">
-        {focusNoticeLine}
+      <div className="space-y-8" lang={locale} dir={dir(locale)}>
+        {liveLines}
         <div className="flex items-center justify-center py-12 text-stone-600">
-          <Loader2 className="h-6 w-6 animate-spin" />
+          <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+          <span className="sr-only">{t('loading')}</span>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8">
-      {focusNoticeLine}
+    <div className="space-y-8" lang={locale} dir={dir(locale)}>
+      {liveLines}
       {/* Section 1 — pending queue (unchanged behavior). */}
       <div className="space-y-3">
-        <h3 className="text-base font-semibold text-[#4a5d23]">Awaiting review</h3>
-        {queueError && (
-          <div role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">
-            {queueError}
-          </div>
-        )}
+        <h3 ref={pendingHeading} tabIndex={-1} className={HEADING}>{t('awaitingTitle')}</h3>
+        <div role="alert" data-testid="businesses-queue-alert" className={queueError ? 'rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800' : 'sr-only'}>
+          {queueError ?? ''}
+        </div>
 
         {pending.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-stone-300 py-10 text-center text-sm text-stone-500">
-            No businesses awaiting review.
+          <div className="rounded-xl border border-dashed border-stone-300 py-10 text-center text-sm text-stone-600">
+            {t('noPending')}
           </div>
         ) : (
           <ul className="space-y-3">
             {pending.map((item) => {
               const isProcessing = processingId === item.id
+              const busy = isProcessing
               const addr = [item.address, item.city, item.state].filter(Boolean).join(', ')
+              const titleId = `pending-title-${item.id}`
               return (
                 <li key={item.id} className="rounded-xl border border-stone-200 bg-white p-4">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime-100 text-lime-700">
-                      <Leaf className="h-4 w-4" />
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime-100 text-lime-800">
+                      <Leaf className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-stone-800">{item.name}</h4>
+                      <h4 id={titleId} lang="" dir="auto" className="font-semibold text-stone-800">{item.name}</h4>
                       {item.description && (
-                        <p className="mt-0.5 text-sm text-stone-600">{item.description}</p>
+                        <p lang="" dir="auto" className="mt-0.5 text-sm text-stone-600">{item.description}</p>
                       )}
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500">
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-600">
                         {addr && (
                           <span className="flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {addr}
+                            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span lang="" dir="auto">{addr}</span>
                           </span>
                         )}
-                        {item.phone && <span>{item.phone}</span>}
-                        {item.website && <span className="truncate">{item.website}</span>}
+                        {item.phone && <span dir="ltr">{item.phone}</span>}
+                        {item.website && <span dir="ltr" className="truncate">{item.website}</span>}
                       </div>
                       <div className="mt-1">
                         {/* fetchPendingBusinesses returns status='pending' rows: members cannot see them yet. */}
                         <MemberViewLink
                           to={{ kind: 'business', id: item.id }}
                           visibility={businessVisibility({ status: 'pending', is_active: true })}
-                          label="View public page"
+                          label={tr('actionViewPublic')}
+                          locale={locale}
                           itemName={item.name}
                           source="businesses"
                         />
@@ -351,50 +434,48 @@ export function BusinessesTab() {
                   </div>
 
                   <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
-                    <label htmlFor={`reason-${item.id}`} className="sr-only">
-                      Rejection reason for {item.name}
+                    <label htmlFor={`reason-${item.id}`} className="block text-xs font-medium text-stone-700">
+                      {t('rejectReasonLabel')}
                     </label>
                     <input
                       id={`reason-${item.id}`}
+                      aria-describedby={titleId}
                       value={reasons[item.id] ?? ''}
                       onChange={(e) => setReasons((r) => ({ ...r, [item.id]: e.target.value }))}
-                      placeholder="Optional reason (shown to submitter on reject)"
-                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                      dir="auto"
+                      className="w-full rounded-lg border border-stone-500 bg-white px-3 py-1.5 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
                       disabled={isProcessing}
                     />
-                    <div className="flex gap-2">
+                    {/* aria-disabled while an action runs (not disabled): the pressed button keeps focus. */}
+                    <div className="flex flex-wrap gap-2">
                       <Button
+                        id={pendingApproveId(item.id)}
                         size="sm"
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
-                        onClick={() => void handleApprove(item)}
-                        disabled={isProcessing}
-                        aria-label={`Approve ${item.name}`}
+                        className="flex-1 bg-green-700 hover:bg-green-800 text-white h-8 text-xs"
+                        onClick={() => { if (!busy) void handleApprove(item) }}
+                        aria-disabled={busy || undefined}
+                        aria-label={namedControl(t('approve'), item.name)}
                       >
                         {isProcessing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                         ) : (
-                          <>
-                            <Check className="h-3.5 w-3.5 mr-1" />
-                            Approve
-                          </>
+                          <Check className="h-3.5 w-3.5 me-1" aria-hidden="true" />
                         )}
+                        {t('approve')}
                       </Button>
                       <Button
                         size="sm"
-                        variant="destructive"
-                        className="flex-1 h-8 text-xs"
-                        onClick={() => void handleReject(item)}
-                        disabled={isProcessing}
-                        aria-label={`Reject ${item.name}`}
+                        className={`flex-1 h-8 text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
+                        onClick={() => { if (!busy) void handleReject(item) }}
+                        aria-disabled={busy || undefined}
+                        aria-label={namedControl(t('reject'), item.name)}
                       >
                         {isProcessing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                         ) : (
-                          <>
-                            <X className="h-3.5 w-3.5 mr-1" />
-                            Reject
-                          </>
+                          <X className="h-3.5 w-3.5 me-1" aria-hidden="true" />
                         )}
+                        {t('reject')}
                       </Button>
                     </div>
                   </div>
@@ -407,62 +488,63 @@ export function BusinessesTab() {
 
       {/* Section 2 — approved businesses (edit / deactivate). */}
       <div className="space-y-3">
-        <h3 className="text-base font-semibold text-[#4a5d23]">
-          Approved businesses {!loadingApproved && `(${approved.length})`}
+        <h3 ref={approvedHeading} tabIndex={-1} className={HEADING}>
+          {loadingApproved
+            ? t('approvedBusinessesTitle')
+            : formatMessage(t('approvedBusinessesCount'), { count: formatCount(approved.length, locale) })}
         </h3>
-        {approvedError && (
-          <div role="alert" className="rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800">
-            {approvedError}
-          </div>
-        )}
+        <div role="alert" data-testid="businesses-approved-alert" className={approvedError ? 'rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800' : 'sr-only'}>
+          {approvedError ?? ''}
+        </div>
 
         {loadingApproved ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-stone-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          <div className="flex items-center gap-2 py-6 text-sm text-stone-600">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {t('loading')}
           </div>
         ) : approved.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-stone-300 py-10 text-center text-sm text-stone-500">
-            No approved businesses yet.
+          <div className="rounded-xl border border-dashed border-stone-300 py-10 text-center text-sm text-stone-600">
+            {t('noApproved')}
           </div>
         ) : (
           <ul className="space-y-3">
             {approved.map((item) => {
               const isEditing = editingId === item.id
               const isSaving = savingId === item.id
-              const isToggling = togglingId === item.id
+              const isToggling = togglingIds.has(item.id)
               const addr = [item.address, item.city, item.state].filter(Boolean).join(', ')
               return (
                 <li key={item.id} className="rounded-xl border border-stone-200 bg-white p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime-100 text-lime-700">
-                      <Leaf className="h-4 w-4" />
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lime-100 text-lime-800">
+                      <Leaf className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h4 id={`business-title-${item.id}`} className="font-semibold text-stone-800">{item.name}</h4>
+                      <h4 id={`business-title-${item.id}`} lang="" dir="auto" className="font-semibold text-stone-800">{item.name}</h4>
                       {item.description && (
-                        <p className="mt-0.5 text-sm text-stone-600">{item.description}</p>
+                        <p lang="" dir="auto" className="mt-0.5 text-sm text-stone-600">{item.description}</p>
                       )}
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-500">
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-stone-600">
                         {addr && (
                           <span className="flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {addr}
+                            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span lang="" dir="auto">{addr}</span>
                           </span>
                         )}
-                        {item.phone && <span>{item.phone}</span>}
-                        {item.website && <span className="truncate">{item.website}</span>}
+                        {item.phone && <span dir="ltr">{item.phone}</span>}
+                        {item.website && <span dir="ltr" className="truncate">{item.website}</span>}
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                         {/* fetchAdminBusinessList returns status='approved' rows only. */}
                         <MemberViewLink
                           to={{ kind: 'business', id: item.id }}
                           visibility={businessVisibility({ status: 'approved', is_active: item.is_active })}
-                          label="View public page"
+                          label={tr('actionViewPublic')}
+                          locale={locale}
                           itemName={item.name}
                           source="businesses"
                         />
                         {/* Its pin on the members' map (businesses_in_bounds also needs a location). */}
-                        <BusinessMapLink item={item} />
+                        <BusinessMapLink item={item} locale={locale} />
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
@@ -470,42 +552,49 @@ export function BusinessesTab() {
                         variant="outline"
                         className={
                           item.is_active
-                            ? 'text-xs text-[#4a5d23] border-[#4a5d23]/30'
-                            : 'text-xs text-stone-500 border-stone-300'
+                            ? 'text-xs text-[#4a5d23] border-[#4a5d23]'
+                            : 'text-xs text-stone-600 border-stone-500'
                         }
                       >
-                        {item.is_active ? 'Active' : 'Inactive'}
+                        {tr(item.is_active ? 'statusActive' : 'statusInactive')}
                       </Badge>
                       {!isEditing && (
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                           <button
                             type="button"
-                            onClick={() => startEdit(item)}
-                            disabled={isToggling}
-                            className="text-[#4a5d23] hover:text-[#3d4d1c] text-xs font-medium inline-flex items-center gap-1 disabled:opacity-50"
-                            aria-label={`Edit ${item.name}`}
+                            id={editButtonId(item.id)}
+                            onClick={() => {
+                              if (isToggling) return
+                              startEdit(item)
+                              // Edit leaves while the form is open: focus its Name field.
+                              setRevealId(item.id)
+                            }}
+                            aria-disabled={isToggling || undefined}
+                            className={`min-h-6 rounded-sm text-[#4a5d23] hover:text-[#3d4d1c] text-xs font-medium inline-flex items-center gap-1 ${FOCUS_RING}`}
+                            aria-label={namedControl(tr('actionEdit'), item.name)}
                           >
-                            <Pencil className="h-3 w-3" /> Edit
+                            <Pencil className="h-3 w-3" aria-hidden="true" /> {tr('actionEdit')}
                           </button>
                           <button
                             type="button"
                             onClick={() => void handleToggleActive(item)}
-                            disabled={isToggling}
+                            aria-disabled={isToggling || undefined}
                             className={
-                              item.is_active
-                                ? 'text-red-500 hover:text-red-700 text-xs font-medium inline-flex items-center gap-1 disabled:opacity-50'
-                                : 'text-[#4a5d23] hover:text-[#3d4d1c] text-xs font-medium inline-flex items-center gap-1 disabled:opacity-50'
+                              (item.is_active
+                                ? 'text-red-700 hover:text-red-800'
+                                : 'text-[#4a5d23] hover:text-[#3d4d1c]') +
+                              ` min-h-6 rounded-sm text-xs font-medium inline-flex items-center gap-1 ${FOCUS_RING}`
                             }
-                            aria-label={`${item.is_active ? 'Deactivate' : 'Reactivate'} ${item.name}`}
+                            aria-label={namedControl(tr(item.is_active ? 'actionDeactivate' : 'actionReactivate'), item.name)}
                           >
                             {isToggling ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                             ) : item.is_active ? (
-                              <X className="h-3 w-3" />
+                              <X className="h-3 w-3" aria-hidden="true" />
                             ) : (
-                              <Check className="h-3 w-3" />
+                              <Check className="h-3 w-3" aria-hidden="true" />
                             )}
-                            {item.is_active ? 'Deactivate' : 'Reactivate'}
+                            {tr(item.is_active ? 'actionDeactivate' : 'actionReactivate')}
                           </button>
                         </div>
                       )}
@@ -518,65 +607,71 @@ export function BusinessesTab() {
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5 sm:col-span-2">
                           <label htmlFor={`edit-name-${item.id}`} className="text-stone-700 text-xs font-medium">
-                            Name
+                            {t('fieldName')} <span>({t('required')})</span>
                           </label>
                           <Input
                             id={`edit-name-${item.id}`}
                             // Names the business being edited when this field takes focus (a followed link focuses it).
                             aria-describedby={`business-title-${item.id}`}
+                            required
+                            aria-required="true"
                             value={draft.name}
                             onChange={(e) => setDraftField('name', e.target.value)}
-                            placeholder="Business name"
+                            lang=""
+                            dir="auto"
                             className={inputClass}
                             disabled={isSaving}
                           />
                         </div>
                         <div className="space-y-1.5 sm:col-span-2">
                           <label htmlFor={`edit-desc-${item.id}`} className="text-stone-700 text-xs font-medium">
-                            Description
+                            {t('fieldDescription')}
                           </label>
                           <Textarea
                             id={`edit-desc-${item.id}`}
                             value={draft.description}
                             onChange={(e) => setDraftField('description', e.target.value)}
-                            placeholder="Optional description"
                             rows={2}
+                            lang=""
+                            dir="auto"
                             className={`${inputClass} resize-none`}
                             disabled={isSaving}
                           />
                         </div>
                         <div className="space-y-1.5">
                           <label htmlFor={`edit-phone-${item.id}`} className="text-stone-700 text-xs font-medium">
-                            Phone
+                            {t('fieldPhone')}
                           </label>
                           <Input
                             id={`edit-phone-${item.id}`}
+                            type="tel"
+                            dir="ltr"
                             value={draft.phone}
                             onChange={(e) => setDraftField('phone', e.target.value)}
-                            placeholder="Phone"
                             className={inputClass}
                             disabled={isSaving}
                           />
                         </div>
                         <div className="space-y-1.5">
                           <label htmlFor={`edit-email-${item.id}`} className="text-stone-700 text-xs font-medium">
-                            Email
+                            {t('fieldEmail')}
                           </label>
                           <Input
                             id={`edit-email-${item.id}`}
+                            dir="ltr"
                             value={draft.email}
                             onChange={(e) => setDraftField('email', e.target.value)}
-                            placeholder="Email"
                             className={inputClass}
                             disabled={isSaving}
                           />
                         </div>
                         <div className="space-y-1.5 sm:col-span-2">
                           <label htmlFor={`edit-website-${item.id}`} className="text-stone-700 text-xs font-medium">
-                            Website
+                            {t('fieldWebsite')}
                           </label>
                           <Input
                             id={`edit-website-${item.id}`}
+                            dir="ltr"
                             value={draft.website}
                             onChange={(e) => setDraftField('website', e.target.value)}
                             placeholder="https://…"
@@ -585,23 +680,32 @@ export function BusinessesTab() {
                           />
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      {/* aria-disabled (not disabled): a pressed Save keeps focus while it runs. */}
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
-                          className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white h-8 text-xs"
+                          className={
+                            draft.name.trim()
+                              ? 'bg-[#4a5d23] hover:bg-[#3d4d1c] text-white h-8 text-xs'
+                              : 'bg-stone-200 text-stone-700 hover:bg-stone-200 h-8 text-xs'
+                          }
                           onClick={() => void handleSaveEdit(item)}
-                          disabled={isSaving || !draft.name.trim()}
+                          aria-disabled={isSaving || !draft.name.trim() || undefined}
                         >
-                          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
+                          {isSaving ? (
+                            <><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />{t('saving')}</>
+                          ) : (
+                            t('save')
+                          )}
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 text-xs"
-                          onClick={cancelEdit}
-                          disabled={isSaving}
+                          className="h-8 border-stone-500 text-xs"
+                          onClick={() => { if (!isSaving) cancelEdit() }}
+                          aria-disabled={isSaving || undefined}
                         >
-                          Cancel
+                          {t('cancel')}
                         </Button>
                       </div>
                     </div>
@@ -618,7 +722,7 @@ export function BusinessesTab() {
 
 /** An approved business row's "View on map": its pin on the members' map, or why it has none — not
  *  repeated when it is the reason the row already shows for the public page (inactive). */
-function BusinessMapLink({ item }: { item: AdminBusiness }) {
+function BusinessMapLink({ item, locale }: { item: AdminBusiness; locale: Locale }) {
   const page = businessVisibility({ status: 'approved', is_active: item.is_active })
   const map = businessMapVisibility({
     status: 'approved',
@@ -630,7 +734,8 @@ function BusinessMapLink({ item }: { item: AdminBusiness }) {
     <MemberViewLink
       to={{ kind: 'map_focus', focus: { kind: 'business', id: item.id } }}
       visibility={map}
-      label={adminNavT('en', 'viewOnMap')}
+      label={adminNavT(locale, 'viewOnMap')}
+      locale={locale}
       itemName={item.name}
       source="businesses"
     />

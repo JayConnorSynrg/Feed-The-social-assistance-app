@@ -58,8 +58,8 @@ import { AdminShell } from './admin-shell'
 import { markupText } from '@/test/markup-text'
 
 const LOCALES = Object.keys(messages) as Locale[]
-/** The tabs whose content a P6 wave translated (W3): marked with the admin's language. */
-const TRANSLATED_TABS = ['moderation', 'community', 'people']
+/** The tabs whose content a P6 wave translated (W3, W4): marked with the admin's language. */
+const TRANSLATED_TABS = ['moderation', 'community', 'people', 'organizations', 'resources', 'businesses', 'manage']
 
 function html(language: string | null, opts: { tier?: string | null; isOrgAdmin?: boolean; cookie?: Locale } = {}) {
   state.language = language
@@ -108,7 +108,7 @@ describe('the admin shell in the admin’s language', () => {
   it.each([
     ['ko', 'ltr'],
     ['ar', 'rtl'],
-  ])('%s: the translated tabs (Moderation, Community, People) carry the admin’s language and direction', (language, direction) => {
+  ])('%s: the translated tabs (Moderation, Community, People, Organizations, Resources, Businesses, Manage) carry the admin’s language and direction', (language, direction) => {
     const panels = [...html(language).matchAll(/<div([^>]*role="tabpanel"[^>]*)>/g)].map((m) => m[1])
     for (const id of TRANSLATED_TABS) {
       const panel = panels.find((p) => p.includes(`-content-${id}"`))!

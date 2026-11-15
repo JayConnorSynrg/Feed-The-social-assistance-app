@@ -11,6 +11,8 @@ const STATUS_LABELS = [
 interface DiscoverProgressProps {
   active: boolean
   durationMs?: number
+  /** The cycling status words in the viewer's language (default: the English three). */
+  labels?: readonly string[]
 }
 
 /**
@@ -18,7 +20,7 @@ interface DiscoverProgressProps {
  * Drives 0→90% with ease-out while active, then snaps to 100% and hides.
  * Implemented via direct DOM mutation (no useState) to avoid cascading renders.
  */
-export function DiscoverProgress({ active, durationMs = 30000 }: DiscoverProgressProps) {
+export function DiscoverProgress({ active, durationMs = 30000, labels = STATUS_LABELS }: DiscoverProgressProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLParagraphElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -38,7 +40,7 @@ export function DiscoverProgress({ active, durationMs = 30000 }: DiscoverProgres
       wrapper.style.display = 'block'
       bar.style.width = '0%'
       labelIndexRef.current = 0
-      label.textContent = STATUS_LABELS[0]
+      label.textContent = labels[0]
       startRef.current = performance.now()
 
       // Animate 0→90% ease-out via rAF — no setState, pure DOM write
@@ -55,8 +57,8 @@ export function DiscoverProgress({ active, durationMs = 30000 }: DiscoverProgres
 
       // Cycle status label every 3s
       labelIntervalRef.current = setInterval(() => {
-        labelIndexRef.current = (labelIndexRef.current + 1) % STATUS_LABELS.length
-        if (label) label.textContent = STATUS_LABELS[labelIndexRef.current]
+        labelIndexRef.current = (labelIndexRef.current + 1) % labels.length
+        if (label) label.textContent = labels[labelIndexRef.current]
       }, 3000)
     } else {
       // Snap to 100%, then hide after 500ms
@@ -76,7 +78,7 @@ export function DiscoverProgress({ active, durationMs = 30000 }: DiscoverProgres
       cancelAnimationFrame(rafRef.current)
       clearInterval(labelIntervalRef.current)
     }
-  }, [active, durationMs])
+  }, [active, durationMs, labels])
 
   return (
     <div ref={wrapperRef} className="space-y-1.5" style={{ display: 'none' }}>
@@ -87,8 +89,8 @@ export function DiscoverProgress({ active, durationMs = 30000 }: DiscoverProgres
           style={{ width: '0%' }}
         />
       </div>
-      <p ref={labelRef} className="text-xs text-stone-500 animate-pulse">
-        {STATUS_LABELS[0]}
+      <p ref={labelRef} className="text-xs text-stone-600 animate-pulse">
+        {labels[0]}
       </p>
     </div>
   )

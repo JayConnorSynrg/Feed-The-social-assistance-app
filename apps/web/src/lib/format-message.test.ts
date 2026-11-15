@@ -44,9 +44,9 @@ describe('formatMessage', () => {
     expect(formatMessage(orgForms.orgFormMessages.hmn.orgDeactivated, { name: 'Food Shelf' })).toBe('Food Shelf raug kaw lawm.')
   })
 
-  it('both dictionaries hand out this same function', () => {
+  it('the event-forms dictionary hands out this same function; org-forms no longer re-exports it (P6 W4)', () => {
     expect(eventForms.formatMessage).toBe(formatMessage)
-    expect(orgForms.formatMessage).toBe(formatMessage)
+    expect('formatMessage' in orgForms).toBe(false)
   })
 })
 
@@ -74,11 +74,8 @@ describe('one definition in the source tree', () => {
   // (lib/i18n-org-forms.ts serves the first two below, lib/i18n-event-forms.ts the other four).
   // P6 W1 repointed admin-shell.tsx.
   const STILL_THROUGH_A_DICTIONARY = [
-    'app/(admin)/moderation/org/[id]/org-admin-shell.tsx',
-    'app/(admin)/moderation/orgs-section.tsx',
     'app/(admin)/moderation/event-scheduler.tsx',
     'app/(admin)/moderation/extend-series-button.tsx',
-    'app/(admin)/moderation/org/org-overview.tsx',
     'components/feed/post-model.ts',
   ]
 

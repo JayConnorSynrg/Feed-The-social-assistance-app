@@ -8,24 +8,25 @@
 // sr-only until needed), so the line is announced politely when it appears; the Dismiss button sits
 // outside the live region and, since it removes itself, hands focus to the active admin tab trigger.
 // Malformed links and tabs this tier does not see are the shell's (useAdminFocusGate), not this line's.
+// The line and its Dismiss read in the admin's language (lib/i18n-admin-resources.ts, P6 W4).
 
 import { Button } from '@/components/ui/button'
+import type { Locale } from '@/lib/i18n'
+import { adminResourcesT, type AdminResourcesMessages } from '@/lib/i18n-admin-resources'
 import { activeAdminTabTrigger } from './admin-focus-return'
 
 /** not_found: missing / not approved / not readable. not_editable: shown, but this tier cannot save it. */
 export type AdminFocusNotice = 'not_found' | 'not_editable'
 export type PlaceFocusKind = 'resource' | 'business'
 
-/** The plain line each miss shows (the Manage and Businesses tabs are English). */
-export const ADMIN_FOCUS_NOTICE_TEXT: Record<AdminFocusNotice, Record<PlaceFocusKind, string>> = {
-  not_found: {
-    resource: "That resource couldn't be found, or it isn't editable here (only approved resources are listed in Manage).",
-    business: "That business couldn't be found, or it isn't editable here (only approved businesses can be edited).",
-  },
-  not_editable: {
-    resource: "Your admin role can't edit resources.",
-    business: 'Only platform admins can edit businesses.',
-  },
+/** The plain line each miss shows, by key. */
+const NOTICE_KEY = {
+  not_found: { resource: 'noticeResourceNotFound', business: 'noticeBusinessNotFound' },
+  not_editable: { resource: 'noticeResourceNotEditable', business: 'noticeBusinessNotEditable' },
+} as const satisfies Record<AdminFocusNotice, Record<PlaceFocusKind, keyof AdminResourcesMessages>>
+
+export function adminFocusNoticeText(notice: AdminFocusNotice, kind: PlaceFocusKind, locale: Locale): string {
+  return adminResourcesT(locale, NOTICE_KEY[notice][kind])
 }
 
 /** Dismiss: focus moves to the active tab trigger BEFORE the button removes itself. */
@@ -38,10 +39,12 @@ export function AdminFocusNoticeLine({
   notice,
   kind,
   onDismiss,
+  locale,
 }: {
   notice: AdminFocusNotice | null
   kind: PlaceFocusKind
   onDismiss: () => void
+  locale: Locale
 }) {
   return (
     <div
@@ -50,11 +53,11 @@ export function AdminFocusNoticeLine({
       }
     >
       <p role="status" className={notice ? 'flex-1' : 'sr-only'}>
-        {notice ? ADMIN_FOCUS_NOTICE_TEXT[notice][kind] : ''}
+        {notice ? adminFocusNoticeText(notice, kind, locale) : ''}
       </p>
       {notice && (
-        <Button variant="outline" size="sm" className="h-6 shrink-0 text-xs" onClick={() => dismissNotice(onDismiss)}>
-          Dismiss
+        <Button variant="outline" size="sm" className="h-6 shrink-0 border-stone-500 text-xs" onClick={() => dismissNotice(onDismiss)}>
+          {adminResourcesT(locale, 'dismiss')}
         </Button>
       )}
     </div>

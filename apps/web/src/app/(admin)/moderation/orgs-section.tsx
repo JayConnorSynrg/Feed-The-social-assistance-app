@@ -10,7 +10,10 @@
 // via admin_set_org_active, reverted on failure), Open admin and View public page (active orgs; an
 // inactive org shows why members cannot see it instead). Each row's name links to that organization's admin page (/moderation/org/<id>). The
 // membership roster stays available as a row expansion; OrgMembers is also the Members tab of the
-// organization admin page, read-only there for organization admins.
+// organization admin page, read-only there for organization admins. The roster reads in the
+// admin's language (lib/i18n-org-admin.ts, P6 W4); a failure shows a sentence for its code and
+// writes one admin.org.members_failed row (code + op, never text); each change is announced in an
+// always-mounted status line, and Remove hands focus to the next row (else the add box).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -33,7 +36,16 @@ import { dir, type Locale } from '@/lib/i18n'
 import { MemberViewLink } from '@/components/admin/member-view-link'
 import { adminNavT, memberReasonText } from '@/lib/i18n-admin-nav'
 import { organizationMapVisibility, organizationVisibility, showsMapControl, type MemberVisibility } from '@/lib/member-visibility'
-import { orgFormT, formatMessage, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { orgFormT, type OrgFormMessages } from '@/lib/i18n-org-forms'
+import { formatMessage } from '@/lib/format-message'
+import { cn } from '@/lib/utils'
+import { orgAdminT, orgRoleLabel, type OrgAdminMessages } from '@/lib/i18n-org-admin'
+import { namedControl } from '@/lib/i18n-admin-resources'
+import { formatDate } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
+import { logger } from '@/lib/logger'
+import { failureCode } from '@/lib/failure-code'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, focusAfterRowRemoval, type Announcement } from './row-focus'
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
 import { orgTypeKey } from '@/components/org-form/org-labels'
@@ -46,6 +58,7 @@ import {
   removeOrgMember,
   type MemberRole,
   type OrgMember,
+  type RosterFailure,
 } from './org-members-data'
 
 export interface OrgsSectionProps {
@@ -268,7 +281,7 @@ export function OrgsSection({ locale, onCreate, onEdit, refreshKey, notice }: Or
                   </div>
                   {expanded && (
                     <div id={`members-${org.id}`} className="mt-3">
-                      <OrgMembers orgId={org.id} />
+                      <OrgMembers orgId={org.id} locale={locale} />
                     </div>
                   )}
                 </li>
@@ -418,7 +431,33 @@ function MenuReason({ locale, visibility }: { locale: Locale; visibility: Extrac
 // for anyone but a platform admin either way.
 // ---------------------------------------------------------------------------------------------
 
-export function OrgMembers({ orgId, readOnly = false }: { orgId: string; readOnly?: boolean }) {
+type RosterOp = 'load' | 'add' | 'remove' | 'role'
+
+/** The sentence for a failed roster call, by its code. */
+export function rosterFailureText(op: RosterOp, code: RosterFailure, locale: Locale): string {
+  const key: keyof OrgAdminMessages =
+    op === 'load'
+      ? 'membersLoadFailed'
+      : op === 'remove'
+        ? 'removeFailed'
+        : op === 'role'
+          ? 'roleFailed'
+          : code === '23505'
+            ? 'addDuplicate'
+            : code === '22P02'
+              ? 'addInvalid'
+              : code === '23503'
+                ? 'addNoAccount'
+                : 'addFailed'
+  return orgAdminT(locale, key)
+}
+
+/** Ids the roster's focus moves use (one roster per organization on a page). */
+export const rosterAddInputId = (orgId: string) => `roster-${orgId}-user-id`
+export const rosterRemoveId = (orgId: string, memberId: string) => `roster-${orgId}-remove-${memberId}`
+export const rosterRoleId = (orgId: string, memberId: string) => `roster-${orgId}-role-${memberId}`
+
+export function OrgMembers({ orgId, readOnly = false, locale }: { orgId: string; readOnly?: boolean; locale: Locale }) {
   const supabase = useMemo(() => createClient(), [])
   const [members, setMembers] = useState<OrgMember[]>([])
   const [loadingMembers, setLoadingMembers] = useState(true)
@@ -428,6 +467,20 @@ export function OrgMembers({ orgId, readOnly = false }: { orgId: string; readOnl
   const [addRole, setAddRole] = useState<MemberRole>('member')
   const [addingMember, setAddingMember] = useState(false)
   const [addMemberError, setAddMemberError] = useState<string | null>(null)
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  // The member whose Remove is running (a second press on that row does nothing).
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  // After a role change: the row's role trigger, focused once the roster has re-rendered.
+  const focusAfter = useRef<string | null>(null)
+
+  const fail = useCallback(
+    (op: RosterOp, code: RosterFailure) => {
+      // No other row records a roster call: one row with its code (never a message).
+      logger.warn('admin.org.members_failed', { op, code })
+      return rosterFailureText(op, code, locale)
+    },
+    [locale]
+  )
 
   const fetchMembers = useCallback(async () => {
     setLoadingMembers(true)
@@ -435,47 +488,69 @@ export function OrgMembers({ orgId, readOnly = false }: { orgId: string; readOnl
       setMembers(await fetchOrgMembers(supabase, orgId))
       setLoadError(null)
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Could not load members.')
+      setLoadError(fail('load', failureCode(e)))
     } finally {
       setLoadingMembers(false)
     }
-  }, [supabase, orgId])
+  }, [supabase, orgId, fail])
 
   useEffect(() => {
     void fetchMembers()
-  }, [fetchMembers])
+    // The first load (and a new organization) only; writes re-read explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, orgId])
+
+  useEffect(() => {
+    const target = focusAfter.current
+    if (!target) return
+    focusAfter.current = null
+    afterLayout(() => document.getElementById(target)?.focus())
+  }, [members])
 
   const handleAddMember = useCallback(async () => {
-    if (readOnly || !addUserId.trim()) return
+    if (readOnly || addingMember || !addUserId.trim()) return
     setAddingMember(true)
     setAddMemberError(null)
+    // An earlier remove / role failure no longer applies once the admin acts again.
+    setRosterError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       const err = await addOrgMember(supabase, orgId, addUserId.trim(), addRole, user?.id ?? null)
       if (err) {
-        setAddMemberError(err)
+        setAddMemberError(fail('add', err))
       } else {
         setAddUserId('')
         setAddRole('member')
+        announce(setStatus, orgAdminT(locale, 'memberAdded'))
         await fetchMembers()
       }
     } finally {
       setAddingMember(false)
     }
-  }, [readOnly, supabase, orgId, addUserId, addRole, fetchMembers])
+  }, [readOnly, addingMember, supabase, orgId, addUserId, addRole, fetchMembers, fail, locale])
 
   const handleRemoveMember = useCallback(
     async (memberId: string) => {
-      if (readOnly) return
+      if (readOnly || removingId === memberId) return
+      setRemovingId(memberId)
       setRosterError(null)
-      const err = await removeOrgMember(supabase, orgId, memberId)
-      if (err) {
-        setRosterError(err)
-        return
+      try {
+        const err = await removeOrgMember(supabase, orgId, memberId)
+        if (err) {
+          setRosterError(fail('remove', err))
+          return
+        }
+        // Move focus NOW, while its row is still on screen, to a control that stays (the next row's
+        // Remove, else the add box): focus never passes through <body> when the row leaves.
+        const next = focusAfterRowRemoval(members.map((m) => m.id), memberId)
+        document.getElementById(next ? rosterRemoveId(orgId, next) : rosterAddInputId(orgId))?.focus()
+        announce(setStatus, orgAdminT(locale, 'memberRemoved'))
+        await fetchMembers()
+      } finally {
+        setRemovingId(null)
       }
-      await fetchMembers()
     },
-    [readOnly, supabase, orgId, fetchMembers]
+    [readOnly, removingId, supabase, orgId, fetchMembers, fail, members, locale]
   )
 
   const handleChangeRole = useCallback(
@@ -484,20 +559,26 @@ export function OrgMembers({ orgId, readOnly = false }: { orgId: string; readOnl
       setRosterError(null)
       const err = await changeOrgMemberRole(supabase, orgId, memberId, nextRole)
       if (err) {
-        setRosterError(err)
+        setRosterError(fail('role', err))
         return
       }
+      focusAfter.current = rosterRoleId(orgId, memberId)
+      announce(setStatus, orgAdminT(locale, 'roleChanged'))
       await fetchMembers()
     },
-    [readOnly, supabase, orgId, fetchMembers]
+    [readOnly, supabase, orgId, fetchMembers, fail, locale]
   )
 
   return (
     <OrgMembersView
+      orgId={orgId}
+      locale={locale}
       members={members}
       loading={loadingMembers}
       loadError={loadError}
       rosterError={rosterError}
+      status={status}
+      removingId={removingId}
       readOnly={readOnly}
       add={{ userId: addUserId, role: addRole, adding: addingMember, error: addMemberError }}
       onAddUserIdChange={setAddUserId}
@@ -510,10 +591,17 @@ export function OrgMembers({ orgId, readOnly = false }: { orgId: string; readOnl
 }
 
 export interface OrgMembersViewProps {
+  orgId: string
+  locale: Locale
   members: OrgMember[]
   loading: boolean
+  /** Already in the admin's language (rosterFailureText). */
   loadError: string | null
   rosterError: string | null
+  /** The last change's result, announced by an always-mounted status line. */
+  status: Announcement
+  /** The member whose Remove is running, if any. */
+  removingId?: string | null
   readOnly: boolean
   add: { userId: string; role: MemberRole; adding: boolean; error: string | null }
   onAddUserIdChange: (v: string) => void
@@ -524,59 +612,87 @@ export interface OrgMembersViewProps {
 }
 
 export function OrgMembersView(props: OrgMembersViewProps) {
-  const { members, loading, loadError, rosterError, readOnly, add } = props
+  const { orgId, locale, members, loading, loadError, rosterError, status, readOnly, add, removingId = null } = props
+  const t = (key: keyof OrgAdminMessages) => orgAdminT(locale, key)
+  const tz = browserTimeZone()
+  const addId = rosterAddInputId(orgId)
+  // Busy (adding) keeps its colours — the label says "Adding…"; empty (invalid) is a solid grey.
+  const addInvalid = !add.userId.trim()
+  const addDisabled = add.adding || addInvalid
+  const alert = rosterError ?? loadError
   return (
-    // The roster is English-only for now; mark it so screen readers do not read it as the admin locale.
-    <div lang="en" dir="ltr" className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+    <div lang={locale} dir={dir(locale)} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
       {!readOnly && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          <Input
-            value={add.userId}
-            onChange={(e) => props.onAddUserIdChange(e.target.value)}
-            placeholder="User UUID"
-            aria-label="User UUID"
-            className="w-64 text-sm text-stone-900 placeholder:text-stone-500"
-          />
-          <Select value={add.role} onValueChange={(v) => props.onAddRoleChange(v as MemberRole)}>
-            <SelectTrigger className="w-28 text-sm text-stone-900" aria-label="Role">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent lang="en">
-              <SelectItem value="member">Member</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-            </SelectContent>
-          </Select>
-          <button type="button" onClick={props.onAdd} disabled={add.adding || !add.userId.trim()} className={PRIMARY}>
-            {add.adding ? 'Adding…' : 'Add Member'}
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            <label htmlFor={addId} className="text-xs font-medium text-stone-700">
+              {t('userIdLabel')} <span>({orgFormT(locale, 'fieldRequired')})</span>
+            </label>
+            <Input
+              id={addId}
+              required
+              aria-required="true"
+              value={add.userId}
+              onChange={(e) => props.onAddUserIdChange(e.target.value)}
+              dir="ltr"
+              className="w-64 max-w-full font-mono text-sm text-stone-900"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span id={`${addId}-role`} className="text-xs font-medium text-stone-700">{t('roleLabel')}</span>
+            <Select value={add.role} onValueChange={(v) => props.onAddRoleChange(v as MemberRole)}>
+              <SelectTrigger className="w-32 border-stone-500 text-sm text-stone-900" aria-labelledby={`${addId}-role`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent lang={locale} dir={dir(locale)}>
+                <SelectItem value="member">{t('roleMember')}</SelectItem>
+                <SelectItem value="admin">{t('roleAdmin')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {/* aria-disabled (not disabled): the pressed button keeps focus while the add runs. */}
+          <button
+            type="button"
+            onClick={() => { if (!addDisabled) props.onAdd() }}
+            aria-disabled={addDisabled || undefined}
+            className={cn(PRIMARY, addInvalid && 'bg-stone-200 text-stone-700 hover:bg-stone-200')}
+          >
+            {add.adding ? t('adding') : t('addMember')}
           </button>
         </div>
       )}
-      {add.error && (
-        <p role="alert" className="mb-2 text-xs text-red-700">
-          {add.error}
+      {/* The add form's own alert, always mounted: an add failure is shown and announced even while
+          an earlier roster line is on screen. */}
+      {!readOnly && (
+        <p role="alert" data-testid={`roster-add-alert-${orgId}`} className={add.error ? 'mb-2 text-xs text-red-700' : 'sr-only'}>
+          {add.error ?? ''}
         </p>
       )}
-      {(rosterError || loadError) && (
-        <p role="alert" className="mb-2 text-xs text-red-700">
-          {rosterError ?? loadError}
-        </p>
-      )}
+      {/* Always mounted, so a change or a failure is announced when its line appears. */}
+      <p role="status" data-testid={`roster-status-${orgId}`} className="sr-only"><AnnouncementText announcement={status} /></p>
+      <p role="alert" data-testid={`roster-alert-${orgId}`} className={alert ? 'mb-2 text-xs text-red-700' : 'sr-only'}>
+        {alert ?? ''}
+      </p>
 
-      {loading ? (
-        <p className="text-sm text-stone-600">Loading members…</p>
-      ) : loadError ? null : members.length === 0 ? (
-        <p className="text-sm text-stone-600">No members yet.</p>
+      {/* A re-read keeps the table on screen (so focus inside it survives); the loading line is only
+          for a roster with nothing to show yet. */}
+      {members.length === 0 ? (
+        loading ? (
+          <p className="text-sm text-stone-600">{t('membersLoading')}</p>
+        ) : loadError ? null : (
+          <p className="text-sm text-stone-600">{t('membersEmpty')}</p>
+        )
       ) : (
-        <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+        <div aria-busy={loading || undefined} className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
           <table className="w-full text-sm">
             <thead className="bg-stone-50">
               <tr>
-                <th className="px-3 py-2 text-start font-medium text-stone-600">User ID</th>
-                <th className="px-3 py-2 text-start font-medium text-stone-600">Role</th>
-                <th className="px-3 py-2 text-start font-medium text-stone-600">Joined</th>
+                <th className="px-3 py-2 text-start font-medium text-stone-600">{t('userIdLabel')}</th>
+                <th className="px-3 py-2 text-start font-medium text-stone-600">{t('roleLabel')}</th>
+                <th className="px-3 py-2 text-start font-medium text-stone-600">{t('colJoined')}</th>
                 {!readOnly && (
                   <th className="px-3 py-2">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('colActions')}</span>
                   </th>
                 )}
               </tr>
@@ -584,35 +700,37 @@ export function OrgMembersView(props: OrgMembersViewProps) {
             <tbody className="divide-y divide-stone-100">
               {members.map((m) => (
                 <tr key={m.id}>
-                  <td className="max-w-[180px] truncate px-3 py-2 font-mono text-xs text-stone-700">{m.user_id}</td>
+                  <td dir="ltr" className="max-w-[180px] truncate px-3 py-2 text-start font-mono text-xs text-stone-700">{m.user_id}</td>
                   <td className="px-3 py-2">
                     {readOnly ? (
-                      <span className="text-xs text-stone-800">{m.role === 'admin' ? 'Admin' : 'Member'}</span>
+                      <span className="text-xs text-stone-800">{orgRoleLabel(m.role, locale)}</span>
                     ) : (
                       <Select
                         value={m.role === 'admin' ? 'admin' : 'member'}
                         onValueChange={(v) => props.onChangeRole(m.id, v as MemberRole)}
                       >
-                        <SelectTrigger className="h-8 w-28 text-xs text-stone-900" aria-label="Role">
+                        <SelectTrigger id={rosterRoleId(orgId, m.id)} className="h-8 w-32 border-stone-500 text-xs text-stone-900" aria-label={namedControl(t('roleLabel'), m.user_id)}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent lang="en">
-                          <SelectItem value="member">Member</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
+                        <SelectContent lang={locale} dir={dir(locale)}>
+                          <SelectItem value="member">{t('roleMember')}</SelectItem>
+                          <SelectItem value="admin">{t('roleAdmin')}</SelectItem>
                         </SelectContent>
                       </Select>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-xs text-stone-600">{new Date(m.joined_at).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-xs text-stone-600">{formatDate(m.joined_at, locale, tz)}</td>
                   {!readOnly && (
                     <td className="px-3 py-2 text-end">
                       <button
                         type="button"
-                        onClick={() => props.onRemove(m.id)}
-                        aria-label={`Remove member ${m.user_id}`}
+                        id={rosterRemoveId(orgId, m.id)}
+                        onClick={() => { if (removingId !== m.id) props.onRemove(m.id) }}
+                        aria-disabled={removingId === m.id || undefined}
+                        aria-label={namedControl(t('remove'), m.user_id)}
                         className={`inline-flex min-h-6 min-w-6 items-center gap-1 rounded px-1 text-xs font-medium text-red-700 hover:text-red-800 ${FOCUS_RING}`}
                       >
-                        <Trash2 className="h-3 w-3" aria-hidden="true" /> Remove
+                        <Trash2 className="h-3 w-3" aria-hidden="true" /> {t('remove')}
                       </button>
                     </td>
                   )}

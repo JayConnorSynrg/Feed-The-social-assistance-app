@@ -5,9 +5,9 @@
 // admin's language (lib/i18n-admin-shell.ts; the tier marker is roleLabel, lib/i18n-feed-card.ts).
 // The locale is useProfileLocale(), so the cookie the server rendered with, the profile and the
 // device choice agree from the first paint. The header, the tab bar and the translated tabs
-// (Moderation, Community, People) carry that language; every other tab's content is marked English
-// (lang="en" dir="ltr") until its own wave translates it, and a translated part inside one (Events,
-// Organizations…) sets its own lang on its root.
+// (Moderation, Community, People — P6 W3; Organizations, Resources, Businesses, Manage — P6 W4)
+// carry that language; every other tab's content is marked English (lang="en" dir="ltr") until its
+// own wave translates it, and a translated part inside one (Events…) sets its own lang on its root.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutDashboard, Calendar, ShieldAlert, Users, Database, ListChecks, Building2, UserCog, Leaf, type LucideIcon } from 'lucide-react'
@@ -331,7 +331,7 @@ export function AdminShell() {
             </TabsContent>
           )}
           {tabs.includes('organizations') && (
-            <TabsContent value="organizations" lang="en" dir="ltr" className="mt-4">
+            <TabsContent value="organizations" lang={locale} dir={dir(locale)} className="mt-4">
               <OrgsSection
                 locale={locale}
                 onCreate={() => openCreate('org')}
@@ -342,18 +342,18 @@ export function AdminShell() {
             </TabsContent>
           )}
           {tabs.includes('resources') && (
-            <TabsContent value="resources" lang="en" dir="ltr" className="mt-4">
-              <ResourcesTab />
+            <TabsContent value="resources" lang={locale} dir={dir(locale)} className="mt-4">
+              <ResourcesTab locale={locale} />
             </TabsContent>
           )}
           {tabs.includes('businesses') && (
-            <TabsContent value="businesses" lang="en" dir="ltr" className="mt-4">
-              <BusinessesTab />
+            <TabsContent value="businesses" lang={locale} dir={dir(locale)} className="mt-4">
+              <BusinessesTab locale={locale} />
             </TabsContent>
           )}
           {tabs.includes('manage') && (
-            <TabsContent value="manage" lang="en" dir="ltr" className="mt-4">
-              <ManageResourcesTab />
+            <TabsContent value="manage" lang={locale} dir={dir(locale)} className="mt-4">
+              <ManageResourcesTab locale={locale} />
             </TabsContent>
           )}
           {tabs.includes('people') && (

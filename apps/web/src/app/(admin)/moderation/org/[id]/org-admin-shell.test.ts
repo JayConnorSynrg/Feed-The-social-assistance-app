@@ -52,6 +52,7 @@ vi.mock('@/lib/org-data', () => ({
 }))
 
 import { OrgAdminShell } from './org-admin-shell'
+import { orgAdminT } from '@/lib/i18n-org-admin'
 
 const ORG = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -83,14 +84,14 @@ describe('OrgAdminShell', () => {
 
   it('feeds Overview, Events and Members exactly this org id; roster read-only for an org admin', () => {
     renderToStaticMarkup(h(OrgAdminShell, { org: ORG, isPlatformAdmin: false }))
-    expect(captured.overview).toEqual([{ orgId: ORG.id }])
+    expect(captured.overview).toEqual([{ orgId: ORG.id, locale: 'en' }])
     expect(captured.events).toEqual([{ orgId: ORG.id }])
-    expect(captured.members).toEqual([{ orgId: ORG.id, readOnly: true }])
+    expect(captured.members).toEqual([{ orgId: ORG.id, readOnly: true, locale: 'en' }])
   })
 
   it('a platform admin keeps roster writes', () => {
     renderToStaticMarkup(h(OrgAdminShell, { org: ORG, isPlatformAdmin: true }))
-    expect(captured.members).toEqual([{ orgId: ORG.id, readOnly: false }])
+    expect(captured.members).toEqual([{ orgId: ORG.id, readOnly: false, locale: 'en' }])
   })
 
   it('Profile edits this org only: edit mode, this id, no name index, no switch to another org', () => {
@@ -126,13 +127,16 @@ describe('OrgAdminShell', () => {
     expect((html.match(/<main[\s>]/g) ?? []).length).toBe(1)
   })
 
-  it('English-only parts read left-to-right inside a right-to-left page; translated links follow the viewer', () => {
+  it('P6 W4 — Arabic: no English island is left; back link, tabs and Profile read in Arabic; the org name keeps its own', () => {
     captured.language = 'ar'
     const html = renderToStaticMarkup(h(OrgAdminShell, { org: ORG, isPlatformAdmin: false }))
-    const englishIslands = html.match(/<[a-z]+ [^>]*lang="en"[^>]*>/g) ?? []
-    // Back link, tab list, Profile section.
-    expect(englishIslands).toHaveLength(3)
-    for (const tag of englishIslands) expect(tag).toContain('dir="ltr"')
+    expect(html.match(/<[a-z]+ [^>]*lang="en"[^>]*>/g) ?? []).toEqual([])
+    const tabs = [...html.matchAll(/<button role="tab"[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]+)<\/button>/g)].map((m) => m[1])
+    expect(tabs).toEqual((['tabOverview', 'tabEvents', 'tabProfile', 'tabMembers'] as const).map((k) => orgAdminT('ar', k)))
+    expect(html).toContain(`aria-label="${orgAdminT('ar', 'backYours')}"`)
+    expect(html).toContain(`aria-label="${orgAdminT('ar', 'sections')}"`)
+    expect(html).toContain(`>${orgAdminT('ar', 'profileTitle')}</h2>`)
+    expect(html).toMatch(/<h1 lang="" dir="auto"[^>]*>Rutland Food Shelf<\/h1>/)
     const publicLink = html.match(/<a [^>]*href="\/s\/organization\/[^"]+"[^>]*>/)
     expect(publicLink![0]).toContain('lang="ar"')
     expect(publicLink![0]).toContain('dir="rtl"')

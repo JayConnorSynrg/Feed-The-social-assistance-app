@@ -507,6 +507,517 @@ step in that test, and the test fails until the list below is regenerated.
 | `errIncomplete` | hmn | Not every signature could be read, so no file was made. Try again. | Nyeem tsis tau txhua tus kos npe, yog li tsis tau ua daim ntawv. Thov rov sim dua. | 2026-11-14 | machine-drafted, needs native review |
 | `errGeneric` | hmn | The download failed and no file was made. Try again. | Rub tsis tau thiab tsis tau ua daim ntawv. Thov rov sim dua. | 2026-11-14 | machine-drafted, needs native review |
 
+### `lib/i18n-admin-resources.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `discoverTitle` | ht | Discover Resources | Dekouvri resous | 2026-11-15 | machine-drafted, needs native review |
+| `discoverIntro` | ht | Enter a natural-language query to source and stage new resources for review. | Ekri yon rechèch nan lang natirèl pou jwenn nouvo resous epi prepare yo pou revizyon. | 2026-11-15 | machine-drafted, needs native review |
+| `nearLabel` | ht | Searching near | Ap chèche toupre | 2026-11-15 | machine-drafted, needs native review |
+| `nearPlaceholder` | ht | e.g. Burlington, VT (defaults to your location) | egz. Burlington, VT (pa defo, kote ou ye a) | 2026-11-15 | machine-drafted, needs native review |
+| `useMyLocation` | ht | Use my location | Sèvi ak kote m ye a | 2026-11-15 | machine-drafted, needs native review |
+| `queryLabel` | ht | What to look for | Sa pou chèche | 2026-11-15 | machine-drafted, needs native review |
+| `queryPlaceholder` | ht | e.g. "food banks in Burlington VT" or "SNAP application forms" | egz. "bank manje nan Burlington VT" oswa "fòm demann SNAP" | 2026-11-15 | machine-drafted, needs native review |
+| `discover` | ht | Discover | Dekouvri | 2026-11-15 | machine-drafted, needs native review |
+| `discovering` | ht | Discovering… | Ap dekouvri… | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTimeout` | ht | Discovery request timed out — check the queue for any staged items. | Rechèch la pran twòp tan — gade nan lis la si gen eleman ki prepare. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverFailed` | ht | Discovery failed. Try again. | Rechèch la echwe. Eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverSummary` | ht | {staged} ({rejected}) | {staged} ({rejected}) | 2026-11-15 | machine-drafted, needs native review |
+| `progressSearching` | ht | Searching sources… | Ap chèche sous… | 2026-11-15 | machine-drafted, needs native review |
+| `progressVerifying` | ht | Verifying provenance… | Ap verifye orijin… | 2026-11-15 | machine-drafted, needs native review |
+| `progressGeocoding` | ht | Geocoding addresses… | Ap jeokode adrès… | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitle` | ht | Pending review | Ap tann revizyon | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitleCount` | ht | Pending review ({count}) | Ap tann revizyon ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | ht | Show | Montre | 2026-11-15 | machine-drafted, needs native review |
+| `filterAll` | ht | All | Tout | 2026-11-15 | machine-drafted, needs native review |
+| `typeResource` | ht | Resource | Resous | 2026-11-15 | machine-drafted, needs native review |
+| `typeLink` | ht | Link | Lyen | 2026-11-15 | machine-drafted, needs native review |
+| `typeForm` | ht | Form | Fòm | 2026-11-15 | machine-drafted, needs native review |
+| `viewLabel` | ht | View | Afichaj | 2026-11-15 | machine-drafted, needs native review |
+| `viewList` | ht | List | Lis | 2026-11-15 | machine-drafted, needs native review |
+| `viewMap` | ht | Map | Kat | 2026-11-15 | machine-drafted, needs native review |
+| `bulkApprove` | ht | Bulk approve high-confidence ({count}) | Apwouve tout sa ki gen gwo konfyans ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | ht | Confirm | Konfime | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | ht | Cancel | Anile | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | ht | Try again | Eseye ankò | 2026-11-15 | machine-drafted, needs native review |
+| `queueLoadFailed` | ht | Could not load the review queue. | Nou pa t kapab chaje lis revizyon an. | 2026-11-15 | machine-drafted, needs native review |
+| `approveFailed` | ht | Could not approve {name}. It is still in the queue. | Nou pa t kapab apwouve {name}. Li toujou nan lis la. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectFailed` | ht | Could not reject {name}. It is still in the queue. | Nou pa t kapab rejte {name}. Li toujou nan lis la. | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | ht | No pending items | Pa gen anyen k ap tann | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | ht | Use the discovery input above to source new resources. | Sèvi ak rechèch anwo a pou jwenn nouvo resous. | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceHigh` | ht | High confidence | Gwo konfyans | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceMedium` | ht | Medium confidence | Konfyans mwayen | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocation` | ht | Needs location | Bezwen adrès | 2026-11-15 | machine-drafted, needs native review |
+| `itemDetails` | ht | Details | Detay | 2026-11-15 | machine-drafted, needs native review |
+| `provenanceVerified` | ht | .gov/.org verified | Verifye .gov/.org | 2026-11-15 | machine-drafted, needs native review |
+| `phoneLine` | ht | Phone: {phone} | Telefòn: {phone} | 2026-11-15 | machine-drafted, needs native review |
+| `categoryLine` | ht | Category: {category} | Kategori: {category} | 2026-11-15 | machine-drafted, needs native review |
+| `approve` | ht | Approve | Apwouve | 2026-11-15 | machine-drafted, needs native review |
+| `reject` | ht | Reject | Rejte | 2026-11-15 | machine-drafted, needs native review |
+| `paRequired` | ht | Platform admin approval required | Fòk yon administratè platfòm apwouve l | 2026-11-15 | machine-drafted, needs native review |
+| `approvedStatus` | ht | {name} was approved. | {name} apwouve. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectedStatus` | ht | {name} was rejected. | {name} rejte. | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleApprove` | ht | Review and confirm resource | Revize epi konfime resous la | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleEdit` | ht | Edit resource | Modifye resous la | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescApprove` | ht | Edit any field before approving. Confirm saves your changes and publishes this resource in one step. | Modifye nenpòt chan anvan ou apwouve. Konfime anrejistre chanjman ou yo epi pibliye resous sa a an yon sèl etap. | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescEdit` | ht | Changes persist to the resources table and are recorded with your admin identity. | Chanjman yo anrejistre nan tab resous yo ak idantite administratè ou. | 2026-11-15 | machine-drafted, needs native review |
+| `fieldName` | ht | Name | Non | 2026-11-15 | machine-drafted, needs native review |
+| `fieldDescription` | ht | Description | Deskripsyon | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCategory` | ht | Category | Kategori | 2026-11-15 | machine-drafted, needs native review |
+| `fieldStatus` | ht | Status | Estati | 2026-11-15 | machine-drafted, needs native review |
+| `fieldServiceMode` | ht | Service mode | Fason sèvis la bay | 2026-11-15 | machine-drafted, needs native review |
+| `fieldAddress` | ht | Address | Adrès | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCity` | ht | City | Vil | 2026-11-15 | machine-drafted, needs native review |
+| `fieldState` | ht | State | Eta | 2026-11-15 | machine-drafted, needs native review |
+| `fieldZip` | ht | ZIP | Kòd postal | 2026-11-15 | machine-drafted, needs native review |
+| `fieldPhone` | ht | Phone | Telefòn | 2026-11-15 | machine-drafted, needs native review |
+| `fieldEmail` | ht | Email | Imèl | 2026-11-15 | machine-drafted, needs native review |
+| `fieldWebsite` | ht | Website | Sit entènèt | 2026-11-15 | machine-drafted, needs native review |
+| `required` | ht | required | obligatwa | 2026-11-15 | machine-drafted, needs native review |
+| `statusApproved` | ht | Approved | Apwouve | 2026-11-15 | machine-drafted, needs native review |
+| `statusPending` | ht | Pending | Ap tann | 2026-11-15 | machine-drafted, needs native review |
+| `statusRejected` | ht | Rejected | Rejte | 2026-11-15 | machine-drafted, needs native review |
+| `statusArchived` | ht | Archived | Achive | 2026-11-15 | machine-drafted, needs native review |
+| `modePhysical` | ht | Physical location | Kote fizik | 2026-11-15 | machine-drafted, needs native review |
+| `modeOnline` | ht | Online only | Sou entènèt sèlman | 2026-11-15 | machine-drafted, needs native review |
+| `modeHybrid` | ht | Hybrid (physical + online) | Melanje (fizik + sou entènèt) | 2026-11-15 | machine-drafted, needs native review |
+| `onlineHint` | ht | Online resources are not geocoded or placed on the map. | Resous sou entènèt pa jeokode epi yo pa mete yo sou kat la. | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocationLong` | ht | Needs location — not shown on the map. Enter an address and pick a suggestion to place it. | Bezwen adrès — li pa parèt sou kat la. Antre yon adrès epi chwazi yon sijesyon pou mete l. | 2026-11-15 | machine-drafted, needs native review |
+| `addressPlaceholder` | ht | Start typing an address… | Kòmanse tape yon adrès… | 2026-11-15 | machine-drafted, needs native review |
+| `addressSuggestions` | ht | Address suggestions | Sijesyon adrès | 2026-11-15 | machine-drafted, needs native review |
+| `nameRequired` | ht | Name is required. | Non an obligatwa. | 2026-11-15 | machine-drafted, needs native review |
+| `categoryRequired` | ht | Category is required. | Kategori a obligatwa. | 2026-11-15 | machine-drafted, needs native review |
+| `statusRequired` | ht | Status is required. | Estati a obligatwa. | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | ht | Could not save the resource. Your changes are still in the form. | Nou pa t kapab anrejistre resous la. Chanjman ou yo toujou nan fòm nan. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmFailed` | ht | Could not save and approve the resource. Your changes are still in the form. | Nou pa t kapab anrejistre epi apwouve resous la. Chanjman ou yo toujou nan fòm nan. | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | ht | Saving… | Ap anrejistre… | 2026-11-15 | machine-drafted, needs native review |
+| `confirming` | ht | Confirming… | Ap konfime… | 2026-11-15 | machine-drafted, needs native review |
+| `saveChanges` | ht | Save changes | Anrejistre chanjman yo | 2026-11-15 | machine-drafted, needs native review |
+| `close` | ht | Close | Fèmen | 2026-11-15 | machine-drafted, needs native review |
+| `stateAll` | ht | All states | Tout eta yo | 2026-11-15 | machine-drafted, needs native review |
+| `cityPlaceholder` | ht | e.g. Burlington | egz. Burlington | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | ht | Search name / description | Chèche non oswa deskripsyon | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | ht | e.g. food bank | egz. bank manje | 2026-11-15 | machine-drafted, needs native review |
+| `applyFilters` | ht | Apply filters | Aplike filt yo | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | ht | Loading… | Ap chaje… | 2026-11-15 | machine-drafted, needs native review |
+| `approvedTitle` | ht | Approved resources | Resous ki apwouve | 2026-11-15 | machine-drafted, needs native review |
+| `showing` | ht | — showing {count} | — {count} ap parèt | 2026-11-15 | machine-drafted, needs native review |
+| `moreAvailable` | ht | (more available) | (gen plis) | 2026-11-15 | machine-drafted, needs native review |
+| `showMap` | ht | Show map | Montre kat la | 2026-11-15 | machine-drafted, needs native review |
+| `hideMap` | ht | Hide map | Kache kat la | 2026-11-15 | machine-drafted, needs native review |
+| `listLoadFailed` | ht | Could not load resources. | Nou pa t kapab chaje resous yo. | 2026-11-15 | machine-drafted, needs native review |
+| `moreLoadFailed` | ht | Could not load more resources. | Nou pa t kapab chaje plis resous. | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchTitle` | ht | No resources match these filters | Pa gen resous ki koresponn ak filt sa yo | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchBody` | ht | Adjust the state, city, or search and apply again. | Chanje eta a, vil la oswa rechèch la epi aplike ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | ht | Saved | Anrejistre | 2026-11-15 | machine-drafted, needs native review |
+| `savedStatus` | ht | Changes to {name} were saved. | Chanjman pou {name} anrejistre. | 2026-11-15 | machine-drafted, needs native review |
+| `editResource` | ht | Edit resource | Modifye resous | 2026-11-15 | machine-drafted, needs native review |
+| `loadMore` | ht | Load more | Chaje plis | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotFound` | ht | That resource couldn't be found, or it isn't editable here (only approved resources are listed in Manage). | Nou pa jwenn resous sa a, oswa ou pa ka modifye l isit la (se sèlman resous ki apwouve ki nan Jere). | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotFound` | ht | That business couldn't be found, or it isn't editable here (only approved businesses can be edited). | Nou pa jwenn biznis sa a, oswa ou pa ka modifye l isit la (se sèlman biznis ki apwouve ou ka modifye). | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotEditable` | ht | Your admin role can't edit resources. | Wòl administratè ou pa ka modifye resous. | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotEditable` | ht | Only platform admins can edit businesses. | Se sèlman administratè platfòm ki ka modifye biznis. | 2026-11-15 | machine-drafted, needs native review |
+| `dismiss` | ht | Dismiss | Fèmen mesaj la | 2026-11-15 | machine-drafted, needs native review |
+| `awaitingTitle` | ht | Awaiting review | Ap tann revizyon | 2026-11-15 | machine-drafted, needs native review |
+| `noPending` | ht | No businesses awaiting review. | Pa gen biznis k ap tann revizyon. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectReasonLabel` | ht | Reason if you reject (optional, shown to the submitter) | Rezon si ou rejte l (opsyonèl, moun ki voye l la ap wè l) | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesTitle` | ht | Approved businesses | Biznis ki apwouve | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesCount` | ht | Approved businesses ({count}) | Biznis ki apwouve ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `noApproved` | ht | No approved businesses yet. | Poko gen biznis ki apwouve. | 2026-11-15 | machine-drafted, needs native review |
+| `save` | ht | Save | Anrejistre | 2026-11-15 | machine-drafted, needs native review |
+| `pendingLoadFailed` | ht | Could not load the businesses awaiting review. | Nou pa t kapab chaje biznis k ap tann revizyon yo. | 2026-11-15 | machine-drafted, needs native review |
+| `approvedLoadFailed` | ht | Could not load the approved businesses. | Nou pa t kapab chaje biznis ki apwouve yo. | 2026-11-15 | machine-drafted, needs native review |
+| `businessApproveFailed` | ht | Could not approve {name}. | Nou pa t kapab apwouve {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `businessRejectFailed` | ht | Could not reject {name}. | Nou pa t kapab rejte {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `businessSaveFailed` | ht | Could not save {name}. Your changes are still in the form. | Nou pa t kapab anrejistre {name}. Chanjman ou yo toujou nan fòm nan. | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotSaved` | ht | Nothing was saved: this business was not changed. Only platform admins can edit businesses, or it no longer exists. | Anyen pa t anrejistre: biznis sa a pa chanje. Se sèlman administratè platfòm ki ka modifye biznis, oswa li pa egziste ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTitle` | so | Discover Resources | Hel kheyraadyo | 2026-11-15 | machine-drafted, needs native review |
+| `discoverIntro` | so | Enter a natural-language query to source and stage new resources for review. | Qor codsi luqad caadi ah si aad u hesho kheyraadyo cusub oo loogu diyaariyo dib-u-eegis. | 2026-11-15 | machine-drafted, needs native review |
+| `nearLabel` | so | Searching near | Raadinta u dhow | 2026-11-15 | machine-drafted, needs native review |
+| `nearPlaceholder` | so | e.g. Burlington, VT (defaults to your location) | tusaale: Burlington, VT (asal ahaan goobtaada) | 2026-11-15 | machine-drafted, needs native review |
+| `useMyLocation` | so | Use my location | Isticmaal goobtayda | 2026-11-15 | machine-drafted, needs native review |
+| `queryLabel` | so | What to look for | Waxa la raadinayo | 2026-11-15 | machine-drafted, needs native review |
+| `queryPlaceholder` | so | e.g. "food banks in Burlington VT" or "SNAP application forms" | tusaale: "bangiyada cuntada ee Burlington VT" ama "foomamka codsiga SNAP" | 2026-11-15 | machine-drafted, needs native review |
+| `discover` | so | Discover | Hel | 2026-11-15 | machine-drafted, needs native review |
+| `discovering` | so | Discovering… | Waa la raadinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTimeout` | so | Discovery request timed out — check the queue for any staged items. | Codsiga raadinta waqtigii wuu dhammaaday — ka eeg safka wixii la diyaariyey. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverFailed` | so | Discovery failed. Try again. | Raadintu way guuldarraysatay. Isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverSummary` | so | {staged} ({rejected}) | {staged} ({rejected}) | 2026-11-15 | machine-drafted, needs native review |
+| `progressSearching` | so | Searching sources… | Ilaha waa la raadinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `progressVerifying` | so | Verifying provenance… | Asalka waa la xaqiijinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `progressGeocoding` | so | Geocoding addresses… | Cinwaannada waa la calaamaynayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitle` | so | Pending review | Sugaya dib-u-eegis | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitleCount` | so | Pending review ({count}) | Sugaya dib-u-eegis ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | so | Show | Muuji | 2026-11-15 | machine-drafted, needs native review |
+| `filterAll` | so | All | Dhammaan | 2026-11-15 | machine-drafted, needs native review |
+| `typeResource` | so | Resource | Kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `typeLink` | so | Link | Xiriiriye | 2026-11-15 | machine-drafted, needs native review |
+| `typeForm` | so | Form | Foom | 2026-11-15 | machine-drafted, needs native review |
+| `viewLabel` | so | View | Muuqaal | 2026-11-15 | machine-drafted, needs native review |
+| `viewList` | so | List | Liis | 2026-11-15 | machine-drafted, needs native review |
+| `viewMap` | so | Map | Khariidad | 2026-11-15 | machine-drafted, needs native review |
+| `bulkApprove` | so | Bulk approve high-confidence ({count}) | Ansixi dhammaan kuwa kalsoonida sare leh ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | so | Confirm | Xaqiiji | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | so | Cancel | Jooji | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | so | Try again | Isku day mar kale | 2026-11-15 | machine-drafted, needs native review |
+| `queueLoadFailed` | so | Could not load the review queue. | Lama soo rari karin safka dib-u-eegista. | 2026-11-15 | machine-drafted, needs native review |
+| `approveFailed` | so | Could not approve {name}. It is still in the queue. | Lama ansixin karin {name}. Wali waa safka ku jiraa. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectFailed` | so | Could not reject {name}. It is still in the queue. | Lama diidi karin {name}. Wali waa safka ku jiraa. | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | so | No pending items | Ma jiraan waxyaabo sugaya | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | so | Use the discovery input above to source new resources. | Isticmaal sanduuqa raadinta ee kore si aad u hesho kheyraadyo cusub. | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceHigh` | so | High confidence | Kalsooni sare | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceMedium` | so | Medium confidence | Kalsooni dhexe | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocation` | so | Needs location | Wuxuu u baahan yahay goob | 2026-11-15 | machine-drafted, needs native review |
+| `itemDetails` | so | Details | Faahfaahin | 2026-11-15 | machine-drafted, needs native review |
+| `provenanceVerified` | so | .gov/.org verified | La xaqiijiyey .gov/.org | 2026-11-15 | machine-drafted, needs native review |
+| `phoneLine` | so | Phone: {phone} | Telefoon: {phone} | 2026-11-15 | machine-drafted, needs native review |
+| `categoryLine` | so | Category: {category} | Qayb: {category} | 2026-11-15 | machine-drafted, needs native review |
+| `approve` | so | Approve | Ansixi | 2026-11-15 | machine-drafted, needs native review |
+| `reject` | so | Reject | Diid | 2026-11-15 | machine-drafted, needs native review |
+| `paRequired` | so | Platform admin approval required | Waxa loo baahan yahay ansixinta maamulaha madal | 2026-11-15 | machine-drafted, needs native review |
+| `approvedStatus` | so | {name} was approved. | {name} waa la ansixiyey. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectedStatus` | so | {name} was rejected. | {name} waa la diiday. | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleApprove` | so | Review and confirm resource | Dib u eeg oo xaqiiji kheyraadka | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleEdit` | so | Edit resource | Wax ka beddel kheyraadka | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescApprove` | so | Edit any field before approving. Confirm saves your changes and publishes this resource in one step. | Wax ka beddel goob kasta ka hor intaadan ansixin. Xaqiijintu waxay kaydisaa isbeddelladaada waxayna daabacdaa kheyraadkan hal tallaabo. | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescEdit` | so | Changes persist to the resources table and are recorded with your admin identity. | Isbeddelladu waxay ku kaydsamaan shaxda kheyraadka waxaana lagu diiwaangeliyaa aqoonsigaaga maamule. | 2026-11-15 | machine-drafted, needs native review |
+| `fieldName` | so | Name | Magac | 2026-11-15 | machine-drafted, needs native review |
+| `fieldDescription` | so | Description | Sharaxaad | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCategory` | so | Category | Qayb | 2026-11-15 | machine-drafted, needs native review |
+| `fieldStatus` | so | Status | Xaalad | 2026-11-15 | machine-drafted, needs native review |
+| `fieldServiceMode` | so | Service mode | Habka adeegga | 2026-11-15 | machine-drafted, needs native review |
+| `fieldAddress` | so | Address | Cinwaan | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCity` | so | City | Magaalo | 2026-11-15 | machine-drafted, needs native review |
+| `fieldState` | so | State | Gobol | 2026-11-15 | machine-drafted, needs native review |
+| `fieldZip` | so | ZIP | Koodhka boosta | 2026-11-15 | machine-drafted, needs native review |
+| `fieldPhone` | so | Phone | Telefoon | 2026-11-15 | machine-drafted, needs native review |
+| `fieldEmail` | so | Email | Iimayl | 2026-11-15 | machine-drafted, needs native review |
+| `fieldWebsite` | so | Website | Bogga internetka | 2026-11-15 | machine-drafted, needs native review |
+| `required` | so | required | waajib | 2026-11-15 | machine-drafted, needs native review |
+| `statusApproved` | so | Approved | La ansixiyey | 2026-11-15 | machine-drafted, needs native review |
+| `statusPending` | so | Pending | Sugaya | 2026-11-15 | machine-drafted, needs native review |
+| `statusRejected` | so | Rejected | La diiday | 2026-11-15 | machine-drafted, needs native review |
+| `statusArchived` | so | Archived | La kaydiyey | 2026-11-15 | machine-drafted, needs native review |
+| `modePhysical` | so | Physical location | Goob muuqata | 2026-11-15 | machine-drafted, needs native review |
+| `modeOnline` | so | Online only | Online keliya | 2026-11-15 | machine-drafted, needs native review |
+| `modeHybrid` | so | Hybrid (physical + online) | Isku-dhaf (goob + online) | 2026-11-15 | machine-drafted, needs native review |
+| `onlineHint` | so | Online resources are not geocoded or placed on the map. | Kheyraadka online-ka ah lama calaameeyo lagumana dhigo khariidadda. | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocationLong` | so | Needs location — not shown on the map. Enter an address and pick a suggestion to place it. | Wuxuu u baahan yahay goob — khariidadda kuma muuqdo. Geli cinwaan oo dooro soo-jeedin si aad u dhigto. | 2026-11-15 | machine-drafted, needs native review |
+| `addressPlaceholder` | so | Start typing an address… | Bilow qorista cinwaan… | 2026-11-15 | machine-drafted, needs native review |
+| `addressSuggestions` | so | Address suggestions | Soo-jeedinta cinwaanka | 2026-11-15 | machine-drafted, needs native review |
+| `nameRequired` | so | Name is required. | Magacu waa waajib. | 2026-11-15 | machine-drafted, needs native review |
+| `categoryRequired` | so | Category is required. | Qaybtu waa waajib. | 2026-11-15 | machine-drafted, needs native review |
+| `statusRequired` | so | Status is required. | Xaaladdu waa waajib. | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | so | Could not save the resource. Your changes are still in the form. | Lama kaydin karin kheyraadka. Isbeddelladaadu wali foomka ayay ku jiraan. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmFailed` | so | Could not save and approve the resource. Your changes are still in the form. | Lama kaydin lamana ansixin karin kheyraadka. Isbeddelladaadu wali foomka ayay ku jiraan. | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | so | Saving… | Waa la kaydinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `confirming` | so | Confirming… | Waa la xaqiijinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `saveChanges` | so | Save changes | Kaydi isbeddellada | 2026-11-15 | machine-drafted, needs native review |
+| `close` | so | Close | Xir | 2026-11-15 | machine-drafted, needs native review |
+| `stateAll` | so | All states | Dhammaan gobollada | 2026-11-15 | machine-drafted, needs native review |
+| `cityPlaceholder` | so | e.g. Burlington | tusaale: Burlington | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | so | Search name / description | Ka raadi magaca / sharaxaadda | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | so | e.g. food bank | tusaale: bangiga cuntada | 2026-11-15 | machine-drafted, needs native review |
+| `applyFilters` | so | Apply filters | Dabaq shaandhaynta | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | so | Loading… | Waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `approvedTitle` | so | Approved resources | Kheyraadka la ansixiyey | 2026-11-15 | machine-drafted, needs native review |
+| `showing` | so | — showing {count} | — waxa la muujinayaa {count} | 2026-11-15 | machine-drafted, needs native review |
+| `moreAvailable` | so | (more available) | (waxa jira kuwo kale) | 2026-11-15 | machine-drafted, needs native review |
+| `showMap` | so | Show map | Muuji khariidadda | 2026-11-15 | machine-drafted, needs native review |
+| `hideMap` | so | Hide map | Qari khariidadda | 2026-11-15 | machine-drafted, needs native review |
+| `listLoadFailed` | so | Could not load resources. | Lama soo rari karin kheyraadka. | 2026-11-15 | machine-drafted, needs native review |
+| `moreLoadFailed` | so | Could not load more resources. | Lama soo rari karin kheyraad dheeraad ah. | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchTitle` | so | No resources match these filters | Ma jiro kheyraad u dhigma shaandhaynta | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchBody` | so | Adjust the state, city, or search and apply again. | Beddel gobolka, magaalada ama raadinta oo mar kale dabaq. | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | so | Saved | Waa la kaydiyey | 2026-11-15 | machine-drafted, needs native review |
+| `savedStatus` | so | Changes to {name} were saved. | Isbeddellada {name} waa la kaydiyey. | 2026-11-15 | machine-drafted, needs native review |
+| `editResource` | so | Edit resource | Wax ka beddel kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `loadMore` | so | Load more | Soo rar wax dheeraad ah | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotFound` | so | That resource couldn't be found, or it isn't editable here (only approved resources are listed in Manage). | Kheyraadkaas lama helin, ama halkan lagama beddeli karo (Maaraynta waxa ku jira kheyraadka la ansixiyey oo keliya). | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotFound` | so | That business couldn't be found, or it isn't editable here (only approved businesses can be edited). | Ganacsigaas lama helin, ama halkan lagama beddeli karo (ganacsiyada la ansixiyey oo keliya ayaa wax laga beddeli karaa). | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotEditable` | so | Your admin role can't edit resources. | Doorkaaga maamule wax kama beddeli karo kheyraadka. | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotEditable` | so | Only platform admins can edit businesses. | Maamulayaasha madasha oo keliya ayaa wax ka beddeli kara ganacsiyada. | 2026-11-15 | machine-drafted, needs native review |
+| `dismiss` | so | Dismiss | Iska dhaaf | 2026-11-15 | machine-drafted, needs native review |
+| `awaitingTitle` | so | Awaiting review | Sugaya dib-u-eegis | 2026-11-15 | machine-drafted, needs native review |
+| `noPending` | so | No businesses awaiting review. | Ma jiraan ganacsiyo sugaya dib-u-eegis. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectReasonLabel` | so | Reason if you reject (optional, shown to the submitter) | Sababta haddii aad diiddo (ikhtiyaari, waxa arkaya qofka soo gudbiyey) | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesTitle` | so | Approved businesses | Ganacsiyada la ansixiyey | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesCount` | so | Approved businesses ({count}) | Ganacsiyada la ansixiyey ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `noApproved` | so | No approved businesses yet. | Wali ma jiraan ganacsiyo la ansixiyey. | 2026-11-15 | machine-drafted, needs native review |
+| `save` | so | Save | Kaydi | 2026-11-15 | machine-drafted, needs native review |
+| `pendingLoadFailed` | so | Could not load the businesses awaiting review. | Lama soo rari karin ganacsiyada sugaya dib-u-eegis. | 2026-11-15 | machine-drafted, needs native review |
+| `approvedLoadFailed` | so | Could not load the approved businesses. | Lama soo rari karin ganacsiyada la ansixiyey. | 2026-11-15 | machine-drafted, needs native review |
+| `businessApproveFailed` | so | Could not approve {name}. | Lama ansixin karin {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `businessRejectFailed` | so | Could not reject {name}. | Lama diidi karin {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `businessSaveFailed` | so | Could not save {name}. Your changes are still in the form. | Lama kaydin karin {name}. Isbeddelladaadu wali foomka ayay ku jiraan. | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotSaved` | so | Nothing was saved: this business was not changed. Only platform admins can edit businesses, or it no longer exists. | Waxba lama kaydin: ganacsigan isma beddelin. Maamulayaasha madasha oo keliya ayaa wax ka beddeli kara ganacsiyada, ama hadda ma jiro. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTitle` | am | Discover Resources | ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `discoverIntro` | am | Enter a natural-language query to source and stage new resources for review. | አዳዲስ ሀብቶችን ለማግኘትና ለግምገማ ለማዘጋጀት በተራ ቋንቋ ጥያቄ ያስገቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `nearLabel` | am | Searching near | በአቅራቢያ መፈለጊያ | 2026-11-15 | machine-drafted, needs native review |
+| `nearPlaceholder` | am | e.g. Burlington, VT (defaults to your location) | ለምሳሌ Burlington, VT (በነባሪ የእርስዎ አካባቢ) | 2026-11-15 | machine-drafted, needs native review |
+| `useMyLocation` | am | Use my location | አካባቢዬን ተጠቀም | 2026-11-15 | machine-drafted, needs native review |
+| `queryLabel` | am | What to look for | የሚፈለገው | 2026-11-15 | machine-drafted, needs native review |
+| `queryPlaceholder` | am | e.g. "food banks in Burlington VT" or "SNAP application forms" | ለምሳሌ "በBurlington VT ያሉ የምግብ ባንኮች" ወይም "የSNAP ማመልከቻ ቅጾች" | 2026-11-15 | machine-drafted, needs native review |
+| `discover` | am | Discover | ፈልግ | 2026-11-15 | machine-drafted, needs native review |
+| `discovering` | am | Discovering… | በመፈለግ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTimeout` | am | Discovery request timed out — check the queue for any staged items. | የፍለጋ ጥያቄው ጊዜው አልፏል — የተዘጋጁ ነገሮች ካሉ ወረፋውን ይመልከቱ። | 2026-11-15 | machine-drafted, needs native review |
+| `discoverFailed` | am | Discovery failed. Try again. | ፍለጋው አልተሳካም። እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `discoverSummary` | am | {staged} ({rejected}) | {staged} ({rejected}) | 2026-11-15 | machine-drafted, needs native review |
+| `progressSearching` | am | Searching sources… | ምንጮችን በመፈለግ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `progressVerifying` | am | Verifying provenance… | ምንጩን በማረጋገጥ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `progressGeocoding` | am | Geocoding addresses… | አድራሻዎችን ጂኦኮድ በማድረግ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitle` | am | Pending review | ግምገማ በመጠባበቅ ላይ | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitleCount` | am | Pending review ({count}) | ግምገማ በመጠባበቅ ላይ ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | am | Show | አሳይ | 2026-11-15 | machine-drafted, needs native review |
+| `filterAll` | am | All | ሁሉም | 2026-11-15 | machine-drafted, needs native review |
+| `typeResource` | am | Resource | ሀብት | 2026-11-15 | machine-drafted, needs native review |
+| `typeLink` | am | Link | አገናኝ | 2026-11-15 | machine-drafted, needs native review |
+| `typeForm` | am | Form | ቅጽ | 2026-11-15 | machine-drafted, needs native review |
+| `viewLabel` | am | View | እይታ | 2026-11-15 | machine-drafted, needs native review |
+| `viewList` | am | List | ዝርዝር | 2026-11-15 | machine-drafted, needs native review |
+| `viewMap` | am | Map | ካርታ | 2026-11-15 | machine-drafted, needs native review |
+| `bulkApprove` | am | Bulk approve high-confidence ({count}) | ከፍተኛ እምነት ያላቸውን በአንድ ላይ አጽድቅ ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | am | Confirm | አረጋግጥ | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | am | Cancel | ሰርዝ | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | am | Try again | እንደገና ሞክር | 2026-11-15 | machine-drafted, needs native review |
+| `queueLoadFailed` | am | Could not load the review queue. | የግምገማ ወረፋውን መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `approveFailed` | am | Could not approve {name}. It is still in the queue. | {name}ን ማጽደቅ አልተቻለም። አሁንም በወረፋው ውስጥ ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `rejectFailed` | am | Could not reject {name}. It is still in the queue. | {name}ን አለመቀበል አልተቻለም። አሁንም በወረፋው ውስጥ ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | am | No pending items | በመጠባበቅ ላይ ያለ ነገር የለም | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | am | Use the discovery input above to source new resources. | አዳዲስ ሀብቶችን ለማግኘት ከላይ ያለውን የፍለጋ ሳጥን ይጠቀሙ። | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceHigh` | am | High confidence | ከፍተኛ እምነት | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceMedium` | am | Medium confidence | መካከለኛ እምነት | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocation` | am | Needs location | አካባቢ ያስፈልገዋል | 2026-11-15 | machine-drafted, needs native review |
+| `itemDetails` | am | Details | ዝርዝሮች | 2026-11-15 | machine-drafted, needs native review |
+| `provenanceVerified` | am | .gov/.org verified | በ.gov/.org የተረጋገጠ | 2026-11-15 | machine-drafted, needs native review |
+| `phoneLine` | am | Phone: {phone} | ስልክ፦ {phone} | 2026-11-15 | machine-drafted, needs native review |
+| `categoryLine` | am | Category: {category} | ምድብ፦ {category} | 2026-11-15 | machine-drafted, needs native review |
+| `approve` | am | Approve | አጽድቅ | 2026-11-15 | machine-drafted, needs native review |
+| `reject` | am | Reject | አትቀበል | 2026-11-15 | machine-drafted, needs native review |
+| `paRequired` | am | Platform admin approval required | የመድረክ አስተዳዳሪ ማጽደቅ ያስፈልጋል | 2026-11-15 | machine-drafted, needs native review |
+| `approvedStatus` | am | {name} was approved. | {name} ጸድቋል። | 2026-11-15 | machine-drafted, needs native review |
+| `rejectedStatus` | am | {name} was rejected. | {name} ውድቅ ተደርጓል። | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleApprove` | am | Review and confirm resource | ሀብቱን ይገምግሙና ያረጋግጡ | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleEdit` | am | Edit resource | ሀብቱን ያርትዑ | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescApprove` | am | Edit any field before approving. Confirm saves your changes and publishes this resource in one step. | ከማጽደቅዎ በፊት ማንኛውንም መስክ ያርትዑ። ማረጋገጥ ለውጦችዎን ያስቀምጣል እና ይህን ሀብት በአንድ እርምጃ ያትማል። | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescEdit` | am | Changes persist to the resources table and are recorded with your admin identity. | ለውጦቹ በሀብቶች ሰንጠረዥ ውስጥ ይቀመጣሉ እና ከአስተዳዳሪ ማንነትዎ ጋር ይመዘገባሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `fieldName` | am | Name | ስም | 2026-11-15 | machine-drafted, needs native review |
+| `fieldDescription` | am | Description | መግለጫ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCategory` | am | Category | ምድብ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldStatus` | am | Status | ሁኔታ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldServiceMode` | am | Service mode | የአገልግሎት ዓይነት | 2026-11-15 | machine-drafted, needs native review |
+| `fieldAddress` | am | Address | አድራሻ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCity` | am | City | ከተማ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldState` | am | State | ግዛት | 2026-11-15 | machine-drafted, needs native review |
+| `fieldZip` | am | ZIP | የፖስታ ኮድ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldPhone` | am | Phone | ስልክ | 2026-11-15 | machine-drafted, needs native review |
+| `fieldEmail` | am | Email | ኢሜይል | 2026-11-15 | machine-drafted, needs native review |
+| `fieldWebsite` | am | Website | ድረ-ገጽ | 2026-11-15 | machine-drafted, needs native review |
+| `required` | am | required | ግዴታ | 2026-11-15 | machine-drafted, needs native review |
+| `statusApproved` | am | Approved | የጸደቀ | 2026-11-15 | machine-drafted, needs native review |
+| `statusPending` | am | Pending | በመጠባበቅ ላይ | 2026-11-15 | machine-drafted, needs native review |
+| `statusRejected` | am | Rejected | ውድቅ የተደረገ | 2026-11-15 | machine-drafted, needs native review |
+| `statusArchived` | am | Archived | በማህደር የተቀመጠ | 2026-11-15 | machine-drafted, needs native review |
+| `modePhysical` | am | Physical location | አካላዊ ቦታ | 2026-11-15 | machine-drafted, needs native review |
+| `modeOnline` | am | Online only | በመስመር ላይ ብቻ | 2026-11-15 | machine-drafted, needs native review |
+| `modeHybrid` | am | Hybrid (physical + online) | ድብልቅ (በአካል + በመስመር ላይ) | 2026-11-15 | machine-drafted, needs native review |
+| `onlineHint` | am | Online resources are not geocoded or placed on the map. | የመስመር ላይ ሀብቶች ጂኦኮድ አይደረጉም፤ በካርታው ላይም አይቀመጡም። | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocationLong` | am | Needs location — not shown on the map. Enter an address and pick a suggestion to place it. | አካባቢ ያስፈልገዋል — በካርታው ላይ አይታይም። ለማስቀመጥ አድራሻ ያስገቡና ጥቆማ ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `addressPlaceholder` | am | Start typing an address… | አድራሻ መተየብ ይጀምሩ… | 2026-11-15 | machine-drafted, needs native review |
+| `addressSuggestions` | am | Address suggestions | የአድራሻ ጥቆማዎች | 2026-11-15 | machine-drafted, needs native review |
+| `nameRequired` | am | Name is required. | ስም ግዴታ ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `categoryRequired` | am | Category is required. | ምድብ ግዴታ ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `statusRequired` | am | Status is required. | ሁኔታ ግዴታ ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | am | Could not save the resource. Your changes are still in the form. | ሀብቱን ማስቀመጥ አልተቻለም። ለውጦችዎ አሁንም በቅጹ ውስጥ አሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `confirmFailed` | am | Could not save and approve the resource. Your changes are still in the form. | ሀብቱን ማስቀመጥና ማጽደቅ አልተቻለም። ለውጦችዎ አሁንም በቅጹ ውስጥ አሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | am | Saving… | በማስቀመጥ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `confirming` | am | Confirming… | በማረጋገጥ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `saveChanges` | am | Save changes | ለውጦቹን አስቀምጥ | 2026-11-15 | machine-drafted, needs native review |
+| `close` | am | Close | ዝጋ | 2026-11-15 | machine-drafted, needs native review |
+| `stateAll` | am | All states | ሁሉም ግዛቶች | 2026-11-15 | machine-drafted, needs native review |
+| `cityPlaceholder` | am | e.g. Burlington | ለምሳሌ Burlington | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | am | Search name / description | በስም / በመግለጫ ፈልግ | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | am | e.g. food bank | ለምሳሌ የምግብ ባንክ | 2026-11-15 | machine-drafted, needs native review |
+| `applyFilters` | am | Apply filters | ማጣሪያዎችን ተግብር | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | am | Loading… | በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `approvedTitle` | am | Approved resources | የጸደቁ ሀብቶች | 2026-11-15 | machine-drafted, needs native review |
+| `showing` | am | — showing {count} | — {count} እየታዩ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `moreAvailable` | am | (more available) | (ተጨማሪ አለ) | 2026-11-15 | machine-drafted, needs native review |
+| `showMap` | am | Show map | ካርታውን አሳይ | 2026-11-15 | machine-drafted, needs native review |
+| `hideMap` | am | Hide map | ካርታውን ደብቅ | 2026-11-15 | machine-drafted, needs native review |
+| `listLoadFailed` | am | Could not load resources. | ሀብቶቹን መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `moreLoadFailed` | am | Could not load more resources. | ተጨማሪ ሀብቶችን መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchTitle` | am | No resources match these filters | ከእነዚህ ማጣሪያዎች ጋር የሚዛመድ ሀብት የለም | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchBody` | am | Adjust the state, city, or search and apply again. | ግዛቱን፣ ከተማውን ወይም ፍለጋውን ይቀይሩና እንደገና ይተግብሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | am | Saved | ተቀምጧል | 2026-11-15 | machine-drafted, needs native review |
+| `savedStatus` | am | Changes to {name} were saved. | በ{name} ላይ የተደረጉ ለውጦች ተቀምጠዋል። | 2026-11-15 | machine-drafted, needs native review |
+| `editResource` | am | Edit resource | ሀብቱን አርትዕ | 2026-11-15 | machine-drafted, needs native review |
+| `loadMore` | am | Load more | ተጨማሪ ጫን | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotFound` | am | That resource couldn't be found, or it isn't editable here (only approved resources are listed in Manage). | ያ ሀብት አልተገኘም፣ ወይም እዚህ ሊስተካከል አይችልም (በአስተዳደር ውስጥ የጸደቁ ሀብቶች ብቻ ይዘረዘራሉ)። | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotFound` | am | That business couldn't be found, or it isn't editable here (only approved businesses can be edited). | ያ ንግድ አልተገኘም፣ ወይም እዚህ ሊስተካከል አይችልም (የጸደቁ ንግዶች ብቻ ሊስተካከሉ ይችላሉ)። | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotEditable` | am | Your admin role can't edit resources. | የእርስዎ የአስተዳዳሪ ሚና ሀብቶችን ማርትዕ አይችልም። | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotEditable` | am | Only platform admins can edit businesses. | ንግዶችን ማርትዕ የሚችሉት የመድረክ አስተዳዳሪዎች ብቻ ናቸው። | 2026-11-15 | machine-drafted, needs native review |
+| `dismiss` | am | Dismiss | አሰናብት | 2026-11-15 | machine-drafted, needs native review |
+| `awaitingTitle` | am | Awaiting review | ግምገማ በመጠባበቅ ላይ | 2026-11-15 | machine-drafted, needs native review |
+| `noPending` | am | No businesses awaiting review. | ግምገማ የሚጠብቅ ንግድ የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `rejectReasonLabel` | am | Reason if you reject (optional, shown to the submitter) | ውድቅ ካደረጉ ምክንያቱ (አማራጭ፣ ለአስገቢው ይታያል) | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesTitle` | am | Approved businesses | የጸደቁ ንግዶች | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesCount` | am | Approved businesses ({count}) | የጸደቁ ንግዶች ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `noApproved` | am | No approved businesses yet. | እስካሁን የጸደቀ ንግድ የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `save` | am | Save | አስቀምጥ | 2026-11-15 | machine-drafted, needs native review |
+| `pendingLoadFailed` | am | Could not load the businesses awaiting review. | ግምገማ የሚጠብቁትን ንግዶች መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `approvedLoadFailed` | am | Could not load the approved businesses. | የጸደቁትን ንግዶች መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `businessApproveFailed` | am | Could not approve {name}. | {name}ን ማጽደቅ አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `businessRejectFailed` | am | Could not reject {name}. | {name}ን ውድቅ ማድረግ አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `businessSaveFailed` | am | Could not save {name}. Your changes are still in the form. | {name}ን ማስቀመጥ አልተቻለም። ለውጦችዎ አሁንም በቅጹ ውስጥ አሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotSaved` | am | Nothing was saved: this business was not changed. Only platform admins can edit businesses, or it no longer exists. | ምንም አልተቀመጠም፦ ይህ ንግድ አልተለወጠም። ንግዶችን ማርትዕ የሚችሉት የመድረክ አስተዳዳሪዎች ብቻ ናቸው፣ ወይም ንግዱ ከእንግዲህ የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTitle` | hmn | Discover Resources | Nrhiav cov kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `discoverIntro` | hmn | Enter a natural-language query to source and stage new resources for review. | Sau ib lo lus nug ib txwm hais los nrhiav cov kev pab tshiab thiab muab tso cia tos tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `nearLabel` | hmn | Searching near | Nrhiav ze ntawm | 2026-11-15 | machine-drafted, needs native review |
+| `nearPlaceholder` | hmn | e.g. Burlington, VT (defaults to your location) | piv txwv Burlington, VT (ib txwm yog koj qhov chaw) | 2026-11-15 | machine-drafted, needs native review |
+| `useMyLocation` | hmn | Use my location | Siv kuv qhov chaw | 2026-11-15 | machine-drafted, needs native review |
+| `queryLabel` | hmn | What to look for | Yuav nrhiav dab tsi | 2026-11-15 | machine-drafted, needs native review |
+| `queryPlaceholder` | hmn | e.g. "food banks in Burlington VT" or "SNAP application forms" | piv txwv "cov chaw pub zaub mov hauv Burlington VT" lossis "cov ntawv thov SNAP" | 2026-11-15 | machine-drafted, needs native review |
+| `discover` | hmn | Discover | Nrhiav | 2026-11-15 | machine-drafted, needs native review |
+| `discovering` | hmn | Discovering… | Tab tom nrhiav… | 2026-11-15 | machine-drafted, needs native review |
+| `discoverTimeout` | hmn | Discovery request timed out — check the queue for any staged items. | Kev nrhiav siv sij hawm ntev dhau lawm — saib hauv kab tos seb puas muaj yam twg npaj lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverFailed` | hmn | Discovery failed. Try again. | Kev nrhiav tsis tiav. Sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `discoverSummary` | hmn | {staged} ({rejected}) | {staged} ({rejected}) | 2026-11-15 | machine-drafted, needs native review |
+| `progressSearching` | hmn | Searching sources… | Tab tom nrhiav qhov chaw los… | 2026-11-15 | machine-drafted, needs native review |
+| `progressVerifying` | hmn | Verifying provenance… | Tab tom kuaj keeb kwm… | 2026-11-15 | machine-drafted, needs native review |
+| `progressGeocoding` | hmn | Geocoding addresses… | Tab tom muab cim chaw nyob… | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitle` | hmn | Pending review | Tos tshuaj xyuas | 2026-11-15 | machine-drafted, needs native review |
+| `pendingTitleCount` | hmn | Pending review ({count}) | Tos tshuaj xyuas ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `filterLabel` | hmn | Show | Qhia | 2026-11-15 | machine-drafted, needs native review |
+| `filterAll` | hmn | All | Txhua yam | 2026-11-15 | machine-drafted, needs native review |
+| `typeResource` | hmn | Resource | Kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `typeLink` | hmn | Link | Txuas | 2026-11-15 | machine-drafted, needs native review |
+| `typeForm` | hmn | Form | Daim ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `viewLabel` | hmn | View | Saib li | 2026-11-15 | machine-drafted, needs native review |
+| `viewList` | hmn | List | Daim ntawv teev | 2026-11-15 | machine-drafted, needs native review |
+| `viewMap` | hmn | Map | Daim ntawv qhia chaw | 2026-11-15 | machine-drafted, needs native review |
+| `bulkApprove` | hmn | Bulk approve high-confidence ({count}) | Pom zoo ib zaug rau cov ntseeg tau siab ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | hmn | Confirm | Paub meej | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | hmn | Cancel | Tso tseg | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | hmn | Try again | Sim dua | 2026-11-15 | machine-drafted, needs native review |
+| `queueLoadFailed` | hmn | Could not load the review queue. | Rub tsis tau kab tos tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `approveFailed` | hmn | Could not approve {name}. It is still in the queue. | Pom zoo tsis tau rau {name}. Nws tseem nyob hauv kab tos. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectFailed` | hmn | Could not reject {name}. It is still in the queue. | Tsis lees tsis tau rau {name}. Nws tseem nyob hauv kab tos. | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | hmn | No pending items | Tsis muaj dab tsi tos | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | hmn | Use the discovery input above to source new resources. | Siv lub thawv nrhiav saum toj no los nrhiav cov kev pab tshiab. | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceHigh` | hmn | High confidence | Ntseeg tau siab | 2026-11-15 | machine-drafted, needs native review |
+| `confidenceMedium` | hmn | Medium confidence | Ntseeg tau nruab nrab | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocation` | hmn | Needs location | Xav tau qhov chaw | 2026-11-15 | machine-drafted, needs native review |
+| `itemDetails` | hmn | Details | Ntxiv ntxaws | 2026-11-15 | machine-drafted, needs native review |
+| `provenanceVerified` | hmn | .gov/.org verified | Kuaj xyuas lawm .gov/.org | 2026-11-15 | machine-drafted, needs native review |
+| `phoneLine` | hmn | Phone: {phone} | Xov tooj: {phone} | 2026-11-15 | machine-drafted, needs native review |
+| `categoryLine` | hmn | Category: {category} | Pawg: {category} | 2026-11-15 | machine-drafted, needs native review |
+| `approve` | hmn | Approve | Pom zoo | 2026-11-15 | machine-drafted, needs native review |
+| `reject` | hmn | Reject | Tsis lees | 2026-11-15 | machine-drafted, needs native review |
+| `paRequired` | hmn | Platform admin approval required | Yuav tsum tau tus thawj tswj platform pom zoo | 2026-11-15 | machine-drafted, needs native review |
+| `approvedStatus` | hmn | {name} was approved. | Pom zoo rau {name} lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectedStatus` | hmn | {name} was rejected. | Tsis lees {name} lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleApprove` | hmn | Review and confirm resource | Tshuaj xyuas thiab lees paub qhov kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `dialogTitleEdit` | hmn | Edit resource | Kho qhov kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescApprove` | hmn | Edit any field before approving. Confirm saves your changes and publishes this resource in one step. | Kho txhua qhov chaw ua ntej pom zoo. Paub meej yuav khaws koj cov kev hloov thiab tshaj tawm qhov kev pab no ib zaug. | 2026-11-15 | machine-drafted, needs native review |
+| `dialogDescEdit` | hmn | Changes persist to the resources table and are recorded with your admin identity. | Cov kev hloov raug khaws rau hauv lub rooj kev pab thiab sau npe nrog koj tus kheej tus thawj tswj. | 2026-11-15 | machine-drafted, needs native review |
+| `fieldName` | hmn | Name | Npe | 2026-11-15 | machine-drafted, needs native review |
+| `fieldDescription` | hmn | Description | Piav qhia | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCategory` | hmn | Category | Pawg | 2026-11-15 | machine-drafted, needs native review |
+| `fieldStatus` | hmn | Status | Xwm txheej | 2026-11-15 | machine-drafted, needs native review |
+| `fieldServiceMode` | hmn | Service mode | Hom kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
+| `fieldAddress` | hmn | Address | Chaw nyob | 2026-11-15 | machine-drafted, needs native review |
+| `fieldCity` | hmn | City | Nroog | 2026-11-15 | machine-drafted, needs native review |
+| `fieldState` | hmn | State | Xeev | 2026-11-15 | machine-drafted, needs native review |
+| `fieldZip` | hmn | ZIP | Tus lej xa ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `fieldPhone` | hmn | Phone | Xov tooj | 2026-11-15 | machine-drafted, needs native review |
+| `fieldEmail` | hmn | Email | Email | 2026-11-15 | machine-drafted, needs native review |
+| `fieldWebsite` | hmn | Website | Lub vev xaib | 2026-11-15 | machine-drafted, needs native review |
+| `required` | hmn | required | yuav tsum muaj | 2026-11-15 | machine-drafted, needs native review |
+| `statusApproved` | hmn | Approved | Pom zoo lawm | 2026-11-15 | machine-drafted, needs native review |
+| `statusPending` | hmn | Pending | Tab tom tos | 2026-11-15 | machine-drafted, needs native review |
+| `statusRejected` | hmn | Rejected | Tsis lees lawm | 2026-11-15 | machine-drafted, needs native review |
+| `statusArchived` | hmn | Archived | Muab khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `modePhysical` | hmn | Physical location | Qhov chaw tiag | 2026-11-15 | machine-drafted, needs native review |
+| `modeOnline` | hmn | Online only | Hauv online xwb | 2026-11-15 | machine-drafted, needs native review |
+| `modeHybrid` | hmn | Hybrid (physical + online) | Sib xyaw (tuaj ntsib + online) | 2026-11-15 | machine-drafted, needs native review |
+| `onlineHint` | hmn | Online resources are not geocoded or placed on the map. | Cov kev pab online tsis muab cim qhov chaw thiab tsis muab tso rau daim ntawv qhia chaw. | 2026-11-15 | machine-drafted, needs native review |
+| `needsLocationLong` | hmn | Needs location — not shown on the map. Enter an address and pick a suggestion to place it. | Xav tau qhov chaw — tsis pom rau daim ntawv qhia chaw. Sau ib qho chaw nyob thiab xaiv ib qho lus qhia los muab tso. | 2026-11-15 | machine-drafted, needs native review |
+| `addressPlaceholder` | hmn | Start typing an address… | Pib ntaus qhov chaw nyob… | 2026-11-15 | machine-drafted, needs native review |
+| `addressSuggestions` | hmn | Address suggestions | Cov chaw nyob uas qhia | 2026-11-15 | machine-drafted, needs native review |
+| `nameRequired` | hmn | Name is required. | Yuav tsum muaj npe. | 2026-11-15 | machine-drafted, needs native review |
+| `categoryRequired` | hmn | Category is required. | Yuav tsum muaj pawg. | 2026-11-15 | machine-drafted, needs native review |
+| `statusRequired` | hmn | Status is required. | Yuav tsum muaj xwm txheej. | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | hmn | Could not save the resource. Your changes are still in the form. | Khaws tsis tau qhov kev pab. Koj cov kev hloov tseem nyob hauv daim ntawv. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmFailed` | hmn | Could not save and approve the resource. Your changes are still in the form. | Khaws thiab pom zoo tsis tau qhov kev pab. Koj cov kev hloov tseem nyob hauv daim ntawv. | 2026-11-15 | machine-drafted, needs native review |
+| `saving` | hmn | Saving… | Tab tom khaws… | 2026-11-15 | machine-drafted, needs native review |
+| `confirming` | hmn | Confirming… | Tab tom lees paub… | 2026-11-15 | machine-drafted, needs native review |
+| `saveChanges` | hmn | Save changes | Khaws cov kev hloov | 2026-11-15 | machine-drafted, needs native review |
+| `close` | hmn | Close | Kaw | 2026-11-15 | machine-drafted, needs native review |
+| `stateAll` | hmn | All states | Txhua lub xeev | 2026-11-15 | machine-drafted, needs native review |
+| `cityPlaceholder` | hmn | e.g. Burlington | piv txwv Burlington | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | hmn | Search name / description | Nrhiav npe / piav qhia | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | hmn | e.g. food bank | piv txwv chaw pub zaub mov | 2026-11-15 | machine-drafted, needs native review |
+| `applyFilters` | hmn | Apply filters | Siv cov lim | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | hmn | Loading… | Tab tom rub… | 2026-11-15 | machine-drafted, needs native review |
+| `approvedTitle` | hmn | Approved resources | Cov kev pab pom zoo lawm | 2026-11-15 | machine-drafted, needs native review |
+| `showing` | hmn | — showing {count} | — qhia {count} | 2026-11-15 | machine-drafted, needs native review |
+| `moreAvailable` | hmn | (more available) | (tseem muaj ntxiv) | 2026-11-15 | machine-drafted, needs native review |
+| `showMap` | hmn | Show map | Qhia daim ntawv qhia chaw | 2026-11-15 | machine-drafted, needs native review |
+| `hideMap` | hmn | Hide map | Zais daim ntawv qhia chaw | 2026-11-15 | machine-drafted, needs native review |
+| `listLoadFailed` | hmn | Could not load resources. | Rub tsis tau cov kev pab. | 2026-11-15 | machine-drafted, needs native review |
+| `moreLoadFailed` | hmn | Could not load more resources. | Rub tsis tau cov kev pab ntxiv. | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchTitle` | hmn | No resources match these filters | Tsis muaj kev pab twg haum cov lim no | 2026-11-15 | machine-drafted, needs native review |
+| `noMatchBody` | hmn | Adjust the state, city, or search and apply again. | Hloov lub xeev, lub nroog, lossis kev nrhiav thiab siv dua. | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | hmn | Saved | Khaws lawm | 2026-11-15 | machine-drafted, needs native review |
+| `savedStatus` | hmn | Changes to {name} were saved. | Khaws cov kev hloov rau {name} lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `editResource` | hmn | Edit resource | Kho qhov kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `loadMore` | hmn | Load more | Rub ntxiv | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotFound` | hmn | That resource couldn't be found, or it isn't editable here (only approved resources are listed in Manage). | Nrhiav tsis tau qhov kev pab ntawd, lossis kho tsis tau ntawm no (Kev Tswj tsuas teev cov kev pab pom zoo lawm xwb). | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotFound` | hmn | That business couldn't be found, or it isn't editable here (only approved businesses can be edited). | Nrhiav tsis tau lub lag luam ntawd, lossis kho tsis tau ntawm no (tsuas kho tau cov lag luam pom zoo lawm xwb). | 2026-11-15 | machine-drafted, needs native review |
+| `noticeResourceNotEditable` | hmn | Your admin role can't edit resources. | Koj lub luag haujlwm thawj tswj kho tsis tau cov kev pab. | 2026-11-15 | machine-drafted, needs native review |
+| `noticeBusinessNotEditable` | hmn | Only platform admins can edit businesses. | Tsuas yog cov thawj tswj platform thiaj kho tau cov lag luam. | 2026-11-15 | machine-drafted, needs native review |
+| `dismiss` | hmn | Dismiss | Muab tshem | 2026-11-15 | machine-drafted, needs native review |
+| `awaitingTitle` | hmn | Awaiting review | Tos tshuaj xyuas | 2026-11-15 | machine-drafted, needs native review |
+| `noPending` | hmn | No businesses awaiting review. | Tsis muaj lag luam twg tos tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `rejectReasonLabel` | hmn | Reason if you reject (optional, shown to the submitter) | Vim li cas yog tias koj tsis lees (xaiv tau, tus xa yuav pom) | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesTitle` | hmn | Approved businesses | Cov lag luam pom zoo lawm | 2026-11-15 | machine-drafted, needs native review |
+| `approvedBusinessesCount` | hmn | Approved businesses ({count}) | Cov lag luam pom zoo lawm ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `noApproved` | hmn | No approved businesses yet. | Tseem tsis tau muaj lag luam pom zoo. | 2026-11-15 | machine-drafted, needs native review |
+| `save` | hmn | Save | Khaws | 2026-11-15 | machine-drafted, needs native review |
+| `pendingLoadFailed` | hmn | Could not load the businesses awaiting review. | Rub tsis tau cov lag luam tos tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `approvedLoadFailed` | hmn | Could not load the approved businesses. | Rub tsis tau cov lag luam pom zoo lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `businessApproveFailed` | hmn | Could not approve {name}. | Pom zoo tsis tau rau {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `businessRejectFailed` | hmn | Could not reject {name}. | Tsis lees tsis tau rau {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `businessSaveFailed` | hmn | Could not save {name}. Your changes are still in the form. | Khaws tsis tau {name}. Koj cov kev hloov tseem nyob hauv daim ntawv. | 2026-11-15 | machine-drafted, needs native review |
+| `businessNotSaved` | hmn | Nothing was saved: this business was not changed. Only platform admins can edit businesses, or it no longer exists. | Tsis tau khaws dab tsi: lub lag luam no tsis hloov. Tsuas yog cov thawj tswj platform thiaj kho tau cov lag luam, lossis nws tsis muaj lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `STAGED_CANDIDATES.other` | ht | Staged {n} candidates for review | {n} kandida prepare pou revizyon | 2026-11-15 | machine-drafted, needs native review |
+| `STAGED_CANDIDATES.one` | so | Staged {n} candidate for review | {n} musharax ayaa loo diyaariyey dib-u-eegis | 2026-11-15 | machine-drafted, needs native review |
+| `STAGED_CANDIDATES.other` | so | Staged {n} candidates for review | {n} musharax ayaa loo diyaariyey dib-u-eegis | 2026-11-15 | machine-drafted, needs native review |
+| `STAGED_CANDIDATES.one` | am | Staged {n} candidate for review | {n} እጩ ለግምገማ ተዘጋጅቷል | 2026-11-15 | machine-drafted, needs native review |
+| `STAGED_CANDIDATES.other` | am | Staged {n} candidates for review | {n} እጩዎች ለግምገማ ተዘጋጅተዋል | 2026-11-15 | machine-drafted, needs native review |
+| `STAGED_CANDIDATES.other` | hmn | Staged {n} candidates for review | Npaj {n} yam tos tshuaj xyuas lawm | 2026-11-15 | machine-drafted, needs native review |
+| `REJECTED_BY_FILTER.other` | ht | {n} rejected by provenance filter | {n} rejte pa filt orijin nan | 2026-11-15 | machine-drafted, needs native review |
+| `REJECTED_BY_FILTER.other` | so | {n} rejected by provenance filter | {n} waxa diiday shaandhada isha | 2026-11-15 | machine-drafted, needs native review |
+| `REJECTED_BY_FILTER.other` | am | {n} rejected by provenance filter | {n} በምንጭ ማጣሪያ ውድቅ ተደርገዋል | 2026-11-15 | machine-drafted, needs native review |
+| `REJECTED_BY_FILTER.other` | hmn | {n} rejected by provenance filter | {n} raug lub lim keeb kwm tsis lees | 2026-11-15 | machine-drafted, needs native review |
+| `SOURCE_COUNT.other` | ht | {n} sources | {n} sous | 2026-11-15 | machine-drafted, needs native review |
+| `SOURCE_COUNT.one` | so | {n} source | {n} il | 2026-11-15 | machine-drafted, needs native review |
+| `SOURCE_COUNT.other` | so | {n} sources | {n} ilo | 2026-11-15 | machine-drafted, needs native review |
+| `SOURCE_COUNT.one` | am | {n} source | {n} ምንጭ | 2026-11-15 | machine-drafted, needs native review |
+| `SOURCE_COUNT.other` | am | {n} sources | {n} ምንጮች | 2026-11-15 | machine-drafted, needs native review |
+| `SOURCE_COUNT.other` | hmn | {n} sources | {n} qhov chaw los | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_CONFIRM.other` | ht | Approve {n} high-confidence items? | Apwouve {n} eleman ki gen gwo konfyans? | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_CONFIRM.other` | so | Approve {n} high-confidence items? | Ma ansixinaysaa {n} shay oo kalsooni sare leh? | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_CONFIRM.one` | am | Approve {n} high-confidence item? | {n} ከፍተኛ እምነት ያለው ነገር ይጽደቅ? | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_CONFIRM.other` | am | Approve {n} high-confidence items? | {n} ከፍተኛ እምነት ያላቸው ነገሮች ይጽደቁ? | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_CONFIRM.other` | hmn | Approve {n} high-confidence items? | Pom zoo rau {n} yam uas ntseeg tau siab? | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_DONE.other` | ht | {n} items approved. | {n} eleman apwouve. | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_DONE.other` | so | {n} items approved. | {n} shay ayaa la ansixiyey. | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_DONE.one` | am | {n} item approved. | {n} ነገር ጸድቋል። | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_DONE.other` | am | {n} items approved. | {n} ነገሮች ጸድቀዋል። | 2026-11-15 | machine-drafted, needs native review |
+| `BULK_DONE.other` | hmn | {n} items approved. | Pom zoo {n} yam lawm. | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-admin-shell.ts`
 
 | Key | Locale | English | Text | Added | Status |
@@ -2435,6 +2946,271 @@ step in that test, and the test fails until the list below is regenerated.
 | `connection` | am | We're having trouble connecting. Please check your connection and try again. | ለመገናኘት ችግር አጋጥሞናል። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
 | `permission` | hmn | You don't have permission to view this right now. Please try again or contact support. | Tam sim no koj tsis muaj cai saib qhov no. Thov sim dua los yog hu rau kev pab. | 2026-10-11 | machine-drafted, needs native review |
 | `connection` | hmn | We're having trouble connecting. Please check your connection and try again. | Peb muaj teeb meem txuas. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+
+### `lib/i18n-org-admin.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `backAll` | ht | All organizations | Tout òganizasyon yo | 2026-11-15 | machine-drafted, needs native review |
+| `backYours` | ht | Your organizations | Òganizasyon ou yo | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | ht | Organization admin sections | Seksyon administrasyon òganizasyon an | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | ht | Overview | Apèsi | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | ht | Events | Evènman | 2026-11-15 | machine-drafted, needs native review |
+| `tabProfile` | ht | Profile | Pwofil | 2026-11-15 | machine-drafted, needs native review |
+| `tabMembers` | ht | Members | Manm | 2026-11-15 | machine-drafted, needs native review |
+| `profileTitle` | ht | Public profile | Pwofil piblik | 2026-11-15 | machine-drafted, needs native review |
+| `profileIntro` | ht | Name, description, contact details, hours, map pin, photos and linked resources shown on this organization’s public page. | Non, deskripsyon, kontak, lè ouvèti, pwen sou kat, foto ak resous ki lye ki parèt sou paj piblik òganizasyon sa a. | 2026-11-15 | machine-drafted, needs native review |
+| `editProfile` | ht | Edit profile | Modifye pwofil la | 2026-11-15 | machine-drafted, needs native review |
+| `overviewTitle` | ht | This organization at a glance | Òganizasyon sa a an bref | 2026-11-15 | machine-drafted, needs native review |
+| `overviewLoading` | ht | Loading overview… | Ap chaje apèsi a… | 2026-11-15 | machine-drafted, needs native review |
+| `overviewFailed` | ht | Could not load this organization’s numbers. | Nou pa t kapab chaje chif òganizasyon sa a. | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | ht | Try again | Eseye ankò | 2026-11-15 | machine-drafted, needs native review |
+| `tileActiveEvents` | ht | Active events | Evènman aktif | 2026-11-15 | machine-drafted, needs native review |
+| `tileUpcomingDates` | ht | Event dates, next 30 days | Dat evènman, 30 pwochen jou yo | 2026-11-15 | machine-drafted, needs native review |
+| `tileCheckins` | ht | Check-ins, last 30 days | Prezans anrejistre, 30 dènye jou yo | 2026-11-15 | machine-drafted, needs native review |
+| `tileMembers` | ht | Members | Manm | 2026-11-15 | machine-drafted, needs native review |
+| `endingTitle` | ht | Repeating events ending in the next 30 days | Evènman ki repete ki fini nan 30 pwochen jou yo | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | ht | Loading… | Ap chaje… | 2026-11-15 | machine-drafted, needs native review |
+| `endingFailed` | ht | Could not load the repeating events that end soon. | Nou pa t kapab chaje evènman ki repete ki pral fini byento yo. | 2026-11-15 | machine-drafted, needs native review |
+| `endingEmpty` | ht | No repeating event ends in the next 30 days. | Pa gen evènman ki repete ki fini nan 30 pwochen jou yo. | 2026-11-15 | machine-drafted, needs native review |
+| `indexIntro` | ht | Choose an organization to manage its events, profile and members. | Chwazi yon òganizasyon pou jere evènman, pwofil ak manm li. | 2026-11-15 | machine-drafted, needs native review |
+| `indexEmpty` | ht | You do not manage any active organization right now. | Ou pa jere okenn òganizasyon aktif kounye a. | 2026-11-15 | machine-drafted, needs native review |
+| `userIdLabel` | ht | User ID | ID itilizatè | 2026-11-15 | machine-drafted, needs native review |
+| `roleLabel` | ht | Role | Wòl | 2026-11-15 | machine-drafted, needs native review |
+| `roleMember` | ht | Member | Manm | 2026-11-15 | machine-drafted, needs native review |
+| `roleAdmin` | ht | Admin | Administratè | 2026-11-15 | machine-drafted, needs native review |
+| `addMember` | ht | Add member | Ajoute manm | 2026-11-15 | machine-drafted, needs native review |
+| `adding` | ht | Adding… | Ap ajoute… | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoading` | ht | Loading members… | Ap chaje manm yo… | 2026-11-15 | machine-drafted, needs native review |
+| `membersEmpty` | ht | No members yet. | Poko gen manm. | 2026-11-15 | machine-drafted, needs native review |
+| `colJoined` | ht | Joined | Antre | 2026-11-15 | machine-drafted, needs native review |
+| `colActions` | ht | Actions | Aksyon | 2026-11-15 | machine-drafted, needs native review |
+| `remove` | ht | Remove | Retire | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoadFailed` | ht | Could not load members. | Nou pa t kapab chaje manm yo. | 2026-11-15 | machine-drafted, needs native review |
+| `addFailed` | ht | Could not add that member. Check the user ID and try again. | Nou pa t kapab ajoute manm sa a. Verifye ID itilizatè a epi eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `addDuplicate` | ht | That person is already a member. | Moun sa a deja manm. | 2026-11-15 | machine-drafted, needs native review |
+| `addInvalid` | ht | That is not a valid user ID. | Sa a pa yon ID itilizatè ki valab. | 2026-11-15 | machine-drafted, needs native review |
+| `addNoAccount` | ht | No account has that user ID. | Pa gen kont ki gen ID itilizatè sa a. | 2026-11-15 | machine-drafted, needs native review |
+| `removeFailed` | ht | Could not remove that member — you may not have permission, or they were already removed. | Nou pa t kapab retire manm sa a — petèt ou pa gen otorizasyon, oswa yo te deja retire l. | 2026-11-15 | machine-drafted, needs native review |
+| `roleFailed` | ht | Could not change that role — you may not have permission. | Nou pa t kapab chanje wòl sa a — petèt ou pa gen otorizasyon. | 2026-11-15 | machine-drafted, needs native review |
+| `memberAdded` | ht | Member added. | Manm ajoute. | 2026-11-15 | machine-drafted, needs native review |
+| `memberRemoved` | ht | Member removed. | Manm retire. | 2026-11-15 | machine-drafted, needs native review |
+| `roleChanged` | ht | Role changed. | Wòl chanje. | 2026-11-15 | machine-drafted, needs native review |
+| `close` | ht | Close | Fèmen | 2026-11-15 | machine-drafted, needs native review |
+| `waitingTitle` | ht | Waiting to confirm ({count}) | Ap tann konfimasyon ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `waitingEmpty` | ht | No one is waiting — early check-ins appear here. | Pèsonn pa ap tann — moun ki anrejistre bonè parèt isit la. | 2026-11-15 | machine-drafted, needs native review |
+| `householdSize` | ht | Household {size} | Fwaye {size} | 2026-11-15 | machine-drafted, needs native review |
+| `attendance` | ht | attendance {rate} | prezans {rate} | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | ht | Confirm | Konfime | 2026-11-15 | machine-drafted, needs native review |
+| `walkinTitle` | ht | Add a walk-in | Ajoute yon moun ki vini san randevou | 2026-11-15 | machine-drafted, needs native review |
+| `addHousehold` | ht | Add household | Ajoute fwaye | 2026-11-15 | machine-drafted, needs native review |
+| `walkinHint` | ht | Anonymous walk-ins are counted for the event but not linked to any account. | Moun anonim ki vini san randevou konte pou evènman an, men yo pa lye ak okenn kont. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmedTitle` | ht | Confirmed ({count}) | Konfime ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `footer` | ht | Confirm each person as they arrive. Live count refreshes automatically. | Konfime chak moun lè yo rive. Kantite an dirèk la mete l ajou pou kont li. | 2026-11-15 | machine-drafted, needs native review |
+| `flashConfirmed` | ht | Confirmed {name} | {name} konfime | 2026-11-15 | machine-drafted, needs native review |
+| `flashWalkin` | ht | Walk-in added | Moun san randevou ajoute | 2026-11-15 | machine-drafted, needs native review |
+| `kioskLoadFailed` | ht | Could not refresh the attendance list. It will try again shortly. | Nou pa t kapab mete lis prezans lan ajou. L ap eseye ankò talè. | 2026-11-15 | machine-drafted, needs native review |
+| `kioskConfirmFailed` | ht | Could not confirm {name}. Try again. | Nou pa t kapab konfime {name}. Eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `kioskWalkinFailed` | ht | Could not add the walk-in. Try again. | Nou pa t kapab ajoute moun san randevou a. Eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `backAll` | so | All organizations | Dhammaan ururada | 2026-11-15 | machine-drafted, needs native review |
+| `backYours` | so | Your organizations | Ururadaada | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | so | Organization admin sections | Qaybaha maamulka ururka | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | so | Overview | Guudmar | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | so | Events | Dhacdooyin | 2026-11-15 | machine-drafted, needs native review |
+| `tabProfile` | so | Profile | Astaan | 2026-11-15 | machine-drafted, needs native review |
+| `tabMembers` | so | Members | Xubno | 2026-11-15 | machine-drafted, needs native review |
+| `profileTitle` | so | Public profile | Astaanta dadweynaha | 2026-11-15 | machine-drafted, needs native review |
+| `profileIntro` | so | Name, description, contact details, hours, map pin, photos and linked resources shown on this organization’s public page. | Magaca, sharaxaadda, xiriirka, saacadaha, calaamadda khariidadda, sawirrada iyo kheyraadka ku xiran ee ka muuqda bogga dadweynaha ee ururkan. | 2026-11-15 | machine-drafted, needs native review |
+| `editProfile` | so | Edit profile | Wax ka beddel astaanta | 2026-11-15 | machine-drafted, needs native review |
+| `overviewTitle` | so | This organization at a glance | Ururkan oo kooban | 2026-11-15 | machine-drafted, needs native review |
+| `overviewLoading` | so | Loading overview… | Guudmarka waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `overviewFailed` | so | Could not load this organization’s numbers. | Lama soo rari karin tirooyinka ururkan. | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | so | Try again | Isku day mar kale | 2026-11-15 | machine-drafted, needs native review |
+| `tileActiveEvents` | so | Active events | Dhacdooyinka firfircoon | 2026-11-15 | machine-drafted, needs native review |
+| `tileUpcomingDates` | so | Event dates, next 30 days | Taariikhaha dhacdooyinka, 30 maalmood ee soo socda | 2026-11-15 | machine-drafted, needs native review |
+| `tileCheckins` | so | Check-ins, last 30 days | Is-diiwaangelinta, 30-kii maalmood ee la soo dhaafay | 2026-11-15 | machine-drafted, needs native review |
+| `tileMembers` | so | Members | Xubno | 2026-11-15 | machine-drafted, needs native review |
+| `endingTitle` | so | Repeating events ending in the next 30 days | Dhacdooyinka soo noqnoqda ee dhammaanaya 30 maalmood ee soo socda | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | so | Loading… | Waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `endingFailed` | so | Could not load the repeating events that end soon. | Lama soo rari karin dhacdooyinka soo noqnoqda ee dhowaan dhammaanaya. | 2026-11-15 | machine-drafted, needs native review |
+| `endingEmpty` | so | No repeating event ends in the next 30 days. | Ma jirto dhacdo soo noqnoqota oo dhammaanaysa 30 maalmood ee soo socda. | 2026-11-15 | machine-drafted, needs native review |
+| `indexIntro` | so | Choose an organization to manage its events, profile and members. | Dooro urur si aad u maamusho dhacdooyinkiisa, astaantiisa iyo xubnihiisa. | 2026-11-15 | machine-drafted, needs native review |
+| `indexEmpty` | so | You do not manage any active organization right now. | Hadda ma maamushid urur firfircoon. | 2026-11-15 | machine-drafted, needs native review |
+| `userIdLabel` | so | User ID | Aqoonsiga isticmaalaha | 2026-11-15 | machine-drafted, needs native review |
+| `roleLabel` | so | Role | Door | 2026-11-15 | machine-drafted, needs native review |
+| `roleMember` | so | Member | Xubin | 2026-11-15 | machine-drafted, needs native review |
+| `roleAdmin` | so | Admin | Maamule | 2026-11-15 | machine-drafted, needs native review |
+| `addMember` | so | Add member | Ku dar xubin | 2026-11-15 | machine-drafted, needs native review |
+| `adding` | so | Adding… | Waa lagu darayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoading` | so | Loading members… | Xubnaha waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `membersEmpty` | so | No members yet. | Wali xubno ma jiraan. | 2026-11-15 | machine-drafted, needs native review |
+| `colJoined` | so | Joined | Ku biiray | 2026-11-15 | machine-drafted, needs native review |
+| `colActions` | so | Actions | Ficillo | 2026-11-15 | machine-drafted, needs native review |
+| `remove` | so | Remove | Ka saar | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoadFailed` | so | Could not load members. | Lama soo rari karin xubnaha. | 2026-11-15 | machine-drafted, needs native review |
+| `addFailed` | so | Could not add that member. Check the user ID and try again. | Xubintaas laguma dari karin. Hubi aqoonsiga isticmaalaha oo isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `addDuplicate` | so | That person is already a member. | Qofkaasi horeba waa xubin. | 2026-11-15 | machine-drafted, needs native review |
+| `addInvalid` | so | That is not a valid user ID. | Kani ma aha aqoonsi isticmaale oo sax ah. | 2026-11-15 | machine-drafted, needs native review |
+| `addNoAccount` | so | No account has that user ID. | Ma jiro akoon leh aqoonsigaas. | 2026-11-15 | machine-drafted, needs native review |
+| `removeFailed` | so | Could not remove that member — you may not have permission, or they were already removed. | Xubintaas lama saari karin — waxa laga yaabaa inaadan ogolaansho lahayn, ama horeba waa la saaray. | 2026-11-15 | machine-drafted, needs native review |
+| `roleFailed` | so | Could not change that role — you may not have permission. | Doorkaas lama beddeli karin — waxa laga yaabaa inaadan ogolaansho lahayn. | 2026-11-15 | machine-drafted, needs native review |
+| `memberAdded` | so | Member added. | Xubin waa lagu daray. | 2026-11-15 | machine-drafted, needs native review |
+| `memberRemoved` | so | Member removed. | Xubin waa la saaray. | 2026-11-15 | machine-drafted, needs native review |
+| `roleChanged` | so | Role changed. | Doorka waa la beddelay. | 2026-11-15 | machine-drafted, needs native review |
+| `close` | so | Close | Xir | 2026-11-15 | machine-drafted, needs native review |
+| `waitingTitle` | so | Waiting to confirm ({count}) | Sugaya xaqiijin ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `waitingEmpty` | so | No one is waiting — early check-ins appear here. | Qofna ma sugayo — kuwa hore isu diiwaangeliyey halkan ayay ka muuqdaan. | 2026-11-15 | machine-drafted, needs native review |
+| `householdSize` | so | Household {size} | Qoys {size} | 2026-11-15 | machine-drafted, needs native review |
+| `attendance` | so | attendance {rate} | imaansho {rate} | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | so | Confirm | Xaqiiji | 2026-11-15 | machine-drafted, needs native review |
+| `walkinTitle` | so | Add a walk-in | Ku dar qof aan ballan lahayn | 2026-11-15 | machine-drafted, needs native review |
+| `addHousehold` | so | Add household | Ku dar qoys | 2026-11-15 | machine-drafted, needs native review |
+| `walkinHint` | so | Anonymous walk-ins are counted for the event but not linked to any account. | Dadka aan magacooda la aqoon ee aan ballanta lahayn waa lagu tiriyaa dhacdada laakiin laguma xiro akoon. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmedTitle` | so | Confirmed ({count}) | La xaqiijiyey ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `footer` | so | Confirm each person as they arrive. Live count refreshes automatically. | Xaqiiji qof walba markuu yimaado. Tirinta tooska ahi si toos ah ayay isu cusboonaysiisaa. | 2026-11-15 | machine-drafted, needs native review |
+| `flashConfirmed` | so | Confirmed {name} | {name} waa la xaqiijiyey | 2026-11-15 | machine-drafted, needs native review |
+| `flashWalkin` | so | Walk-in added | Qof aan ballan lahayn ayaa lagu daray | 2026-11-15 | machine-drafted, needs native review |
+| `kioskLoadFailed` | so | Could not refresh the attendance list. It will try again shortly. | Lama cusboonaysiin karin liiska imaanshaha. Mar kale ayuu dhowaan isku dayi doonaa. | 2026-11-15 | machine-drafted, needs native review |
+| `kioskConfirmFailed` | so | Could not confirm {name}. Try again. | Lama xaqiijin karin {name}. Isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `kioskWalkinFailed` | so | Could not add the walk-in. Try again. | Lama dari karin qofka aan ballanta lahayn. Isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `backAll` | am | All organizations | ሁሉም ድርጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `backYours` | am | Your organizations | የእርስዎ ድርጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | am | Organization admin sections | የድርጅት አስተዳደር ክፍሎች | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | am | Overview | አጠቃላይ እይታ | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | am | Events | ዝግጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `tabProfile` | am | Profile | መገለጫ | 2026-11-15 | machine-drafted, needs native review |
+| `tabMembers` | am | Members | አባላት | 2026-11-15 | machine-drafted, needs native review |
+| `profileTitle` | am | Public profile | ይፋዊ መገለጫ | 2026-11-15 | machine-drafted, needs native review |
+| `profileIntro` | am | Name, description, contact details, hours, map pin, photos and linked resources shown on this organization’s public page. | በዚህ ድርጅት ይፋዊ ገጽ ላይ የሚታዩ ስም፣ መግለጫ፣ የመገኛ ዝርዝሮች፣ ሰዓቶች፣ የካርታ ምልክት፣ ፎቶዎችና የተገናኙ ሀብቶች። | 2026-11-15 | machine-drafted, needs native review |
+| `editProfile` | am | Edit profile | መገለጫውን አርትዕ | 2026-11-15 | machine-drafted, needs native review |
+| `overviewTitle` | am | This organization at a glance | ይህ ድርጅት በአጭሩ | 2026-11-15 | machine-drafted, needs native review |
+| `overviewLoading` | am | Loading overview… | አጠቃላይ እይታውን በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `overviewFailed` | am | Could not load this organization’s numbers. | የዚህን ድርጅት ቁጥሮች መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | am | Try again | እንደገና ሞክር | 2026-11-15 | machine-drafted, needs native review |
+| `tileActiveEvents` | am | Active events | ንቁ ዝግጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `tileUpcomingDates` | am | Event dates, next 30 days | የዝግጅት ቀኖች፣ በሚቀጥሉት 30 ቀናት | 2026-11-15 | machine-drafted, needs native review |
+| `tileCheckins` | am | Check-ins, last 30 days | የመገኘት ምዝገባዎች፣ ባለፉት 30 ቀናት | 2026-11-15 | machine-drafted, needs native review |
+| `tileMembers` | am | Members | አባላት | 2026-11-15 | machine-drafted, needs native review |
+| `endingTitle` | am | Repeating events ending in the next 30 days | በሚቀጥሉት 30 ቀናት የሚያበቁ ተደጋጋሚ ዝግጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | am | Loading… | በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `endingFailed` | am | Could not load the repeating events that end soon. | በቅርቡ የሚያበቁትን ተደጋጋሚ ዝግጅቶች መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `endingEmpty` | am | No repeating event ends in the next 30 days. | በሚቀጥሉት 30 ቀናት የሚያበቃ ተደጋጋሚ ዝግጅት የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `indexIntro` | am | Choose an organization to manage its events, profile and members. | ዝግጅቶቹን፣ መገለጫውንና አባላቱን ለማስተዳደር ድርጅት ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `indexEmpty` | am | You do not manage any active organization right now. | በአሁኑ ጊዜ የሚያስተዳድሩት ንቁ ድርጅት የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `userIdLabel` | am | User ID | የተጠቃሚ መታወቂያ | 2026-11-15 | machine-drafted, needs native review |
+| `roleLabel` | am | Role | ሚና | 2026-11-15 | machine-drafted, needs native review |
+| `roleMember` | am | Member | አባል | 2026-11-15 | machine-drafted, needs native review |
+| `roleAdmin` | am | Admin | አስተዳዳሪ | 2026-11-15 | machine-drafted, needs native review |
+| `addMember` | am | Add member | አባል አክል | 2026-11-15 | machine-drafted, needs native review |
+| `adding` | am | Adding… | በማከል ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoading` | am | Loading members… | አባላትን በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `membersEmpty` | am | No members yet. | እስካሁን አባላት የሉም። | 2026-11-15 | machine-drafted, needs native review |
+| `colJoined` | am | Joined | የተቀላቀለበት | 2026-11-15 | machine-drafted, needs native review |
+| `colActions` | am | Actions | እርምጃዎች | 2026-11-15 | machine-drafted, needs native review |
+| `remove` | am | Remove | አስወግድ | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoadFailed` | am | Could not load members. | አባላትን መጫን አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `addFailed` | am | Could not add that member. Check the user ID and try again. | ያንን አባል ማከል አልተቻለም። የተጠቃሚ መታወቂያውን ያረጋግጡና እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `addDuplicate` | am | That person is already a member. | ያ ሰው አስቀድሞ አባል ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `addInvalid` | am | That is not a valid user ID. | ይህ ትክክለኛ የተጠቃሚ መታወቂያ አይደለም። | 2026-11-15 | machine-drafted, needs native review |
+| `addNoAccount` | am | No account has that user ID. | ያ የተጠቃሚ መታወቂያ ያለው መለያ የለም። | 2026-11-15 | machine-drafted, needs native review |
+| `removeFailed` | am | Could not remove that member — you may not have permission, or they were already removed. | ያንን አባል ማስወገድ አልተቻለም — ፈቃድ ላይኖርዎት ይችላል፣ ወይም አስቀድሞ ተወግዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `roleFailed` | am | Could not change that role — you may not have permission. | ያንን ሚና መቀየር አልተቻለም — ፈቃድ ላይኖርዎት ይችላል። | 2026-11-15 | machine-drafted, needs native review |
+| `memberAdded` | am | Member added. | አባል ታክሏል። | 2026-11-15 | machine-drafted, needs native review |
+| `memberRemoved` | am | Member removed. | አባል ተወግዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `roleChanged` | am | Role changed. | ሚናው ተቀይሯል። | 2026-11-15 | machine-drafted, needs native review |
+| `close` | am | Close | ዝጋ | 2026-11-15 | machine-drafted, needs native review |
+| `waitingTitle` | am | Waiting to confirm ({count}) | ማረጋገጫ በመጠበቅ ላይ ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `waitingEmpty` | am | No one is waiting — early check-ins appear here. | የሚጠብቅ ሰው የለም — ቀድመው የተመዘገቡ እዚህ ይታያሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `householdSize` | am | Household {size} | ቤተሰብ {size} | 2026-11-15 | machine-drafted, needs native review |
+| `attendance` | am | attendance {rate} | የመገኘት መጠን {rate} | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | am | Confirm | አረጋግጥ | 2026-11-15 | machine-drafted, needs native review |
+| `walkinTitle` | am | Add a walk-in | ያለ ቀጠሮ የመጣ ሰው አክል | 2026-11-15 | machine-drafted, needs native review |
+| `addHousehold` | am | Add household | ቤተሰብ አክል | 2026-11-15 | machine-drafted, needs native review |
+| `walkinHint` | am | Anonymous walk-ins are counted for the event but not linked to any account. | ማንነታቸው ያልታወቀ ያለ ቀጠሮ የመጡ ሰዎች ለዝግጅቱ ይቆጠራሉ፣ ግን ከማንም መለያ ጋር አይገናኙም። | 2026-11-15 | machine-drafted, needs native review |
+| `confirmedTitle` | am | Confirmed ({count}) | የተረጋገጡ ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `footer` | am | Confirm each person as they arrive. Live count refreshes automatically. | እያንዳንዱ ሰው ሲደርስ ያረጋግጡ። የቀጥታ ቆጠራው በራሱ ይታደሳል። | 2026-11-15 | machine-drafted, needs native review |
+| `flashConfirmed` | am | Confirmed {name} | {name} ተረጋግጧል | 2026-11-15 | machine-drafted, needs native review |
+| `flashWalkin` | am | Walk-in added | ያለ ቀጠሮ የመጣ ሰው ታክሏል | 2026-11-15 | machine-drafted, needs native review |
+| `kioskLoadFailed` | am | Could not refresh the attendance list. It will try again shortly. | የመገኘት ዝርዝሩን ማደስ አልተቻለም። በቅርቡ እንደገና ይሞከራል። | 2026-11-15 | machine-drafted, needs native review |
+| `kioskConfirmFailed` | am | Could not confirm {name}. Try again. | {name}ን ማረጋገጥ አልተቻለም። እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `kioskWalkinFailed` | am | Could not add the walk-in. Try again. | ያለ ቀጠሮ የመጣውን ሰው ማከል አልተቻለም። እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `backAll` | hmn | All organizations | Txhua lub koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `backYours` | hmn | Your organizations | Koj cov koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | hmn | Organization admin sections | Cov ntu tswj lub koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | hmn | Overview | Saib luv luv | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | hmn | Events | Cov xwm txheej | 2026-11-15 | machine-drafted, needs native review |
+| `tabProfile` | hmn | Profile | Cov ntaub ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `tabMembers` | hmn | Members | Cov tswv cuab | 2026-11-15 | machine-drafted, needs native review |
+| `profileTitle` | hmn | Public profile | Cov ntaub ntawv rau pej xeem | 2026-11-15 | machine-drafted, needs native review |
+| `profileIntro` | hmn | Name, description, contact details, hours, map pin, photos and linked resources shown on this organization’s public page. | Npe, piav qhia, kev tiv tauj, sij hawm qhib, tus pin hauv daim ntawv qhia chaw, duab thiab cov kev pab txuas uas pom hauv lub koom haum nplooj ntawv pej xeem. | 2026-11-15 | machine-drafted, needs native review |
+| `editProfile` | hmn | Edit profile | Kho cov ntaub ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `overviewTitle` | hmn | This organization at a glance | Lub koom haum no luv luv | 2026-11-15 | machine-drafted, needs native review |
+| `overviewLoading` | hmn | Loading overview… | Tab tom rub qhov saib luv luv… | 2026-11-15 | machine-drafted, needs native review |
+| `overviewFailed` | hmn | Could not load this organization’s numbers. | Rub tsis tau lub koom haum no cov lej. | 2026-11-15 | machine-drafted, needs native review |
+| `tryAgain` | hmn | Try again | Sim dua | 2026-11-15 | machine-drafted, needs native review |
+| `tileActiveEvents` | hmn | Active events | Cov xwm txheej tab tom muaj | 2026-11-15 | machine-drafted, needs native review |
+| `tileUpcomingDates` | hmn | Event dates, next 30 days | Cov hnub xwm txheej, 30 hnub tom ntej | 2026-11-15 | machine-drafted, needs native review |
+| `tileCheckins` | hmn | Check-ins, last 30 days | Kev sau npe tuaj, 30 hnub dhau los | 2026-11-15 | machine-drafted, needs native review |
+| `tileMembers` | hmn | Members | Cov tswv cuab | 2026-11-15 | machine-drafted, needs native review |
+| `endingTitle` | hmn | Repeating events ending in the next 30 days | Cov xwm txheej rov ua dua uas xaus hauv 30 hnub tom ntej | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | hmn | Loading… | Tab tom rub… | 2026-11-15 | machine-drafted, needs native review |
+| `endingFailed` | hmn | Could not load the repeating events that end soon. | Rub tsis tau cov xwm txheej rov ua dua uas yuav xaus sai sai no. | 2026-11-15 | machine-drafted, needs native review |
+| `endingEmpty` | hmn | No repeating event ends in the next 30 days. | Tsis muaj xwm txheej rov ua dua twg xaus hauv 30 hnub tom ntej. | 2026-11-15 | machine-drafted, needs native review |
+| `indexIntro` | hmn | Choose an organization to manage its events, profile and members. | Xaiv ib lub koom haum los tswj nws cov xwm txheej, cov ntaub ntawv thiab cov tswv cuab. | 2026-11-15 | machine-drafted, needs native review |
+| `indexEmpty` | hmn | You do not manage any active organization right now. | Tam sim no koj tsis tau tswj lub koom haum twg uas tab tom ua haujlwm. | 2026-11-15 | machine-drafted, needs native review |
+| `userIdLabel` | hmn | User ID | Tus ID siv | 2026-11-15 | machine-drafted, needs native review |
+| `roleLabel` | hmn | Role | Lub luag haujlwm | 2026-11-15 | machine-drafted, needs native review |
+| `roleMember` | hmn | Member | Tswv cuab | 2026-11-15 | machine-drafted, needs native review |
+| `roleAdmin` | hmn | Admin | Thawj tswj | 2026-11-15 | machine-drafted, needs native review |
+| `addMember` | hmn | Add member | Ntxiv tswv cuab | 2026-11-15 | machine-drafted, needs native review |
+| `adding` | hmn | Adding… | Tab tom ntxiv… | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoading` | hmn | Loading members… | Tab tom rub cov tswv cuab… | 2026-11-15 | machine-drafted, needs native review |
+| `membersEmpty` | hmn | No members yet. | Tseem tsis tau muaj tswv cuab. | 2026-11-15 | machine-drafted, needs native review |
+| `colJoined` | hmn | Joined | Koom thaum | 2026-11-15 | machine-drafted, needs native review |
+| `colActions` | hmn | Actions | Kev ua | 2026-11-15 | machine-drafted, needs native review |
+| `remove` | hmn | Remove | Tshem tawm | 2026-11-15 | machine-drafted, needs native review |
+| `membersLoadFailed` | hmn | Could not load members. | Rub tsis tau cov tswv cuab. | 2026-11-15 | machine-drafted, needs native review |
+| `addFailed` | hmn | Could not add that member. Check the user ID and try again. | Ntxiv tsis tau tus tswv cuab ntawd. Kuaj tus ID siv thiab sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `addDuplicate` | hmn | That person is already a member. | Tus neeg ntawd twb yog tswv cuab lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `addInvalid` | hmn | That is not a valid user ID. | Qhov ntawd tsis yog tus ID siv raug. | 2026-11-15 | machine-drafted, needs native review |
+| `addNoAccount` | hmn | No account has that user ID. | Tsis muaj tus account twg muaj tus ID ntawd. | 2026-11-15 | machine-drafted, needs native review |
+| `removeFailed` | hmn | Could not remove that member — you may not have permission, or they were already removed. | Tshem tsis tau tus tswv cuab ntawd — tej zaum koj tsis muaj cai, lossis nws twb raug tshem lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `roleFailed` | hmn | Could not change that role — you may not have permission. | Hloov tsis tau lub luag haujlwm ntawd — tej zaum koj tsis muaj cai. | 2026-11-15 | machine-drafted, needs native review |
+| `memberAdded` | hmn | Member added. | Ntxiv tswv cuab lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `memberRemoved` | hmn | Member removed. | Tshem tswv cuab lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `roleChanged` | hmn | Role changed. | Hloov lub luag haujlwm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `close` | hmn | Close | Kaw | 2026-11-15 | machine-drafted, needs native review |
+| `waitingTitle` | hmn | Waiting to confirm ({count}) | Tos lees paub ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `waitingEmpty` | hmn | No one is waiting — early check-ins appear here. | Tsis muaj leej twg tos — cov sau npe ntxov yuav tshwm ntawm no. | 2026-11-15 | machine-drafted, needs native review |
+| `householdSize` | hmn | Household {size} | Tsev neeg {size} | 2026-11-15 | machine-drafted, needs native review |
+| `attendance` | hmn | attendance {rate} | kev tuaj koom {rate} | 2026-11-15 | machine-drafted, needs native review |
+| `confirm` | hmn | Confirm | Paub meej | 2026-11-15 | machine-drafted, needs native review |
+| `walkinTitle` | hmn | Add a walk-in | Ntxiv ib tug neeg tuaj tsis tau teem | 2026-11-15 | machine-drafted, needs native review |
+| `addHousehold` | hmn | Add household | Ntxiv tsev neeg | 2026-11-15 | machine-drafted, needs native review |
+| `walkinHint` | hmn | Anonymous walk-ins are counted for the event but not linked to any account. | Cov neeg tuaj tsis tau teem uas tsis qhia npe raug suav rau qhov xwm txheej tab sis tsis txuas rau tus account twg. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmedTitle` | hmn | Confirmed ({count}) | Lees paub lawm ({count}) | 2026-11-15 | machine-drafted, needs native review |
+| `footer` | hmn | Confirm each person as they arrive. Live count refreshes automatically. | Lees paub txhua tus neeg thaum lawv tuaj txog. Tus lej suav hloov tshiab nws tus kheej. | 2026-11-15 | machine-drafted, needs native review |
+| `flashConfirmed` | hmn | Confirmed {name} | Lees paub {name} lawm | 2026-11-15 | machine-drafted, needs native review |
+| `flashWalkin` | hmn | Walk-in added | Ntxiv tus neeg tuaj tsis tau teem lawm | 2026-11-15 | machine-drafted, needs native review |
+| `kioskLoadFailed` | hmn | Could not refresh the attendance list. It will try again shortly. | Hloov tshiab tsis tau daim ntawv teev neeg tuaj. Nws yuav sim dua sai sai no. | 2026-11-15 | machine-drafted, needs native review |
+| `kioskConfirmFailed` | hmn | Could not confirm {name}. Try again. | Lees paub tsis tau {name}. Sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `kioskWalkinFailed` | hmn | Could not add the walk-in. Try again. | Ntxiv tsis tau tus neeg tuaj tsis tau teem. Sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_CONFIRMED.other` | ht | {n} people confirmed | {n} moun konfime | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_CONFIRMED.one` | so | {n} person confirmed | {n} qof ayaa la xaqiijiyey | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_CONFIRMED.other` | so | {n} people confirmed | {n} qof ayaa la xaqiijiyey | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_CONFIRMED.one` | am | {n} person confirmed | {n} ሰው ተረጋግጧል | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_CONFIRMED.other` | am | {n} people confirmed | {n} ሰዎች ተረጋግጠዋል | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_CONFIRMED.other` | hmn | {n} people confirmed | Lees paub {n} tus neeg lawm | 2026-11-15 | machine-drafted, needs native review |
+| `CHECKIN_COUNT.other` | ht | {n} check-ins | {n} anrejistreman | 2026-11-15 | machine-drafted, needs native review |
+| `CHECKIN_COUNT.other` | so | {n} check-ins | {n} is-diiwaangelin | 2026-11-15 | machine-drafted, needs native review |
+| `CHECKIN_COUNT.one` | am | {n} check-in | {n} ምዝገባ | 2026-11-15 | machine-drafted, needs native review |
+| `CHECKIN_COUNT.other` | am | {n} check-ins | {n} ምዝገባዎች | 2026-11-15 | machine-drafted, needs native review |
+| `CHECKIN_COUNT.other` | hmn | {n} check-ins | {n} zaug sau npe tuaj | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_WORD.other` | ht | people | moun | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_WORD.other` | so | people | qof | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_WORD.one` | am | person | ሰው | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_WORD.other` | am | people | ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `PEOPLE_WORD.other` | hmn | people | tus neeg | 2026-11-15 | machine-drafted, needs native review |
 
 ### `lib/i18n-overview.ts`
 

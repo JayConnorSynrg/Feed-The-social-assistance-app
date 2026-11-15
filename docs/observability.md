@@ -435,6 +435,26 @@ A refused or failed post moderation action already writes `admin.post.<action>.e
 `privilegedRpc`) and `admin.denied`; it gets no further row. Only if the call threw before
 `privilegedRpc` returned would `moderatePost` write `admin.denied` with `code` = the error's class.
 
+## Resources, Manage, Businesses and organization admin failures (admin)
+
+P6 W4 puts the Resources, Manage and Businesses tabs, the resource edit dialog, the organization admin
+page, its roster and the check-in kiosk in the admin's language (`lib/i18n-admin-resources.ts`,
+`lib/i18n-org-admin.ts`). A failure shows a translated line, never the server's text. Where nothing
+recorded the failure before, one row is written with its code only (`lib/failure-code.ts`: the
+PostgREST code or SQLSTATE, else the error's class):
+
+| Event | Labels | When |
+|---|---|---|
+| `admin.resources.load_failed` | `code` | warn: the Resources review queue could not be read (`admin_list_pending_resources`, `resources-tab.tsx`) |
+| `admin.resource.discover_failed` | `code` (`http` · `no_session` · the error's class), `status` (the HTTP status, with `http` only) | warn: Discover failed (`resource-discover` edge function); its reply text is neither shown nor logged. A timeout is not a failure (it reloads the queue) |
+| `admin.resource.list_failed` | `code`, `page` (`first` · `more`) | warn: the Manage list (`admin_list_resources`) could not be read |
+| `admin.org.members_failed` | `code` (SQLSTATE · `no_rows` for a write that matched nothing), `op` (`load` · `add` · `remove` · `role`) | warn: a roster read or write failed (`orgs-section.tsx` `OrgMembers`, `org-members-data.ts`) |
+| `admin.checkin.kiosk.failed` | `code`, `op` (`load` · `confirm` · `walkin`) | warn: the check-in kiosk's attendance read or an `organizer_confirm` call failed (`organizer-checkin-display.tsx`); the 10-second refresh writes one row per run of failures |
+
+Paths that already wrote a row get none added: approve / reject / update of a resource or a business
+(`admin.resource.*`, `admin.business.*` via `privilegedRpc` / `withMetric` / `logger.error`), a resource
+save (`admin.resource.save`), and the business reads (`business.pending.fetch`, `business.admin.list.fetch`).
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

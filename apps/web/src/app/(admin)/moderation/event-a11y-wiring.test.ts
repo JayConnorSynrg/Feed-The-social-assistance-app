@@ -113,7 +113,8 @@ describe('the same status sentence is announced again', () => {
     expect(scheduler).toMatch(/setNotice\(null\)\s*const res = await pastDatesQuery/)
     expect(button).toMatch(/onStart\?\.\(\)\s*const outcome = await runExtend/)
     expect(scheduler).toMatch(/onStart=\{\(\) => setNotice\(null\)\}/)
-    expect(overview).toMatch(/onStart=\{\(\) => setNotice\(''\)\}/)
+    // P6 W4: the org overview clears through clearAnnouncement and announces with a keyed node.
+    expect(overview).toMatch(/onStart=\{\(\) => clearAnnouncement\(setNotice\)\}/)
     expect(overview).toMatch(/onStart=\{onStart\}/)
   })
 })
