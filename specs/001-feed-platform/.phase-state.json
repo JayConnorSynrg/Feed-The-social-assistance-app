@@ -1013,7 +1013,7 @@
       "base": "origin/develop a040a6a",
       "migration": null,
       "note": "P6 translations wave 8: onboarding (5 steps, every label, hint, button and failure line; saved row identical en vs ko; 'Skip for now' on step 1; failures translated, existing log rows code-only) and the public share pages /s/post, /s/embed, /s/business, /s/organization, /s/resource, /s/donate + their metadata and the (social) layout's site metadata in the visitor's language via lib/request-locale-server.ts (the root layout reads the same; one resolver). Member text lang=\"\" dir=\"auto\"; post keeps posts.lang / og:locale; reused labels at their source (roleLabel, business / org-type / resource categories, petition counts, spots left, Assistant Step/Back/Continue); opening hours via Intl in the locale (ht/hmn/so FEED words); English-only hour formatters removed from lib/business.ts. 'Open FEED' on /s/donate. Unchanged: OG images + og:image:alt, oEmbed (English, public cache), proxy publicRoutes, 404s (local prod build: 404 + private no-store). Focus on step heading, aria-pressed groups, aria-disabled + alert, single flight, status line, labels, logical classes, mirrored arrows. Dictionaries lib/i18n-onboarding.ts (47), lib/i18n-share.ts (53 + 2 count tables); 410 native-review rows. 16 mutants red.",
-      "pr": null
+      "pr": 258
     }
   }
 }
