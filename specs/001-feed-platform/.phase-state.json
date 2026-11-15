@@ -3,7 +3,7 @@
   "specDir": "specs/001-feed-platform",
   "projectRoot": "/Users/jelalconnor/CODING/CURSOR/FEED.",
   "created": "2026-01-19T00:00:00.000Z",
-  "lastUpdated": "2026-11-14T00:00:00.000Z",
+  "lastUpdated": "2026-11-15T00:00:00.000Z",
   "currentPhase": 9,
   "currentTask": null,
   "status": "COMPLETE",
@@ -953,6 +953,15 @@
       "note": "Card view: the Feed sub-tab scrolls with the whole card (owner ruling B): region min-h-full + card scroller pb-6 only when regionScrollsWithCard(panel, subtab); the feed list is no longer a scroll container. Last post bottom gap 0px -> 49px at 360x640, 390x844, 768x1024, 1440x900 (local dev, guest, measured); all other panels and sub-tabs measured identical. safe-area-pb defined once as @utility (padding-bottom: env(safe-area-inset-bottom)) for the mobile nav and its spacer. Proxy MFA list was ['/', '/onboarding', '/settings'] with a bare startsWith, so '/' matched every path; now lib/mfa-routes.ts requiresMfa = (admin) group + /api/admin only, derived-from-disk test.",
       "stepUp": "On c320abd: /login?step=mfa served only to an aal1 session with a verified factor; unsafe redirectTo dropped in proxy and page; MFAVerify shown once; aal2 required before navigating to an admin destination; AAL lookup error on an admin route fails closed to /; MFAVerify auto-submit stale-closure fixed.",
       "reviewFixRound": "On 0f2e497: MFA prompt keyboard/screen-reader complete (label, hint, one alert, aria-invalid, one-time-code, readOnly, focus return, form + single flight, 4.5:1 buttons); backup codes hidden for admin destinations; mobile nav stone-600 + aria-current; scroll-padding-bottom; AAL returned error fails closed; factor from getUser().factors; /api/community-summary + /federation/directory MFA routes; dot-segment // rejected."
+    },
+    "feed-petition-csv-export": {
+      "status": "BUILT_PR_OPEN",
+      "branch": "feature/feed-petition-csv-export",
+      "base": "origin/develop 5973158",
+      "migration": null,
+      "note": "Admin Moderation > Community: platform admin picks an approved petition and downloads its signatures CSV (POST /api/admin/petitions/[id]/export). Gate is_current_user_admin() before any read; export_petition_signatures paged 1,000 + checked against get_petition_signature_count; one admin_actions petition.export row per PA attempt, file only after the ok row; one admin.petition.export app_logs event. Columns: Full Name, Signed At, Affirmation, Petition Version Hash (IP, user agent, display name dropped server-side). BOM, RFC 4180, formula-safe, id+date file name. 14-locale copy lib/i18n-admin-petitions.ts. Replaces the coming-soon line.",
+      "pr": 252,
+      "reviewFixRound": "On 000ce36: section lang/dir (F1); status line announces Preparing CSV and is cleared before an error alert, aria-busy on the button only (F2); picker lang=\"\" dir=\"auto\" for member-written titles (F3); dim only without a selection (F4); select border stone-500 (F5); load failure in the always-mounted alert (F6); leading-space formula triggers neutralised (L1); malformed id 400 + one null-target error audit row (L2); approved-only petition read so a PA's own draft cannot be locked (L5). 15 mutants red."
     }
   }
 }

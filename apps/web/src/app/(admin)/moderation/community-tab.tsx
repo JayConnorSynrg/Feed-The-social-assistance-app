@@ -2,9 +2,11 @@
 
 import { useEffect } from 'react'
 import { CommunitySummarySection } from './community-summary-section'
+import { PetitionExportSection } from './petition-export-section'
 import { logger } from '@/lib/logger'
+import type { Locale } from '@/lib/i18n'
 
-export function CommunityTab({ selectedOrgId }: { selectedOrgId: string }) {
+export function CommunityTab({ selectedOrgId, locale }: { selectedOrgId: string; locale: Locale }) {
   useEffect(() => {
     logger.info('admin.community.tab.viewed', { org_id: selectedOrgId })
   }, [selectedOrgId])
@@ -12,9 +14,7 @@ export function CommunityTab({ selectedOrgId }: { selectedOrgId: string }) {
   return (
     <div className="space-y-4">
       <CommunitySummarySection />
-      <div className="rounded-xl border border-stone-200 bg-white p-4 sm:p-6">
-        <p className="text-sm text-stone-500">Petition signatures export — coming soon</p>
-      </div>
+      <PetitionExportSection locale={locale} />
     </div>
   )
 }
