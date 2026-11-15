@@ -81,7 +81,7 @@ describe('menu and moderation copy', () => {
     expect(menuItemLabel('remove', l).endsWith('…')).toBe(true)
   })
 
-  it('the admin console says it in English (the console is English throughout)', () => {
+  it('the admin console’s English line is unchanged (its 14 locales: app/(admin)/moderation/moderation.i18n.test.ts)', () => {
     expect(moderationFailure({ code: '42501', message: 'self_moderation_refused' })).toEqual({
       ok: false,
       message: "You can't moderate your own content — another moderator needs to review it.",

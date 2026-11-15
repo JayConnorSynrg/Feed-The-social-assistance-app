@@ -972,6 +972,16 @@
       "pr": 253,
       "reviewFixRound": "On 9e7a6dc: eligibility never screens an unrecognised state (lib/eligibility-screening.ts unknown_state; translated notice; 2-letter code asked in 14 locales); bubble/placeholder/timestamp contrast; guided flow keyed steps, question focus, Cancel focus return, named option groups, visible hint; resource row wraps at 360px; role=log with whole-reply announcements; IME-safe Enter; isolated model name; QuickTag aria-pressed; tab panel and org selector focus rings. 22 mutants red.",
       "reviewFixRound2": "On 7659615: streaming assistant bubble inert as a whole; failed empty reply not rendered; flow completion focuses the message box (guest: the opening card). 5 mutants red."
+    },
+    "feed-p6-w3-admin-moderation-people": {
+      "status": "BUILT_PR_OPEN",
+      "branch": "feature/feed-p6-w3-admin-moderation-people",
+      "base": "origin/develop dd01a47",
+      "migration": null,
+      "note": "P6 translations wave 3: the admin Moderation tab (Reports / Safety Alerts sub-tabs, reports queue, Removed & Held list, the linked post, every Remove / Hold / Authorize / Dismiss label and result line), the People tab (search, table, tier options via roleLabel, reason-gated dialog with its own lang/dir, every admin_set_tier refusal), Community insights and the admin error / not-found screens in the admin's language, dates through Intl (FEED words for ht/hmn/so). Member text (posts, report details, names) lang=\"\" dir=\"auto\"; Safety Alerts panel and model-written insight themes stay lang=\"en\". Moderation RPCs, arguments, headers, admin_actions and log rows unchanged in every locale (test). Raw error text replaced by translated lines; new code-only rows admin.reports.load_failed {code} and admin.community.insights_failed {code, status}; moderatePost's pre-request throw writes admin.denied {code: error class}. Accessible names for the queue chevron (+aria-expanded), People search, tier select, reason box; 4.5:1 colours on touched lines; flex-wrap/min-w-0/break-words for 360px. Dictionaries lib/i18n-admin-moderation.ts (47 keys + 3 count tables), lib/i18n-admin-people.ts (31 keys); 327 native-review rows. 20 mutants red.",
+      "pr": 254,
+      "reviewFixRound": "On f47ac3a: People keeps the table during re-reads, returns focus to the row select, announces Tier updated in one always-mounted status, shows refusals in an always-mounted alert inside the dialog, required reason, aria-disabled single-flight Apply, visible labels, stone-500 borders; reports queue has one always-mounted status and alert in every state and moves focus to the next card toggle / Removed & Held heading / empty heading after a row leaves (focusAfterRemoval); chevron fixed name + aria-expanded + aria-controls. 19 mutants red.",
+      "reviewFixRound2": "On c1559dd: Tier updated announced once after both dialog close and re-read in either order (grant spent after announcing); failed re-read after a grant keeps rows; queue-driven re-read holds the linked post status text; toggle aria-describedby on author/excerpt. 8 mutants red."
     }
   }
 }

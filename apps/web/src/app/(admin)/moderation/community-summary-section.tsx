@@ -1,8 +1,21 @@
 'use client'
 
+// apps/web/src/app/(admin)/moderation/community-summary-section.tsx
+// The Community tab's insights card, in the admin's language (lib/i18n-admin-moderation.ts), marked
+// lang/dir on its root. The themes (label, summary) are written in English by the model behind
+// /api/community-summary and stay marked lang="en" dir="ltr". A failure shows the admin's sentence
+// and writes one admin.community.insights_failed row: the PostgREST code, the HTTP status, or the
+// error's class — never a message (the route's reply is not shown or logged).
+
 import { useState, useCallback } from 'react'
 import { Sparkles, RefreshCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { logger } from '@/lib/logger'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage } from '@/lib/format-message'
+import { formatClock } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
+import { THEME_POSTS, adminModerationT, moderationCount } from '@/lib/i18n-admin-moderation'
 
 type Theme = {
   type: string
@@ -17,7 +30,15 @@ type PostGroup = {
   excerpts: string[]
 }
 
-export function CommunitySummarySection() {
+/** A failure the card logs: where it happened, by code (no message text). */
+class InsightsFailure extends Error {
+  constructor(readonly code: string, readonly status?: number) {
+    super(code)
+    this.name = 'InsightsFailure'
+  }
+}
+
+export function CommunitySummarySection({ locale = 'en' }: { locale?: Locale } = {}) {
   const [themes, setThemes] = useState<Theme[]>([])
   const [loading, setLoading] = useState(false)
   const [suppressed, setSuppressed] = useState(false)
@@ -41,7 +62,7 @@ export function CommunitySummarySection() {
         .gte('created_at', since.toISOString())
         .limit(200)
 
-      if (postsError) throw new Error(postsError.message)
+      if (postsError) throw new InsightsFailure(postsError.code || 'postgrest')
       if (!posts || posts.length === 0) {
         setSuppressed(true)
         setThemes([])
@@ -70,10 +91,7 @@ export function CommunitySummarySection() {
         body: JSON.stringify({ groups: groupList }),
       })
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error((body as { error?: string }).error ?? `API error ${res.status}`)
-      }
+      if (!res.ok) throw new InsightsFailure('http', res.status)
 
       const data = await res.json() as { suppressed?: boolean; themes?: Theme[] }
       if (data.suppressed) {
@@ -85,44 +103,54 @@ export function CommunitySummarySection() {
       }
       setLastFetched(new Date())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      // The route writes no row of its own: this is the one row for the failure.
+      if (err instanceof InsightsFailure) {
+        logger.warn('admin.community.insights_failed', err.status === undefined ? { code: err.code } : { code: err.code, status: err.status })
+      } else {
+        logger.warn('admin.community.insights_failed', { code: err instanceof Error ? err.name : 'unknown' })
+      }
+      setError(adminModerationT(locale, 'insightsFailed'))
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, locale])
+
+  const generateLabel = adminModerationT(locale, 'insightsGenerate')
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-6">
-      <div className="flex items-center justify-between mb-4">
+    <div lang={locale} dir={dir(locale)} className="rounded-xl border border-stone-200 bg-white p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-lime-600" />
-          <h2 className="text-lg font-semibold text-stone-800">Community Insights</h2>
+          <Sparkles className="h-5 w-5 text-lime-600" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-stone-800">{adminModerationT(locale, 'insightsTitle')}</h2>
         </div>
         <button
           onClick={generateSummary}
           disabled={loading}
-          className="flex items-center gap-1.5 rounded-lg bg-lime-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-lime-700 disabled:opacity-50 transition-colors"
+          className="flex min-h-9 items-center gap-1.5 rounded-lg bg-lime-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-lime-800 disabled:opacity-50 transition-colors"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Analyzing…' : lastFetched ? 'Refresh' : 'Generate Insights'}
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+          {loading
+            ? adminModerationT(locale, 'insightsAnalyzing')
+            : lastFetched
+              ? adminModerationT(locale, 'insightsRefresh')
+              : generateLabel}
         </button>
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-4">
+        <div role="alert" className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-4">
           {error}
         </div>
       )}
 
       {suppressed && (
-        <p className="text-sm text-stone-500 italic">
-          AI insights available once community reaches sufficient volume (k≥20 per category).
-        </p>
+        <p className="text-sm text-stone-600 italic">{adminModerationT(locale, 'insightsSuppressed')}</p>
       )}
 
       {!loading && !suppressed && themes.length === 0 && !error && !lastFetched && (
-        <p className="text-sm text-stone-400 italic">
-          Click &quot;Generate Insights&quot; to analyze community posts from the last 30 days.
+        <p className="text-sm text-stone-600 italic">
+          {formatMessage(adminModerationT(locale, 'insightsHint'), { button: generateLabel })}
         </p>
       )}
 
@@ -133,20 +161,21 @@ export function CommunitySummarySection() {
               key={theme.type}
               className="rounded-lg border border-stone-100 bg-stone-50 p-4"
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="rounded-full bg-lime-100 px-2.5 py-0.5 text-xs font-semibold text-lime-800">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                {/* Written in English by the model behind /api/community-summary. */}
+                <span lang="en" dir="ltr" className="rounded-full bg-lime-100 px-2.5 py-0.5 text-xs font-semibold text-lime-800">
                   {theme.label}
                 </span>
-                <span className="rounded-full bg-stone-200 px-2 py-0.5 text-xs text-stone-600">
-                  {theme.count} posts
+                <span className="rounded-full bg-stone-200 px-2 py-0.5 text-xs text-stone-700">
+                  {moderationCount(THEME_POSTS, theme.count, locale)}
                 </span>
               </div>
-              <p className="text-sm text-stone-700">{theme.summary}</p>
+              <p lang="en" dir="ltr" className="text-sm text-stone-700">{theme.summary}</p>
             </div>
           ))}
           {lastFetched && (
-            <p className="text-xs text-stone-400 mt-2">
-              Last updated: {lastFetched.toLocaleTimeString()}
+            <p className="text-xs text-stone-600 mt-2">
+              {formatMessage(adminModerationT(locale, 'insightsUpdated'), { time: formatClock(lastFetched.toISOString(), locale, browserTimeZone()) })}
             </p>
           )}
         </div>

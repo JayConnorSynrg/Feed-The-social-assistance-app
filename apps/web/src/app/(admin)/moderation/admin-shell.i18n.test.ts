@@ -4,7 +4,8 @@
 // An admin whose language is set reads the admin shell in that language from the first paint:
 //   - the header (tier marker or "Organizer"), the organization selector and every tab name, in the
 //     admin's language; the header and the tab bar marked with it, Arabic right-to-left (the tab
-//     list follows reading direction); each tab's still-English content marked lang="en" dir="ltr";
+//     list follows reading direction); each tab's still-English content marked lang="en" dir="ltr",
+//     and the translated tabs (Moderation, Community, People — P6 W3) marked with the admin's language;
 //     an organization's name keeps its own direction;
 //   - Label in Name: each tab's accessible name is its visible name, in the 14 locales;
 //   - the locale is useProfileLocale(): the cookie the server rendered with applies before the
@@ -57,6 +58,8 @@ import { AdminShell } from './admin-shell'
 import { markupText } from '@/test/markup-text'
 
 const LOCALES = Object.keys(messages) as Locale[]
+/** The tabs whose content a P6 wave translated (W3): marked with the admin's language. */
+const TRANSLATED_TABS = ['moderation', 'community', 'people']
 
 function html(language: string | null, opts: { tier?: string | null; isOrgAdmin?: boolean; cookie?: Locale } = {}) {
   state.language = language
@@ -97,7 +100,20 @@ describe('the admin shell in the admin’s language', () => {
     expect(overview).toMatch(/lang="en"/)
     expect(overview).toMatch(/dir="ltr"/)
     expect(panels.length).toBeGreaterThan(0)
-    for (const p of panels) expect(p).toMatch(/lang="en" dir="ltr"|dir="ltr"[^>]*lang="en"/)
+    const english = panels.filter((p) => !TRANSLATED_TABS.some((id) => p.includes(`-content-${id}"`)))
+    expect(english.length).toBe(panels.length - TRANSLATED_TABS.length)
+    for (const p of english) expect(p).toMatch(/lang="en" dir="ltr"|dir="ltr"[^>]*lang="en"/)
+  })
+
+  it.each([
+    ['ko', 'ltr'],
+    ['ar', 'rtl'],
+  ])('%s: the translated tabs (Moderation, Community, People) carry the admin’s language and direction', (language, direction) => {
+    const panels = [...html(language).matchAll(/<div([^>]*role="tabpanel"[^>]*)>/g)].map((m) => m[1])
+    for (const id of TRANSLATED_TABS) {
+      const panel = panels.find((p) => p.includes(`-content-${id}"`))!
+      expect(panel, id).toMatch(new RegExp(`lang="${language}" dir="${direction}"|dir="${direction}"[^>]*lang="${language}"`))
+    }
   })
 
   it('Arabic: header and tab bar right-to-left (the tablist follows reading direction)', () => {

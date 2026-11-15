@@ -420,6 +420,21 @@ paged 1,000 at a time (prod PostgREST `max_rows` = 1000) and checked against
 The first export of a petition sets `petitions.exported_at`, which locks withdrawals (migration
 `20260613000000`).
 
+## Moderation and Community failures (admin)
+
+The admin console's failure lines are in the admin's language (P6 W3, `lib/i18n-admin-moderation.ts`); the
+diagnostic stays in `app_logs`, one row per failure, by code only — a PostgREST message can quote the
+values it was given, so no message text is logged.
+
+| Event | Labels | When |
+|---|---|---|
+| `admin.reports.load_failed` | `code` (the PostgREST code, else the error's class) | warn: the Moderation › Reports queue could not read the open reports or their posts (`app/(admin)/moderation/reports-queue.tsx`); nothing else records that read |
+| `admin.community.insights_failed` | `code` (the PostgREST code of the posts read · `http` · the error's class), `status` (the HTTP status, with `http` only) | warn: Community › Insights could not be generated (`community-summary-section.tsx`); `/api/community-summary` writes no row of its own |
+
+A refused or failed post moderation action already writes `admin.post.<action>.error` (withMetric, via
+`privilegedRpc`) and `admin.denied`; it gets no further row. Only if the call threw before
+`privilegedRpc` returned would `moderatePost` write `admin.denied` with `code` = the error's class.
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

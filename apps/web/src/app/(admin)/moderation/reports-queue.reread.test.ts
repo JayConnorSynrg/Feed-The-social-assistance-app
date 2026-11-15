@@ -56,7 +56,9 @@ vi.mock('@/lib/supabase/client', () => {
 
 import { mount, findAll } from '@/test/mini-react'
 import { ReportsQueue } from './reports-queue'
-import { MODERATION_CONFLICT_MESSAGE } from './post-moderation-actions'
+import { adminModerationT } from '@/lib/i18n-admin-moderation'
+
+const MODERATION_CONFLICT_MESSAGE = adminModerationT('en', 'failConflict')
 const ENGLISH_REFUSAL = "You can't moderate your own content — another moderator needs to review it."
 
 type El = { type: unknown; props: Record<string, unknown> }

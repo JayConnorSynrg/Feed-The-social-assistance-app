@@ -97,6 +97,347 @@ step in that test, and the test fails until the list below is regenerated.
 | `TIME_WORDS.future.day.one` | so | In {n} days | {n} maalin kadib | 2026-10-11 | machine-drafted, needs native review |
 | `TIME_WORDS.future.day.other` | so | In {n} days | {n} maalmood kadib | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-admin-moderation.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `subtabReports` | ht | Reports | Rapò | 2026-11-15 | machine-drafted, needs native review |
+| `subtabSafety` | ht | Safety Alerts | Alèt sekirite | 2026-11-15 | machine-drafted, needs native review |
+| `loadingReports` | ht | Loading reports… | N ap chaje rapò yo… | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | ht | The reports couldn't be loaded. Please try again. | Nou pa t ka chaje rapò yo. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `errorGeneric` | ht | An error occurred | Gen yon erè ki fèt | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | ht | No open reports | Pa gen rapò ki louvri | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | ht | There are no content reports awaiting review. | Pa gen okenn rapò sou kontni k ap tann revizyon. | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | ht | Report details | Detay rapò yo | 2026-11-15 | machine-drafted, needs native review |
+| `authorLabel` | ht | Author: | Otè: | 2026-11-15 | machine-drafted, needs native review |
+| `viewPost` | ht | View post | Gade piblikasyon an | 2026-11-15 | machine-drafted, needs native review |
+| `actionRemove` | ht | Remove Post | Retire piblikasyon an | 2026-11-15 | machine-drafted, needs native review |
+| `actionHold` | ht | Hold for Review | Kenbe pou revizyon | 2026-11-15 | machine-drafted, needs native review |
+| `actionAuthorize` | ht | Authorize Post | Otorize piblikasyon an | 2026-11-15 | machine-drafted, needs native review |
+| `actionDismiss` | ht | Dismiss | Ignore | 2026-11-15 | machine-drafted, needs native review |
+| `ownPostNote` | ht | This is your own post: another moderator reviews its reports. | Sa a se pwòp piblikasyon pa w: yon lòt moderatè ap revize rapò li yo. | 2026-11-15 | machine-drafted, needs native review |
+| `heldTitle` | ht | Removed & Held Posts | Piblikasyon ki retire ak ki kenbe | 2026-11-15 | machine-drafted, needs native review |
+| `heldEmpty` | ht | No removed or held posts. | Pa gen piblikasyon ki retire oswa ki kenbe. | 2026-11-15 | machine-drafted, needs native review |
+| `statusVisible` | ht | Visible to members | Manm yo ka wè l | 2026-11-15 | machine-drafted, needs native review |
+| `statusRemoved` | ht | Removed | Retire | 2026-11-15 | machine-drafted, needs native review |
+| `statusHeld` | ht | Held for review | Yo kenbe l pou revizyon | 2026-11-15 | machine-drafted, needs native review |
+| `statusHidden` | ht | Hidden from members | Kache pou manm yo | 2026-11-15 | machine-drafted, needs native review |
+| `statusLine` | ht | Status: {status}. | Estati: {status}. | 2026-11-15 | machine-drafted, needs native review |
+| `doneRemove` | ht | Post removed. | Piblikasyon an retire. | 2026-11-15 | machine-drafted, needs native review |
+| `doneHold` | ht | Post held for review. | Piblikasyon an kenbe pou revizyon. | 2026-11-15 | machine-drafted, needs native review |
+| `doneAuthorize` | ht | Post authorized. | Piblikasyon an otorize. | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | ht | Report dismissed. | Rapò a ignore. | 2026-11-15 | machine-drafted, needs native review |
+| `focusTitle` | ht | Linked post | Piblikasyon ki lye a | 2026-11-15 | machine-drafted, needs native review |
+| `focusClose` | ht | Close linked post | Fèmen piblikasyon ki lye a | 2026-11-15 | machine-drafted, needs native review |
+| `focusLoading` | ht | Loading the linked post… | N ap chaje piblikasyon ki lye a… | 2026-11-15 | machine-drafted, needs native review |
+| `focusNotFound` | ht | This post was not found. It may have been deleted. | Nou pa jwenn piblikasyon sa a. Petèt yo efase l. | 2026-11-15 | machine-drafted, needs native review |
+| `focusError` | ht | The linked post could not be loaded. The reports queue below still works. | Nou pa t ka chaje piblikasyon ki lye a. Lis rapò ki anba a toujou mache. | 2026-11-15 | machine-drafted, needs native review |
+| `failConflict` | ht | The author changed this post since you opened it. The latest version is shown — review it and choose again. | Otè a chanje piblikasyon sa a depi ou te louvri l. Nou montre dènye vèsyon an — revize l epi chwazi ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `failSelf` | ht | You can't moderate your own content — another moderator needs to review it. | Ou pa ka modere pwòp kontni pa w — yon lòt moderatè dwe revize l. | 2026-11-15 | machine-drafted, needs native review |
+| `failGone` | ht | This post is gone — its author deleted it. Nothing was changed. | Piblikasyon sa a pa egziste ankò — otè l efase l. Anyen pa chanje. | 2026-11-15 | machine-drafted, needs native review |
+| `insightsTitle` | ht | Community Insights | Enfòmasyon sou kominote a | 2026-11-15 | machine-drafted, needs native review |
+| `insightsAnalyzing` | ht | Analyzing… | N ap analize… | 2026-11-15 | machine-drafted, needs native review |
+| `insightsRefresh` | ht | Refresh | Rafrechi | 2026-11-15 | machine-drafted, needs native review |
+| `insightsGenerate` | ht | Generate Insights | Jenere enfòmasyon | 2026-11-15 | machine-drafted, needs native review |
+| `insightsSuppressed` | ht | AI insights available once community reaches sufficient volume (k≥20 per category). | Enfòmasyon IA ap disponib lè kominote a rive nan yon volim ase (k≥20 pa kategori). | 2026-11-15 | machine-drafted, needs native review |
+| `insightsHint` | ht | Click "{button}" to analyze community posts from the last 30 days. | Klike sou "{button}" pou analize piblikasyon kominote a nan dènye 30 jou yo. | 2026-11-15 | machine-drafted, needs native review |
+| `insightsUpdated` | ht | Last updated: {time} | Dènye mizajou: {time} | 2026-11-15 | machine-drafted, needs native review |
+| `insightsFailed` | ht | The insights couldn't be generated. Please try again. | Nou pa t ka jenere enfòmasyon yo. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `errorTitle` | ht | Something went wrong | Gen yon bagay ki mal pase | 2026-11-15 | machine-drafted, needs native review |
+| `errorBody` | ht | This admin page hit an unexpected error. Please try again, or use the link at the top of the page to return to the feed. | Paj administrasyon sa a rankontre yon erè inatandi. Tanpri eseye ankò, oswa sèvi ak lyen ki anlè paj la pou retounen nan fil la. | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | ht | ref: {digest} | referans: {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | ht | Page not found | Nou pa jwenn paj la | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | ht | This admin page doesn’t exist, or you don’t have access to it. Use the link at the top of the page to return to the feed. | Paj administrasyon sa a pa egziste, oswa ou pa gen aksè ladan l. Sèvi ak lyen ki anlè paj la pou retounen nan fil la. | 2026-11-15 | machine-drafted, needs native review |
+| `subtabReports` | so | Reports | Warbixinno | 2026-11-15 | machine-drafted, needs native review |
+| `subtabSafety` | so | Safety Alerts | Digniinaha badbaadada | 2026-11-15 | machine-drafted, needs native review |
+| `loadingReports` | so | Loading reports… | Warbixinnada waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | so | The reports couldn't be loaded. Please try again. | Warbixinnada lama soo rari karin. Fadlan mar kale isku day. | 2026-11-15 | machine-drafted, needs native review |
+| `errorGeneric` | so | An error occurred | Khalad ayaa dhacay | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | so | No open reports | Ma jiraan warbixino furan | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | so | There are no content reports awaiting review. | Ma jiraan warbixino ku saabsan nuxur oo sugaya dib-u-eegis. | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | so | Report details | Faahfaahinta warbixinnada | 2026-11-15 | machine-drafted, needs native review |
+| `authorLabel` | so | Author: | Qoraaga: | 2026-11-15 | machine-drafted, needs native review |
+| `viewPost` | so | View post | Eeg qoraalka | 2026-11-15 | machine-drafted, needs native review |
+| `actionRemove` | so | Remove Post | Ka saar qoraalka | 2026-11-15 | machine-drafted, needs native review |
+| `actionHold` | so | Hold for Review | Hay si dib loo eego | 2026-11-15 | machine-drafted, needs native review |
+| `actionAuthorize` | so | Authorize Post | Oggolow qoraalka | 2026-11-15 | machine-drafted, needs native review |
+| `actionDismiss` | so | Dismiss | Iska dhaaf | 2026-11-15 | machine-drafted, needs native review |
+| `ownPostNote` | so | This is your own post: another moderator reviews its reports. | Kani waa qoraalkaaga: maamule kale ayaa eegaya warbixinnadiisa. | 2026-11-15 | machine-drafted, needs native review |
+| `heldTitle` | so | Removed & Held Posts | Qoraallada la saaray iyo kuwa la hayo | 2026-11-15 | machine-drafted, needs native review |
+| `heldEmpty` | so | No removed or held posts. | Ma jiraan qoraallo la saaray ama la hayo. | 2026-11-15 | machine-drafted, needs native review |
+| `statusVisible` | so | Visible to members | Xubnuhu way arki karaan | 2026-11-15 | machine-drafted, needs native review |
+| `statusRemoved` | so | Removed | La saaray | 2026-11-15 | machine-drafted, needs native review |
+| `statusHeld` | so | Held for review | Loo hayo dib-u-eegis | 2026-11-15 | machine-drafted, needs native review |
+| `statusHidden` | so | Hidden from members | Xubnaha laga qariyay | 2026-11-15 | machine-drafted, needs native review |
+| `statusLine` | so | Status: {status}. | Xaaladda: {status}. | 2026-11-15 | machine-drafted, needs native review |
+| `doneRemove` | so | Post removed. | Qoraalka waa la saaray. | 2026-11-15 | machine-drafted, needs native review |
+| `doneHold` | so | Post held for review. | Qoraalka waa la hayaa si dib loo eego. | 2026-11-15 | machine-drafted, needs native review |
+| `doneAuthorize` | so | Post authorized. | Qoraalka waa la oggolaaday. | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | so | Report dismissed. | Warbixinta waa la iska dhaafay. | 2026-11-15 | machine-drafted, needs native review |
+| `focusTitle` | so | Linked post | Qoraalka la xiriiriyay | 2026-11-15 | machine-drafted, needs native review |
+| `focusClose` | so | Close linked post | Xir qoraalka la xiriiriyay | 2026-11-15 | machine-drafted, needs native review |
+| `focusLoading` | so | Loading the linked post… | Qoraalka la xiriiriyay waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `focusNotFound` | so | This post was not found. It may have been deleted. | Qoraalkan lama helin. Waxaa laga yaabaa in la tirtiray. | 2026-11-15 | machine-drafted, needs native review |
+| `focusError` | so | The linked post could not be loaded. The reports queue below still works. | Qoraalka la xiriiriyay lama soo rari karin. Safka warbixinnada ee hoose wali wuu shaqeynayaa. | 2026-11-15 | machine-drafted, needs native review |
+| `failConflict` | so | The author changed this post since you opened it. The latest version is shown — review it and choose again. | Qoraaguhu wuu beddelay qoraalkan tan iyo markii aad furtay. Nuqulka ugu dambeeyay ayaa la muujiyay — dib u eeg oo mar kale dooro. | 2026-11-15 | machine-drafted, needs native review |
+| `failSelf` | so | You can't moderate your own content — another moderator needs to review it. | Ma maamuli kartid nuxurkaaga — maamule kale ayaa dib u eegi doona. | 2026-11-15 | machine-drafted, needs native review |
+| `failGone` | so | This post is gone — its author deleted it. Nothing was changed. | Qoraalkan ma jiro — qoraagiisa ayaa tirtiray. Waxba lama beddelin. | 2026-11-15 | machine-drafted, needs native review |
+| `insightsTitle` | so | Community Insights | Aragtiyada bulshada | 2026-11-15 | machine-drafted, needs native review |
+| `insightsAnalyzing` | so | Analyzing… | Waa la falanqeynayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `insightsRefresh` | so | Refresh | Cusboonaysii | 2026-11-15 | machine-drafted, needs native review |
+| `insightsGenerate` | so | Generate Insights | Samee aragtiyo | 2026-11-15 | machine-drafted, needs native review |
+| `insightsSuppressed` | so | AI insights available once community reaches sufficient volume (k≥20 per category). | Aragtiyada AI waxay diyaar noqonayaan marka bulshadu gaarto tiro ku filan (k≥20 qayb kasta). | 2026-11-15 | machine-drafted, needs native review |
+| `insightsHint` | so | Click "{button}" to analyze community posts from the last 30 days. | Guji "{button}" si aad u falanqeyso qoraallada bulshada 30-kii maalmood ee la soo dhaafay. | 2026-11-15 | machine-drafted, needs native review |
+| `insightsUpdated` | so | Last updated: {time} | Markii ugu dambaysay ee la cusboonaysiiyay: {time} | 2026-11-15 | machine-drafted, needs native review |
+| `insightsFailed` | so | The insights couldn't be generated. Please try again. | Aragtiyada lama samayn karin. Fadlan mar kale isku day. | 2026-11-15 | machine-drafted, needs native review |
+| `errorTitle` | so | Something went wrong | Wax ayaa qaldamay | 2026-11-15 | machine-drafted, needs native review |
+| `errorBody` | so | This admin page hit an unexpected error. Please try again, or use the link at the top of the page to return to the feed. | Boggan maamulka wuxuu la kulmay khalad lama filaan ah. Fadlan mar kale isku day, ama isticmaal xiriirka sare ee bogga si aad ugu laabato quudinta. | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | so | ref: {digest} | tixraac: {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | so | Page not found | Bogga lama helin | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | so | This admin page doesn’t exist, or you don’t have access to it. Use the link at the top of the page to return to the feed. | Boggan maamulka ma jiro, ama ma haysatid gelitaan. Isticmaal xiriirka sare ee bogga si aad ugu laabato quudinta. | 2026-11-15 | machine-drafted, needs native review |
+| `subtabReports` | am | Reports | ሪፖርቶች | 2026-11-15 | machine-drafted, needs native review |
+| `subtabSafety` | am | Safety Alerts | የደህንነት ማንቂያዎች | 2026-11-15 | machine-drafted, needs native review |
+| `loadingReports` | am | Loading reports… | ሪፖርቶች በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | am | The reports couldn't be loaded. Please try again. | ሪፖርቶቹን መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `errorGeneric` | am | An error occurred | ስህተት ተከስቷል | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | am | No open reports | ክፍት ሪፖርቶች የሉም | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | am | There are no content reports awaiting review. | ግምገማ የሚጠብቁ የይዘት ሪፖርቶች የሉም። | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | am | Report details | የሪፖርት ዝርዝሮች | 2026-11-15 | machine-drafted, needs native review |
+| `authorLabel` | am | Author: | ጸሐፊ፦ | 2026-11-15 | machine-drafted, needs native review |
+| `viewPost` | am | View post | ልጥፉን ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
+| `actionRemove` | am | Remove Post | ልጥፉን አስወግድ | 2026-11-15 | machine-drafted, needs native review |
+| `actionHold` | am | Hold for Review | ለግምገማ ያዝ | 2026-11-15 | machine-drafted, needs native review |
+| `actionAuthorize` | am | Authorize Post | ልጥፉን ፍቀድ | 2026-11-15 | machine-drafted, needs native review |
+| `actionDismiss` | am | Dismiss | አሰናብት | 2026-11-15 | machine-drafted, needs native review |
+| `ownPostNote` | am | This is your own post: another moderator reviews its reports. | ይህ የራስዎ ልጥፍ ነው፦ ሪፖርቶቹን ሌላ አወያይ ይገመግማል። | 2026-11-15 | machine-drafted, needs native review |
+| `heldTitle` | am | Removed & Held Posts | የተወገዱ እና የተያዙ ልጥፎች | 2026-11-15 | machine-drafted, needs native review |
+| `heldEmpty` | am | No removed or held posts. | የተወገዱ ወይም የተያዙ ልጥፎች የሉም። | 2026-11-15 | machine-drafted, needs native review |
+| `statusVisible` | am | Visible to members | ለአባላት ይታያል | 2026-11-15 | machine-drafted, needs native review |
+| `statusRemoved` | am | Removed | ተወግዷል | 2026-11-15 | machine-drafted, needs native review |
+| `statusHeld` | am | Held for review | ለግምገማ ተይዟል | 2026-11-15 | machine-drafted, needs native review |
+| `statusHidden` | am | Hidden from members | ከአባላት ተደብቋል | 2026-11-15 | machine-drafted, needs native review |
+| `statusLine` | am | Status: {status}. | ሁኔታ፦ {status}። | 2026-11-15 | machine-drafted, needs native review |
+| `doneRemove` | am | Post removed. | ልጥፉ ተወግዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `doneHold` | am | Post held for review. | ልጥፉ ለግምገማ ተይዟል። | 2026-11-15 | machine-drafted, needs native review |
+| `doneAuthorize` | am | Post authorized. | ልጥፉ ተፈቅዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | am | Report dismissed. | ሪፖርቱ ተሰናብቷል። | 2026-11-15 | machine-drafted, needs native review |
+| `focusTitle` | am | Linked post | የተገናኘ ልጥፍ | 2026-11-15 | machine-drafted, needs native review |
+| `focusClose` | am | Close linked post | የተገናኘውን ልጥፍ ዝጋ | 2026-11-15 | machine-drafted, needs native review |
+| `focusLoading` | am | Loading the linked post… | የተገናኘው ልጥፍ በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `focusNotFound` | am | This post was not found. It may have been deleted. | ይህ ልጥፍ አልተገኘም። ተሰርዞ ሊሆን ይችላል። | 2026-11-15 | machine-drafted, needs native review |
+| `focusError` | am | The linked post could not be loaded. The reports queue below still works. | የተገናኘውን ልጥፍ መጫን አልተቻለም። ከታች ያለው የሪፖርቶች ዝርዝር አሁንም ይሰራል። | 2026-11-15 | machine-drafted, needs native review |
+| `failConflict` | am | The author changed this post since you opened it. The latest version is shown — review it and choose again. | ከከፈቱት በኋላ ጸሐፊው ይህን ልጥፍ ቀይሮታል። የቅርብ ጊዜው ስሪት ይታያል — ይገምግሙት እና እንደገና ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `failSelf` | am | You can't moderate your own content — another moderator needs to review it. | የራስዎን ይዘት ማወያየት አይችሉም — ሌላ አወያይ ሊገመግመው ይገባል። | 2026-11-15 | machine-drafted, needs native review |
+| `failGone` | am | This post is gone — its author deleted it. Nothing was changed. | ይህ ልጥፍ የለም — ጸሐፊው ሰርዞታል። ምንም አልተቀየረም። | 2026-11-15 | machine-drafted, needs native review |
+| `insightsTitle` | am | Community Insights | የማህበረሰብ ግንዛቤዎች | 2026-11-15 | machine-drafted, needs native review |
+| `insightsAnalyzing` | am | Analyzing… | በመተንተን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `insightsRefresh` | am | Refresh | አድስ | 2026-11-15 | machine-drafted, needs native review |
+| `insightsGenerate` | am | Generate Insights | ግንዛቤዎችን ፍጠር | 2026-11-15 | machine-drafted, needs native review |
+| `insightsSuppressed` | am | AI insights available once community reaches sufficient volume (k≥20 per category). | ማህበረሰቡ በቂ መጠን ሲደርስ (በእያንዳንዱ ምድብ k≥20) የAI ግንዛቤዎች ይገኛሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `insightsHint` | am | Click "{button}" to analyze community posts from the last 30 days. | ያለፉትን 30 ቀናት የማህበረሰብ ልጥፎች ለመተንተን "{button}"ን ጠቅ ያድርጉ። | 2026-11-15 | machine-drafted, needs native review |
+| `insightsUpdated` | am | Last updated: {time} | ለመጨረሻ ጊዜ የተዘመነው፦ {time} | 2026-11-15 | machine-drafted, needs native review |
+| `insightsFailed` | am | The insights couldn't be generated. Please try again. | ግንዛቤዎቹን መፍጠር አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `errorTitle` | am | Something went wrong | የሆነ ችግር ተፈጥሯል | 2026-11-15 | machine-drafted, needs native review |
+| `errorBody` | am | This admin page hit an unexpected error. Please try again, or use the link at the top of the page to return to the feed. | ይህ የአስተዳዳሪ ገጽ ያልተጠበቀ ስህተት አጋጥሞታል። እባክዎ እንደገና ይሞክሩ፣ ወይም ወደ ምግቡ ለመመለስ በገጹ አናት ያለውን አገናኝ ይጠቀሙ። | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | am | ref: {digest} | ማጣቀሻ፦ {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | am | Page not found | ገጹ አልተገኘም | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | am | This admin page doesn’t exist, or you don’t have access to it. Use the link at the top of the page to return to the feed. | ይህ የአስተዳዳሪ ገጽ የለም፣ ወይም የመድረስ ፈቃድ የለዎትም። ወደ ምግቡ ለመመለስ በገጹ አናት ያለውን አገናኝ ይጠቀሙ። | 2026-11-15 | machine-drafted, needs native review |
+| `subtabReports` | hmn | Reports | Cov kev tshaj qhia | 2026-11-15 | machine-drafted, needs native review |
+| `subtabSafety` | hmn | Safety Alerts | Cov lus ceeb toom kev nyab xeeb | 2026-11-15 | machine-drafted, needs native review |
+| `loadingReports` | hmn | Loading reports… | Tab tom thauj cov kev tshaj qhia… | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | hmn | The reports couldn't be loaded. Please try again. | Thauj tsis tau cov kev tshaj qhia. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `errorGeneric` | hmn | An error occurred | Muaj ib qho yuam kev tshwm sim | 2026-11-15 | machine-drafted, needs native review |
+| `emptyTitle` | hmn | No open reports | Tsis muaj kev tshaj qhia qhib | 2026-11-15 | machine-drafted, needs native review |
+| `emptyBody` | hmn | There are no content reports awaiting review. | Tsis muaj kev tshaj qhia txog cov ntsiab lus tos kev tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | hmn | Report details | Cov ntsiab lus ntawm kev tshaj qhia | 2026-11-15 | machine-drafted, needs native review |
+| `authorLabel` | hmn | Author: | Tus sau: | 2026-11-15 | machine-drafted, needs native review |
+| `viewPost` | hmn | View post | Saib qhov tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
+| `actionRemove` | hmn | Remove Post | Tshem qhov tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
+| `actionHold` | hmn | Hold for Review | Tuav cia tos tshuaj xyuas | 2026-11-15 | machine-drafted, needs native review |
+| `actionAuthorize` | hmn | Authorize Post | Tso cai rau qhov tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
+| `actionDismiss` | hmn | Dismiss | Tsis quav ntsej | 2026-11-15 | machine-drafted, needs native review |
+| `ownPostNote` | hmn | This is your own post: another moderator reviews its reports. | No yog koj qhov tshaj tawm: lwm tus neeg saib xyuas yuav tshuaj xyuas nws cov kev tshaj qhia. | 2026-11-15 | machine-drafted, needs native review |
+| `heldTitle` | hmn | Removed & Held Posts | Cov tshaj tawm raug tshem thiab raug tuav cia | 2026-11-15 | machine-drafted, needs native review |
+| `heldEmpty` | hmn | No removed or held posts. | Tsis muaj tshaj tawm raug tshem lossis raug tuav cia. | 2026-11-15 | machine-drafted, needs native review |
+| `statusVisible` | hmn | Visible to members | Cov tswv cuab pom tau | 2026-11-15 | machine-drafted, needs native review |
+| `statusRemoved` | hmn | Removed | Raug tshem | 2026-11-15 | machine-drafted, needs native review |
+| `statusHeld` | hmn | Held for review | Raug tuav cia tos tshuaj xyuas | 2026-11-15 | machine-drafted, needs native review |
+| `statusHidden` | hmn | Hidden from members | Zais ntawm cov tswv cuab | 2026-11-15 | machine-drafted, needs native review |
+| `statusLine` | hmn | Status: {status}. | Xwm txheej: {status}. | 2026-11-15 | machine-drafted, needs native review |
+| `doneRemove` | hmn | Post removed. | Tshem qhov tshaj tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `doneHold` | hmn | Post held for review. | Tuav qhov tshaj tawm cia tos tshuaj xyuas lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `doneAuthorize` | hmn | Post authorized. | Tso cai rau qhov tshaj tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | hmn | Report dismissed. | Tsis quav ntsej qhov kev tshaj qhia lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `focusTitle` | hmn | Linked post | Qhov tshaj tawm uas txuas los | 2026-11-15 | machine-drafted, needs native review |
+| `focusClose` | hmn | Close linked post | Kaw qhov tshaj tawm uas txuas los | 2026-11-15 | machine-drafted, needs native review |
+| `focusLoading` | hmn | Loading the linked post… | Tab tom thauj qhov tshaj tawm uas txuas los… | 2026-11-15 | machine-drafted, needs native review |
+| `focusNotFound` | hmn | This post was not found. It may have been deleted. | Nrhiav tsis tau qhov tshaj tawm no. Tej zaum nws raug rho tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `focusError` | hmn | The linked post could not be loaded. The reports queue below still works. | Thauj tsis tau qhov tshaj tawm uas txuas los. Daim ntawv kev tshaj qhia hauv qab no tseem siv tau. | 2026-11-15 | machine-drafted, needs native review |
+| `failConflict` | hmn | The author changed this post since you opened it. The latest version is shown — review it and choose again. | Tus sau tau hloov qhov tshaj tawm no txij thaum koj qhib nws. Pom qhov tshiab tshaj lawm — tshuaj xyuas thiab xaiv dua. | 2026-11-15 | machine-drafted, needs native review |
+| `failSelf` | hmn | You can't moderate your own content — another moderator needs to review it. | Koj saib xyuas tsis tau koj cov ntsiab lus — yuav tsum yog lwm tus neeg saib xyuas tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `failGone` | hmn | This post is gone — its author deleted it. Nothing was changed. | Qhov tshaj tawm no tsis muaj lawm — tus sau tau rho tawm. Tsis tau hloov dab tsi. | 2026-11-15 | machine-drafted, needs native review |
+| `insightsTitle` | hmn | Community Insights | Kev nkag siab txog zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `insightsAnalyzing` | hmn | Analyzing… | Tab tom tshuaj xyuas… | 2026-11-15 | machine-drafted, needs native review |
+| `insightsRefresh` | hmn | Refresh | Rov thauj dua | 2026-11-15 | machine-drafted, needs native review |
+| `insightsGenerate` | hmn | Generate Insights | Tsim kev nkag siab | 2026-11-15 | machine-drafted, needs native review |
+| `insightsSuppressed` | hmn | AI insights available once community reaches sufficient volume (k≥20 per category). | Kev nkag siab los ntawm AI yuav muaj thaum zej zog muaj txaus (k≥20 rau txhua pawg). | 2026-11-15 | machine-drafted, needs native review |
+| `insightsHint` | hmn | Click "{button}" to analyze community posts from the last 30 days. | Nias "{button}" los tshuaj xyuas cov tshaj tawm hauv zej zog hauv 30 hnub dhau los. | 2026-11-15 | machine-drafted, needs native review |
+| `insightsUpdated` | hmn | Last updated: {time} | Hloov kawg: {time} | 2026-11-15 | machine-drafted, needs native review |
+| `insightsFailed` | hmn | The insights couldn't be generated. Please try again. | Tsim tsis tau kev nkag siab. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `errorTitle` | hmn | Something went wrong | Muaj teeb meem tshwm sim | 2026-11-15 | machine-drafted, needs native review |
+| `errorBody` | hmn | This admin page hit an unexpected error. Please try again, or use the link at the top of the page to return to the feed. | Nplooj ntawv tswj hwm no muaj ib qho yuam kev tsis tau xav txog. Thov sim dua, lossis siv qhov txuas saum nplooj ntawv rov qab mus rau feed. | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | hmn | ref: {digest} | tus lej siv: {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundTitle` | hmn | Page not found | Nrhiav tsis tau nplooj ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `notFoundBody` | hmn | This admin page doesn’t exist, or you don’t have access to it. Use the link at the top of the page to return to the feed. | Nplooj ntawv tswj hwm no tsis muaj, lossis koj tsis muaj cai nkag. Siv qhov txuas saum nplooj ntawv rov qab mus rau feed. | 2026-11-15 | machine-drafted, needs native review |
+| `POSTS_WITH_REPORTS.other` | ht | {n} posts with open reports | {n} piblikasyon ki gen rapò louvri | 2026-11-15 | machine-drafted, needs native review |
+| `POSTS_WITH_REPORTS.other` | so | {n} posts with open reports | {n} qoraal oo leh warbixino furan | 2026-11-15 | machine-drafted, needs native review |
+| `POSTS_WITH_REPORTS.one` | am | {n} post with open reports | {n} ክፍት ሪፖርት ያለው ልጥፍ | 2026-11-15 | machine-drafted, needs native review |
+| `POSTS_WITH_REPORTS.other` | am | {n} posts with open reports | {n} ክፍት ሪፖርቶች ያሏቸው ልጥፎች | 2026-11-15 | machine-drafted, needs native review |
+| `POSTS_WITH_REPORTS.other` | hmn | {n} posts with open reports | {n} qhov tshaj tawm uas muaj kev tshaj qhia qhib | 2026-11-15 | machine-drafted, needs native review |
+| `REPORT_COUNT.other` | ht | {n} reports | {n} rapò | 2026-11-15 | machine-drafted, needs native review |
+| `REPORT_COUNT.other` | so | {n} reports | {n} warbixin | 2026-11-15 | machine-drafted, needs native review |
+| `REPORT_COUNT.one` | am | {n} report | {n} ሪፖርት | 2026-11-15 | machine-drafted, needs native review |
+| `REPORT_COUNT.other` | am | {n} reports | {n} ሪፖርቶች | 2026-11-15 | machine-drafted, needs native review |
+| `REPORT_COUNT.other` | hmn | {n} reports | {n} qhov kev tshaj qhia | 2026-11-15 | machine-drafted, needs native review |
+| `THEME_POSTS.other` | ht | {n} posts | {n} piblikasyon | 2026-11-15 | machine-drafted, needs native review |
+| `THEME_POSTS.other` | so | {n} posts | {n} qoraal | 2026-11-15 | machine-drafted, needs native review |
+| `THEME_POSTS.one` | am | {n} post | {n} ልጥፍ | 2026-11-15 | machine-drafted, needs native review |
+| `THEME_POSTS.other` | am | {n} posts | {n} ልጥፎች | 2026-11-15 | machine-drafted, needs native review |
+| `THEME_POSTS.other` | hmn | {n} posts | {n} qhov tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
+
+### `lib/i18n-admin-people.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `loadFailed` | ht | Couldn't load people — please retry. | Nou pa t ka chaje moun yo — tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | ht | Tier updated. | Nivo a mete ajou. | 2026-11-15 | machine-drafted, needs native review |
+| `changeFailed` | ht | The tier change failed — please retry. | Chanjman nivo a echwe — tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `deniedCode` | ht | Denied ({code}). | Refize ({code}). | 2026-11-15 | machine-drafted, needs native review |
+| `denySelf` | ht | You cannot change your own tier. | Ou pa ka chanje pwòp nivo pa w. | 2026-11-15 | machine-drafted, needs native review |
+| `denyFounderOnly` | ht | Only the founder can grant or revoke the Admin tier. | Se sèlman fondatè a ki ka bay oswa retire nivo Admin an. | 2026-11-15 | machine-drafted, needs native review |
+| `denyInsufficientTier` | ht | Your tier cannot grant that tier. | Nivo pa w la pa ka bay nivo sa a. | 2026-11-15 | machine-drafted, needs native review |
+| `denyNoChange` | ht | That person already holds this tier. | Moun sa a gen nivo sa a deja. | 2026-11-15 | machine-drafted, needs native review |
+| `denyTargetInvalid` | ht | That account cannot receive a tier. | Kont sa a pa ka resevwa yon nivo. | 2026-11-15 | machine-drafted, needs native review |
+| `denyAuth` | ht | Sign in to manage tiers. | Konekte pou jere nivo yo. | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | ht | Search name or username | Chèche non oswa non itilizatè | 2026-11-15 | machine-drafted, needs native review |
+| `search` | ht | Search | Chèche | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | ht | Loading people… | N ap chaje moun yo… | 2026-11-15 | machine-drafted, needs native review |
+| `empty` | ht | No people found. | Nou pa jwenn okenn moun. | 2026-11-15 | machine-drafted, needs native review |
+| `colPerson` | ht | Person | Moun | 2026-11-15 | machine-drafted, needs native review |
+| `colTier` | ht | Tier | Nivo | 2026-11-15 | machine-drafted, needs native review |
+| `colSetTier` | ht | Set tier | Mete nivo | 2026-11-15 | machine-drafted, needs native review |
+| `noName` | ht | No name | Pa gen non | 2026-11-15 | machine-drafted, needs native review |
+| `noActions` | ht | No actions | Pa gen aksyon | 2026-11-15 | machine-drafted, needs native review |
+| `setTierFor` | ht | Set tier: {name} | Mete nivo: {name} | 2026-11-15 | machine-drafted, needs native review |
+| `change` | ht | Change… | Chanje… | 2026-11-15 | machine-drafted, needs native review |
+| `makeTier` | ht | Make {tier} | Fè l {tier} | 2026-11-15 | machine-drafted, needs native review |
+| `revokeTier` | ht | Revoke tier | Retire nivo a | 2026-11-15 | machine-drafted, needs native review |
+| `grantTo` | ht | Grant {tier} to {name}. | Bay {name} nivo {tier}. | 2026-11-15 | machine-drafted, needs native review |
+| `revokeFrom` | ht | Revoke the tier from {name}. | Retire nivo a nan men {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `reasonRequired` | ht | A reason is required and is recorded in the admin action log. | Yon rezon obligatwa, epi li anrejistre nan jounal aksyon administrasyon an. | 2026-11-15 | machine-drafted, needs native review |
+| `thisPerson` | ht | this person | moun sa a | 2026-11-15 | machine-drafted, needs native review |
+| `reasonLabel` | ht | Reason (required) | Rezon (obligatwa) | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | ht | Cancel | Anile | 2026-11-15 | machine-drafted, needs native review |
+| `apply` | ht | Apply | Aplike | 2026-11-15 | machine-drafted, needs native review |
+| `applying` | ht | Applying… | N ap aplike… | 2026-11-15 | machine-drafted, needs native review |
+| `close` | ht | Close | Fèmen | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | so | Couldn't load people — please retry. | Dadka lama soo rari karin — fadlan mar kale isku day. | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | so | Tier updated. | Heerka waa la cusboonaysiiyay. | 2026-11-15 | machine-drafted, needs native review |
+| `changeFailed` | so | The tier change failed — please retry. | Beddelka heerka wuu fashilmay — fadlan mar kale isku day. | 2026-11-15 | machine-drafted, needs native review |
+| `deniedCode` | so | Denied ({code}). | Waa la diiday ({code}). | 2026-11-15 | machine-drafted, needs native review |
+| `denySelf` | so | You cannot change your own tier. | Ma beddeli kartid heerkaaga. | 2026-11-15 | machine-drafted, needs native review |
+| `denyFounderOnly` | so | Only the founder can grant or revoke the Admin tier. | Aasaasaha oo keliya ayaa bixin kara ama ka qaadi kara heerka Maamule sare. | 2026-11-15 | machine-drafted, needs native review |
+| `denyInsufficientTier` | so | Your tier cannot grant that tier. | Heerkaagu ma bixin karo heerkaas. | 2026-11-15 | machine-drafted, needs native review |
+| `denyNoChange` | so | That person already holds this tier. | Qofkaasi horey ayuu u haystaa heerkan. | 2026-11-15 | machine-drafted, needs native review |
+| `denyTargetInvalid` | so | That account cannot receive a tier. | Akoonkaas ma heli karo heer. | 2026-11-15 | machine-drafted, needs native review |
+| `denyAuth` | so | Sign in to manage tiers. | Gal si aad u maamusho heerarka. | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | so | Search name or username | Raadi magac ama magaca isticmaalaha | 2026-11-15 | machine-drafted, needs native review |
+| `search` | so | Search | Raadi | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | so | Loading people… | Dadka waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `empty` | so | No people found. | Dad lama helin. | 2026-11-15 | machine-drafted, needs native review |
+| `colPerson` | so | Person | Qofka | 2026-11-15 | machine-drafted, needs native review |
+| `colTier` | so | Tier | Heerka | 2026-11-15 | machine-drafted, needs native review |
+| `colSetTier` | so | Set tier | Deji heerka | 2026-11-15 | machine-drafted, needs native review |
+| `noName` | so | No name | Magac ma leh | 2026-11-15 | machine-drafted, needs native review |
+| `noActions` | so | No actions | Fal ma jiro | 2026-11-15 | machine-drafted, needs native review |
+| `setTierFor` | so | Set tier: {name} | Deji heerka: {name} | 2026-11-15 | machine-drafted, needs native review |
+| `change` | so | Change… | Beddel… | 2026-11-15 | machine-drafted, needs native review |
+| `makeTier` | so | Make {tier} | Ka dhig {tier} | 2026-11-15 | machine-drafted, needs native review |
+| `revokeTier` | so | Revoke tier | Ka qaad heerka | 2026-11-15 | machine-drafted, needs native review |
+| `grantTo` | so | Grant {tier} to {name}. | Sii {name} heerka {tier}. | 2026-11-15 | machine-drafted, needs native review |
+| `revokeFrom` | so | Revoke the tier from {name}. | Ka qaad heerka {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `reasonRequired` | so | A reason is required and is recorded in the admin action log. | Sabab waa lagama maarmaan, waxaana lagu diiwaangeliyaa diiwaanka falalka maamulka. | 2026-11-15 | machine-drafted, needs native review |
+| `thisPerson` | so | this person | qofkan | 2026-11-15 | machine-drafted, needs native review |
+| `reasonLabel` | so | Reason (required) | Sababta (waa qasab) | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | so | Cancel | Jooji | 2026-11-15 | machine-drafted, needs native review |
+| `apply` | so | Apply | Codso | 2026-11-15 | machine-drafted, needs native review |
+| `applying` | so | Applying… | Waa la codsanayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `close` | so | Close | Xir | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | am | Couldn't load people — please retry. | ሰዎችን መጫን አልተቻለም — እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | am | Tier updated. | ደረጃው ተዘምኗል። | 2026-11-15 | machine-drafted, needs native review |
+| `changeFailed` | am | The tier change failed — please retry. | የደረጃ ለውጡ አልተሳካም — እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `deniedCode` | am | Denied ({code}). | ተከልክሏል ({code})። | 2026-11-15 | machine-drafted, needs native review |
+| `denySelf` | am | You cannot change your own tier. | የራስዎን ደረጃ መቀየር አይችሉም። | 2026-11-15 | machine-drafted, needs native review |
+| `denyFounderOnly` | am | Only the founder can grant or revoke the Admin tier. | የአስተዳዳሪ ደረጃን መስጠት ወይም መሻር የሚችለው መስራቹ ብቻ ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `denyInsufficientTier` | am | Your tier cannot grant that tier. | ደረጃዎ ያንን ደረጃ መስጠት አይችልም። | 2026-11-15 | machine-drafted, needs native review |
+| `denyNoChange` | am | That person already holds this tier. | ያ ሰው ይህ ደረጃ አለው። | 2026-11-15 | machine-drafted, needs native review |
+| `denyTargetInvalid` | am | That account cannot receive a tier. | ያ መለያ ደረጃ መቀበል አይችልም። | 2026-11-15 | machine-drafted, needs native review |
+| `denyAuth` | am | Sign in to manage tiers. | ደረጃዎችን ለማስተዳደር ይግቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | am | Search name or username | ስም ወይም የተጠቃሚ ስም ይፈልጉ | 2026-11-15 | machine-drafted, needs native review |
+| `search` | am | Search | ፈልግ | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | am | Loading people… | ሰዎች በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `empty` | am | No people found. | ምንም ሰው አልተገኘም። | 2026-11-15 | machine-drafted, needs native review |
+| `colPerson` | am | Person | ሰው | 2026-11-15 | machine-drafted, needs native review |
+| `colTier` | am | Tier | ደረጃ | 2026-11-15 | machine-drafted, needs native review |
+| `colSetTier` | am | Set tier | ደረጃ አዘጋጅ | 2026-11-15 | machine-drafted, needs native review |
+| `noName` | am | No name | ስም የለም | 2026-11-15 | machine-drafted, needs native review |
+| `noActions` | am | No actions | ምንም እርምጃ የለም | 2026-11-15 | machine-drafted, needs native review |
+| `setTierFor` | am | Set tier: {name} | ደረጃ አዘጋጅ፦ {name} | 2026-11-15 | machine-drafted, needs native review |
+| `change` | am | Change… | ቀይር… | 2026-11-15 | machine-drafted, needs native review |
+| `makeTier` | am | Make {tier} | {tier} አድርግ | 2026-11-15 | machine-drafted, needs native review |
+| `revokeTier` | am | Revoke tier | ደረጃውን ሻር | 2026-11-15 | machine-drafted, needs native review |
+| `grantTo` | am | Grant {tier} to {name}. | ለ{name} {tier} ስጥ። | 2026-11-15 | machine-drafted, needs native review |
+| `revokeFrom` | am | Revoke the tier from {name}. | የ{name}ን ደረጃ ሻር። | 2026-11-15 | machine-drafted, needs native review |
+| `reasonRequired` | am | A reason is required and is recorded in the admin action log. | ምክንያት ያስፈልጋል፣ በአስተዳዳሪ እርምጃዎች መዝገብ ውስጥም ይመዘገባል። | 2026-11-15 | machine-drafted, needs native review |
+| `thisPerson` | am | this person | ይህ ሰው | 2026-11-15 | machine-drafted, needs native review |
+| `reasonLabel` | am | Reason (required) | ምክንያት (ያስፈልጋል) | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | am | Cancel | ሰርዝ | 2026-11-15 | machine-drafted, needs native review |
+| `apply` | am | Apply | ተግብር | 2026-11-15 | machine-drafted, needs native review |
+| `applying` | am | Applying… | በመተግበር ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `close` | am | Close | ዝጋ | 2026-11-15 | machine-drafted, needs native review |
+| `loadFailed` | hmn | Couldn't load people — please retry. | Thauj tsis tau cov neeg — thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | hmn | Tier updated. | Hloov qib lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `changeFailed` | hmn | The tier change failed — please retry. | Hloov qib tsis tau — thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `deniedCode` | hmn | Denied ({code}). | Raug tsis kam ({code}). | 2026-11-15 | machine-drafted, needs native review |
+| `denySelf` | hmn | You cannot change your own tier. | Koj hloov tsis tau koj tus kheej qib. | 2026-11-15 | machine-drafted, needs native review |
+| `denyFounderOnly` | hmn | Only the founder can grant or revoke the Admin tier. | Tsuas yog tus tsim thiaj muab lossis tshem tau qib Tus thawj saib xyuas. | 2026-11-15 | machine-drafted, needs native review |
+| `denyInsufficientTier` | hmn | Your tier cannot grant that tier. | Koj qib muab tsis tau qib ntawd. | 2026-11-15 | machine-drafted, needs native review |
+| `denyNoChange` | hmn | That person already holds this tier. | Tus neeg ntawd twb muaj qib no lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `denyTargetInvalid` | hmn | That account cannot receive a tier. | Tus account ntawd txais tsis tau qib. | 2026-11-15 | machine-drafted, needs native review |
+| `denyAuth` | hmn | Sign in to manage tiers. | Nkag mus thiaj tswj tau cov qib. | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | hmn | Search name or username | Nrhiav lub npe lossis lub npe siv | 2026-11-15 | machine-drafted, needs native review |
+| `search` | hmn | Search | Nrhiav | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | hmn | Loading people… | Tab tom thauj cov neeg… | 2026-11-15 | machine-drafted, needs native review |
+| `empty` | hmn | No people found. | Nrhiav tsis tau leej twg. | 2026-11-15 | machine-drafted, needs native review |
+| `colPerson` | hmn | Person | Tus neeg | 2026-11-15 | machine-drafted, needs native review |
+| `colTier` | hmn | Tier | Qib | 2026-11-15 | machine-drafted, needs native review |
+| `colSetTier` | hmn | Set tier | Teem qib | 2026-11-15 | machine-drafted, needs native review |
+| `noName` | hmn | No name | Tsis muaj npe | 2026-11-15 | machine-drafted, needs native review |
+| `noActions` | hmn | No actions | Tsis muaj kev ua | 2026-11-15 | machine-drafted, needs native review |
+| `setTierFor` | hmn | Set tier: {name} | Teem qib: {name} | 2026-11-15 | machine-drafted, needs native review |
+| `change` | hmn | Change… | Hloov… | 2026-11-15 | machine-drafted, needs native review |
+| `makeTier` | hmn | Make {tier} | Ua {tier} | 2026-11-15 | machine-drafted, needs native review |
+| `revokeTier` | hmn | Revoke tier | Tshem qib | 2026-11-15 | machine-drafted, needs native review |
+| `grantTo` | hmn | Grant {tier} to {name}. | Muab {tier} rau {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `revokeFrom` | hmn | Revoke the tier from {name}. | Tshem qib ntawm {name}. | 2026-11-15 | machine-drafted, needs native review |
+| `reasonRequired` | hmn | A reason is required and is recorded in the admin action log. | Yuav tsum muaj laj thawj, thiab nws raug sau tseg rau hauv cov ntaub ntawv kev ua ntawm tus tswj. | 2026-11-15 | machine-drafted, needs native review |
+| `thisPerson` | hmn | this person | tus neeg no | 2026-11-15 | machine-drafted, needs native review |
+| `reasonLabel` | hmn | Reason (required) | Laj thawj (yuav tsum muaj) | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | hmn | Cancel | Tso tseg | 2026-11-15 | machine-drafted, needs native review |
+| `apply` | hmn | Apply | Siv | 2026-11-15 | machine-drafted, needs native review |
+| `applying` | hmn | Applying… | Tab tom siv… | 2026-11-15 | machine-drafted, needs native review |
+| `close` | hmn | Close | Kaw | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-admin-petitions.ts`
 
 | Key | Locale | English | Text | Added | Status |

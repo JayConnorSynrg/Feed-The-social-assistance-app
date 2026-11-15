@@ -1,6 +1,18 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+// apps/web/src/app/(admin)/moderation/reports-queue.tsx
+// The reports queue and the Removed & Held list, in the admin's language (lib/i18n-admin-moderation.ts;
+// report reasons are reportReasonLabel, the words members chose them by). Member-written text — the
+// post, the report's details, the author's name — keeps its own language and direction
+// (lang="" dir="auto"). A failed read shows the admin's sentence and writes one
+// admin.reports.load_failed row with the error's code (never its text).
+// Keyboard and screen reader: the queue has ONE status region and ONE alert, mounted from the first
+// render (loading, empty or full) and changing only their text, so every result is announced. When
+// an action takes a row away, the next place to stand is chosen first (focusAfterRemoval) and focused
+// once the list has changed: the next card's toggle, else the Removed & Held heading, else the empty
+// state's heading.
+
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Flag, ChevronDown, ChevronUp, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -11,15 +23,56 @@ import { MemberViewLink } from '@/components/admin/member-view-link'
 import { postVisibility } from '@/lib/member-visibility'
 import { DESTRUCTIVE_BUTTON_CLASS, canResolveReportsOn, moderatePost, moderationFailure, type PostModerationAction } from './post-moderation-actions'
 import { buildReportGroups, groupPostVisibility, type ContentGroup, type ReportRow, type ReportedPostRow } from './report-groups'
+import { postStatusLabel } from './focused-post'
+import type { Locale } from '@/lib/i18n'
+import { dateTimeFormatter, formatDate } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
+import { REPORT_REASONS, reportReasonLabel, type ReportReason } from '@/lib/i18n-feed-card'
+import { POSTS_WITH_REPORTS, REPORT_COUNT, adminModerationT, moderationActionDone, moderationActionLabel, moderationCount } from '@/lib/i18n-admin-moderation'
 
-const REASON_LABELS: Record<string, string> = {
-  spam: 'Spam',
-  abusive: 'Abusive content',
-  harassment: 'Harassment',
-  misinformation: 'Misinformation',
-  illegal: 'Illegal content',
-  off_topic: 'Off topic',
-  other: 'Other',
+/** A report's reason in the admin's language; a code outside the enum is shown as stored, marked English. */
+function ReasonText({ reason, locale }: { reason: string; locale: Locale }) {
+  return (REPORT_REASONS as readonly string[]).includes(reason) ? (
+    <>{reportReasonLabel(reason as ReportReason, locale)}</>
+  ) : (
+    <span lang="en" dir="ltr">{reason}</span>
+  )
+}
+
+/** Where focus goes after an action took a row away. */
+export type QueueFocus = { kind: 'toggle'; id: string } | { kind: 'held' } | { kind: 'empty' }
+
+/**
+ * The next place to stand, decided BEFORE the row goes (the pressed button goes with it):
+ *   - a report dismissed and its card stays: that card's toggle;
+ *   - a card leaves (Remove, Hold, its last report dismissed): the next card's toggle, else the
+ *     Removed & Held heading;
+ *   - a held post leaves (Authorize): the Removed & Held heading;
+ *   - and when nothing is left at all: the empty state's heading.
+ */
+export function focusAfterRemoval(
+  groups: ReadonlyArray<Pick<ContentGroup, 'content_id'> & { reports: ReadonlyArray<{ id: string }> }>,
+  heldIds: readonly string[],
+  removed: { group: string } | { report: string; group: string } | { held: string },
+): QueueFocus {
+  if ('held' in removed) {
+    const heldLeft = heldIds.filter((id) => id !== removed.held).length
+    return groups.length === 0 && heldLeft === 0 ? { kind: 'empty' } : { kind: 'held' }
+  }
+  const at = groups.findIndex((g) => g.content_id === removed.group)
+  const cardStays = 'report' in removed && (groups[at]?.reports.some((r) => r.id !== removed.report) ?? false)
+  if (cardStays) return { kind: 'toggle', id: removed.group }
+  const next = groups.slice(at + 1)[0]
+  if (next) return { kind: 'toggle', id: next.content_id }
+  const groupsLeft = groups.filter((g) => g.content_id !== removed.group).length
+  return groupsLeft === 0 && heldIds.length === 0 ? { kind: 'empty' } : { kind: 'held' }
+}
+
+/** The code of a failed read for the log row: PostgREST's own code, else the error's class. */
+function failureCode(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code
+  if (typeof code === 'string' && code) return code
+  return err instanceof Error ? err.name : 'unknown'
 }
 
 interface HeldPost {
@@ -42,15 +95,44 @@ function postItemName(content: string | null): string {
 /** onPostChanged: a Remove / Hold / Authorize here succeeded (the linked-post panel above re-reads).
  *  viewerId: the signed-in moderator — no Dismiss on reports about their own post, no Authorize of
  *  their own held post, no Hold of their own removed post (the database refuses each). */
-export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged?: (postId: string) => void; viewerId?: string | null } = {}) {
+export function ReportsQueue({
+  onPostChanged,
+  viewerId = null,
+  locale = 'en',
+}: { onPostChanged?: (postId: string) => void; viewerId?: string | null; locale?: Locale } = {}) {
   const [groups, setGroups] = useState<ContentGroup[]>([])
   const [heldPosts, setHeldPosts] = useState<HeldPost[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The queue's one status line: loading, then the result of the last action.
+  const [announcement, setAnnouncement] = useState('')
+  // The lists as rendered, for the memoised handlers below.
+  const groupsRef = useRef(groups)
+  groupsRef.current = groups
+  const heldRef = useRef(heldPosts)
+  heldRef.current = heldPosts
+  // Focus after a row leaves: chosen before the update, applied after it.
+  const focusTarget = useRef<QueueFocus | null>(null)
+  const toggles = useRef(new Map<string, HTMLButtonElement>())
+  const heldHeading = useRef<HTMLHeadingElement | null>(null)
+  const emptyHeading = useRef<HTMLHeadingElement | null>(null)
 
   const supabase = createClient()
+
+  useEffect(() => {
+    const target = focusTarget.current
+    if (!target) return
+    focusTarget.current = null
+    // After the browser has laid out the changed list (a timer where there is no frame loop).
+    const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (f: () => void) => setTimeout(f, 0)
+    nextFrame(() => {
+      const node =
+        target.kind === 'toggle' ? toggles.current.get(target.id) : target.kind === 'held' ? heldHeading.current : emptyHeading.current
+      node?.focus()
+    })
+  }, [groups, heldPosts])
 
   useEffect(() => {
     const load = async () => {
@@ -96,7 +178,10 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
         // the rows are narrowed to HeldPost here.
         if (hiddenPostsData) setHeldPosts(hiddenPostsData as HeldPost[])
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load reports')
+        // No other row records this read: one row with the code; the message is not logged (a
+        // PostgREST message can quote the values it was given).
+        logger.warn('admin.reports.load_failed', { code: failureCode(err) })
+        setError(adminModerationT(locale, 'loadFailed'))
       } finally {
         setLoading(false)
       }
@@ -131,19 +216,15 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
     )
   }
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+  const timeZone = browserTimeZone()
+  const formatReportTime = (iso: string) =>
+    dateTimeFormatter(locale, timeZone, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
 
   const handleResolve = useCallback(
     async (reportId: string, action: 'dismiss' | 'uphold', expectedVersion: number | null, postId: string) => {
       setProcessingId(reportId)
       setError(null)
+      setAnnouncement('')
       try {
         const { error: rpcError, requestId } = await privilegedRpc(
           supabase,
@@ -158,12 +239,12 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
           logger.warn('admin.denied', { action: `report.${action}`, code: rpcError.code ?? 'unknown', request_id: requestId })
           if (rpcError.code === '42501' && /self_moderation_refused/.test(rpcError.message)) {
             // Dismissing reports on their own content: another moderator has to review it.
-            setError(moderationFailure(rpcError).message)
+            setError(moderationFailure(rpcError, locale).message)
             return
           }
           if (rpcError.code === 'PT409' || rpcError.code === 'PT404') {
             // Show the post as it is now (or that it is gone) before the moderator decides again.
-            const failure = moderationFailure(rpcError)
+            const failure = moderationFailure(rpcError, locale)
             await rereadPost(postId)
             setError(failure.message)
             return
@@ -172,6 +253,8 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
         }
 
         // Remove the resolved report; if group is now empty remove the group
+        focusTarget.current = focusAfterRemoval(groupsRef.current, heldRef.current.map((p) => p.id), { report: reportId, group: postId })
+        setAnnouncement(adminModerationT(locale, 'doneDismiss'))
         setGroups((prev) =>
           prev
             .map((g) => ({
@@ -180,14 +263,15 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
             }))
             .filter((g) => g.reports.length > 0)
         )
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
+      } catch {
+        // A refusal thrown above already wrote its admin.denied row (and withMetric its error row).
+        setError(adminModerationT(locale, 'errorGeneric'))
       } finally {
         setProcessingId(null)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [locale]
   )
 
   // Remove / Hold / Authorize: the shared post moderation path (post-moderation-actions.ts), the
@@ -197,11 +281,18 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
     async (action: PostModerationAction, postId: string, expectedVersion: number | null) => {
       setProcessingId(postId)
       setError(null)
-      const result = await moderatePost(supabase, action, postId, expectedVersion)
+      setAnnouncement('')
+      const result = await moderatePost(supabase, action, postId, expectedVersion, locale)
       if (!result.ok) {
         if (result.conflict || result.gone) await rereadPost(postId)
         setError(result.message)
       } else {
+        focusTarget.current = focusAfterRemoval(
+          groupsRef.current,
+          heldRef.current.map((p) => p.id),
+          action === 'authorize' ? { held: postId } : { group: postId },
+        )
+        setAnnouncement(moderationActionDone(action, locale))
         if (action === 'authorize') setHeldPosts((prev) => prev.filter((p) => p.id !== postId))
         else setGroups((prev) => prev.filter((g) => g.content_id !== postId))
         onPostChanged?.(postId)
@@ -209,43 +300,69 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
       setProcessingId(null)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onPostChanged]
+    [onPostChanged, locale]
+  )
+
+  // The queue's one status region and one alert: rendered in every state, only their text changes.
+  const regions = (
+    <>
+      <p role="status" data-testid="reports-queue-status" className="sr-only">
+        {loading ? adminModerationT(locale, 'loadingReports') : announcement}
+      </p>
+      <div
+        role="alert"
+        data-testid="reports-queue-error"
+        className={error ? 'rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700' : 'sr-only'}
+      >
+        {error ?? ''}
+      </div>
+    </>
   )
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="space-y-4">
+        {regions}
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-hidden="true" />
+        </div>
       </div>
     )
   }
 
+  // Nothing could be read: the failure line alone (not "No open reports", which would be untrue).
+  if (error && groups.length === 0 && heldPosts.length === 0) return <div className="space-y-4">{regions}</div>
+
   if (groups.length === 0 && heldPosts.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-12">
-          <div className="text-center">
-            <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
-            <h3 className="text-lg font-semibold">No open reports</h3>
-            <p className="text-muted-foreground mt-2">
-              There are no content reports awaiting review.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        {regions}
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" aria-hidden="true" />
+              <h3
+                ref={emptyHeading}
+                tabIndex={-1}
+                data-testid="reports-queue-empty-heading"
+                className="text-lg font-semibold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700"
+              >
+                {adminModerationT(locale, 'emptyTitle')}
+              </h3>
+              <p className="text-muted-foreground mt-2">{adminModerationT(locale, 'emptyBody')}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
   return (
     <div className="space-y-4">
-      {error && (
-        <div role="alert" data-testid="reports-queue-error" className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+      {regions}
       {groups.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          {groups.length} post{groups.length !== 1 ? 's' : ''} with open reports
+          {moderationCount(POSTS_WITH_REPORTS, groups.length, locale)}
         </p>
       )}
 
@@ -256,34 +373,35 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
         const canResolve = canResolveReportsOn(group.post_user_id, viewerId)
         const canHold = canResolve || group.post_hidden_reason !== 'admin_removal'
         const reportCount = group.reports.length
-        const reasons = [...new Set(group.reports.map((r) => REASON_LABELS[r.reason] ?? r.reason))]
+        const reasons = [...new Set(group.reports.map((r) => r.reason))]
 
         return (
           <Card key={group.content_id} className="border-orange-200">
             <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded bg-orange-100 text-orange-700">
-                      <Flag className="h-3 w-3" />
-                      {reportCount} report{reportCount !== 1 ? 's' : ''}
+                      <Flag className="h-3 w-3" aria-hidden="true" />
+                      {moderationCount(REPORT_COUNT, reportCount, locale)}
                     </span>
                     {reasons.map((r) => (
                       <span
                         key={r}
                         className="text-xs px-2 py-0.5 rounded bg-stone-100 text-stone-600"
                       >
-                        {r}
+                        <ReasonText reason={r} locale={locale} />
                       </span>
                     ))}
                   </div>
                   {group.post_author && (
-                    <CardTitle className="mt-2 text-sm font-medium text-stone-500">
-                      Author: {group.post_author}
+                    <CardTitle id={`report-author-${group.content_id}`} className="mt-2 text-sm font-medium text-stone-500">
+                      {adminModerationT(locale, 'authorLabel')}{' '}
+                      <span lang="" dir="auto">{group.post_author}</span>
                     </CardTitle>
                   )}
                   {group.post_content && (
-                    <CardDescription className="mt-1 line-clamp-2">
+                    <CardDescription id={`report-excerpt-${group.content_id}`} lang="" dir="auto" className="mt-1 line-clamp-2 break-words">
                       {group.post_content}
                     </CardDescription>
                   )}
@@ -291,16 +409,30 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                     <MemberViewLink
                       to={{ kind: 'post', id: group.content_id }}
                       visibility={groupPostVisibility(group)}
-                      label="View post"
+                      label={adminModerationT(locale, 'viewPost')}
+                      locale={locale}
                       itemName={postItemName(group.post_content)}
                       source="reports_queue"
                     />
                   </div>
                 </div>
                 <Button
+                  ref={(node: HTMLButtonElement | null) => {
+                    if (node) toggles.current.set(group.content_id, node)
+                    else toggles.current.delete(group.content_id)
+                  }}
                   variant="ghost"
                   size="sm"
-                  className="min-h-[44px]"
+                  className="min-h-[44px] shrink-0"
+                  aria-expanded={isExpanded}
+                  aria-controls={`reports-${group.content_id}`}
+                  aria-describedby={
+                    [group.post_author && `report-author-${group.content_id}`, group.post_content && `report-excerpt-${group.content_id}`]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
+                  aria-label={adminModerationT(locale, 'reportDetails')}
+                  data-testid={`toggle-reports-${group.content_id}`}
                   onClick={() =>
                     setExpandedId((prev) =>
                       prev === group.content_id ? null : group.content_id
@@ -308,14 +440,16 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                   }
                 >
                   {isExpanded ? (
-                    <ChevronUp className="h-4 w-4" />
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
                   ) : (
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
                   )}
                 </Button>
               </div>
             </CardHeader>
 
+            {/* Always present, so the toggle's aria-controls names an element. */}
+            <div id={`reports-${group.content_id}`}>
             {isExpanded && (
               <CardContent className="space-y-3">
                 {/* Post-level actions */}
@@ -329,11 +463,11 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                     data-testid={`remove-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      <Loader2 className="h-3 w-3 animate-spin me-1" aria-hidden="true" />
                     ) : (
-                      <XCircle className="h-3 w-3 mr-1" />
+                      <XCircle className="h-3 w-3 me-1" aria-hidden="true" />
                     )}
-                    Remove Post
+                    {moderationActionLabel('remove', locale)}
                   </Button>
                   {canHold && (
                   <Button
@@ -345,15 +479,15 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                     data-testid={`hold-post-${group.content_id}`}
                   >
                     {processingId === group.content_id ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      <Loader2 className="h-3 w-3 animate-spin me-1" aria-hidden="true" />
                     ) : null}
-                    Hold for Review
+                    {moderationActionLabel('hold', locale)}
                   </Button>
                   )}
                 </div>
                 {!canResolve && (
                   <p className="text-xs text-stone-600" data-testid={`own-post-note-${group.content_id}`}>
-                    This is your own post: another moderator reviews its reports.
+                    {adminModerationT(locale, 'ownPostNote')}
                   </p>
                 )}
 
@@ -366,10 +500,10 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-orange-700">
-                          {REASON_LABELS[report.reason] ?? report.reason}
+                          <ReasonText reason={report.reason} locale={locale} />
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {formatDate(report.created_at)}
+                          {formatReportTime(report.created_at)}
                         </span>
                       </div>
                       {canResolve && (
@@ -383,17 +517,17 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                           data-testid={`dismiss-report-${report.id}`}
                         >
                           {processingId === report.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            <Loader2 className="h-3 w-3 animate-spin me-1" aria-hidden="true" />
                           ) : (
-                            <XCircle className="h-3 w-3 mr-1 text-stone-500" />
+                            <XCircle className="h-3 w-3 me-1 text-stone-500" aria-hidden="true" />
                           )}
-                          Dismiss
+                          {adminModerationT(locale, 'actionDismiss')}
                         </Button>
                       </div>
                       )}
                     </div>
                     {report.details && (
-                      <p className="text-xs text-stone-600 leading-relaxed">
+                      <p lang="" dir="auto" className="text-xs text-stone-600 leading-relaxed break-words">
                         {report.details}
                       </p>
                     )}
@@ -401,34 +535,43 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                 ))}
               </CardContent>
             )}
+            </div>
           </Card>
         )
       })}
 
       {/* Removed & Held Posts */}
       <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-4">Removed &amp; Held Posts</h3>
+        <h3
+          ref={heldHeading}
+          tabIndex={-1}
+          data-testid="reports-queue-held-heading"
+          className="text-lg font-semibold mb-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700"
+        >
+          {adminModerationT(locale, 'heldTitle')}
+        </h3>
         {heldPosts.length === 0 ? (
-          <p className="text-stone-500 text-sm">No removed or held posts.</p>
+          <p className="text-stone-600 text-sm">{adminModerationT(locale, 'heldEmpty')}</p>
         ) : (
           <div className="space-y-3">
             {heldPosts.map((post) => (
               <div key={post.id} className="border rounded-lg p-4">
-                <p className="text-sm text-stone-700 line-clamp-2">
+                <p lang="" dir="auto" className="text-sm text-stone-700 line-clamp-2 break-words">
                   {(post.content ?? '').slice(0, 120)}
                 </p>
-                <div className="flex items-center justify-between mt-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-stone-600">
                     <span className="font-medium">
-                      {post.hidden_reason === 'admin_removal' ? 'Removed' : 'Held for Review'}
+                      {postStatusLabel({ is_hidden: true, hidden_reason: post.hidden_reason === 'admin_removal' ? 'admin_removal' : 'hold_for_review' }, locale)}
                     </span>
                     <span>
-                      {post.hidden_at ? new Date(post.hidden_at).toLocaleDateString() : ''}
+                      {post.hidden_at ? formatDate(post.hidden_at, locale, timeZone) : ''}
                     </span>
                     <MemberViewLink
                       to={{ kind: 'post', id: post.id }}
                       visibility={postVisibility(post)}
-                      label="View post"
+                      label={adminModerationT(locale, 'viewPost')}
+                      locale={locale}
                       itemName={postItemName(post.content)}
                       source="held_posts"
                     />
@@ -442,9 +585,9 @@ export function ReportsQueue({ onPostChanged, viewerId = null }: { onPostChanged
                       disabled={processingId === post.id}
                     >
                       {processingId === post.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        <Loader2 className="h-3 w-3 animate-spin me-1" aria-hidden="true" />
                       ) : null}
-                      Authorize Post
+                      {moderationActionLabel('authorize', locale)}
                     </Button>
                   )}
                 </div>

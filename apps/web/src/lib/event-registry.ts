@@ -58,6 +58,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.check.failed': ['code'],
   'admin.checkin.kiosk.confirm': ['method', 'occurrence_id'],
   'admin.checkin.kiosk.walkin': ['household_size', 'occurrence_id'],
+  'admin.community.insights_failed': ['code', 'status'],
   'admin.community.tab.viewed': ['org_id'],
   // The admin screen an "Edit in admin" link opened could not read the item (the row resolves not_found).
   'admin.deeplink.load_failed': ['code', 'kind'],
@@ -122,6 +123,7 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.post.remove.error': ['action', 'request_id', 'target_id'],
   'admin.report.resolve.complete': ['action', 'request_id', 'target_id'],
   'admin.report.resolve.error': ['action', 'request_id', 'target_id'],
+  'admin.reports.load_failed': ['code'],
   'admin.resource.address_autocomplete.error': [],
   'admin.resource.approve': ['content_type', 'outcome', 'resource_id'],
   'admin.resource.approve.complete': ['action', 'request_id', 'target_id'],

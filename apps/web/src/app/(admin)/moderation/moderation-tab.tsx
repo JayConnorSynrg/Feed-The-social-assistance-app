@@ -6,14 +6,17 @@ import { ReportsQueue } from './reports-queue'
 import { SafetyAlertsReview } from './safety-alerts-review'
 import { FocusedPost } from './focused-post'
 import { readAdminFocus } from './admin-focus-url'
+import { dir, type Locale } from '@/lib/i18n'
+import { adminShellT } from '@/lib/i18n-admin-shell'
+import { adminModerationT, type AdminModerationMessages } from '@/lib/i18n-admin-moderation'
 
 type SubTab = 'reports' | 'safety'
 
 const SUBTABS: SubTab[] = ['reports', 'safety']
 
-const SUBTAB_LABELS: Record<SubTab, string> = {
-  reports: 'Reports',
-  safety: 'Safety Alerts',
+const SUBTAB_KEYS: Record<SubTab, keyof AdminModerationMessages> = {
+  reports: 'subtabReports',
+  safety: 'subtabSafety',
 }
 
 /**
@@ -34,8 +37,10 @@ export function initialModerationSubtab(search: string): SubTab {
  * Safety Alerts sub-tabs — a real tablist (role=tab, aria-selected, arrow keys) with an underline on
  * the selected tab, not colour alone.
  */
-/** viewerId: the signed-in moderator — the post actions leave out lifting their own moderation. */
-export function ModerationTab({ selectedOrgId, viewerId = null }: { selectedOrgId: string; viewerId?: string | null }) {
+/** viewerId: the signed-in moderator — the post actions leave out lifting their own moderation.
+ *  locale: the admin's language (the shell marks this tab with it). The Safety Alerts panel is still
+ *  English and is marked lang="en" dir="ltr" here until its own wave translates it. */
+export function ModerationTab({ selectedOrgId, viewerId = null, locale = 'en' }: { selectedOrgId: string; viewerId?: string | null; locale?: Locale }) {
   // null until mounted: the sub-tab depends on the URL (window.location exists only after mount),
   // and neither list is read before it is decided.
   const [activeSubtab, setActiveSubtab] = useState<SubTab | null>(null)
@@ -62,12 +67,13 @@ export function ModerationTab({ selectedOrgId, viewerId = null }: { selectedOrgI
   return (
     <div>
       {/* "Edit in admin" on a post: that post, with its actions (nothing without a post link). */}
-      <FocusedPost onChanged={reloadQueue} reloadKey={postReloadKey} onDismissed={focusSelectedTab} viewerId={viewerId} />
+      <FocusedPost onChanged={reloadQueue} reloadKey={postReloadKey} onDismissed={focusSelectedTab} viewerId={viewerId} locale={locale} />
 
-      <Tabs value={shown} onValueChange={(v) => setActiveSubtab(v as SubTab)} className="gap-0">
+      {/* dir: arrow keys move along the sub-tabs in reading direction (Radix reads it). */}
+      <Tabs value={shown} onValueChange={(v) => setActiveSubtab(v as SubTab)} dir={dir(locale)} className="gap-0">
         <TabsList
           variant="line"
-          aria-label="Moderation"
+          aria-label={adminShellT(locale, 'tabModeration')}
           className={MODERATION_TABLIST_CLASS}
         >
           {SUBTABS.map((tab) => (
@@ -79,7 +85,7 @@ export function ModerationTab({ selectedOrgId, viewerId = null }: { selectedOrgI
               }}
               className="min-h-[44px] flex-none px-4 py-2 text-stone-600 data-[state=active]:font-semibold data-[state=active]:text-lime-800 after:bg-lime-700"
             >
-              {SUBTAB_LABELS[tab]}
+              {adminModerationT(locale, SUBTAB_KEYS[tab])}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -88,9 +94,9 @@ export function ModerationTab({ selectedOrgId, viewerId = null }: { selectedOrgI
         {activeSubtab !== null && (
           <>
             <TabsContent value="reports" className="overflow-y-auto max-h-[calc(100vh-220px)]">
-              <ReportsQueue key={queueKey} onPostChanged={rereadLinkedPost} viewerId={viewerId} />
+              <ReportsQueue key={queueKey} onPostChanged={rereadLinkedPost} viewerId={viewerId} locale={locale} />
             </TabsContent>
-            <TabsContent value="safety" className="overflow-y-auto max-h-[calc(100vh-220px)]">
+            <TabsContent value="safety" lang="en" dir="ltr" className="overflow-y-auto max-h-[calc(100vh-220px)]">
               <SafetyAlertsReview />
             </TabsContent>
           </>
