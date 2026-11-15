@@ -31,7 +31,7 @@ import { formatCount } from '@/lib/i18n-intl'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { adminResourcesT, namedControl } from '@/lib/i18n-admin-resources'
-import { afterLayout, announce } from './row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, type Announcement } from './row-focus'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
@@ -128,7 +128,7 @@ export function ManageResourcesTab({ locale }: { locale: Locale }) {
   // The list heading: where focus goes when the control that had it leaves (Retry, Load more).
   const listHeading = useRef<HTMLHeadingElement | null>(null)
   // A saved edit, announced once the dialog has fully closed (the page behind it is aria-hidden).
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const savedAnnouncement = useRef<string | null>(null)
   // After Load more brings the last page, the button leaves: focus the first new row's Edit button.
   const focusRowId = useRef<string | null | undefined>(undefined)
@@ -463,7 +463,7 @@ export function ManageResourcesTab({ locale }: { locale: Locale }) {
       <AdminFocusNoticeLine notice={focusNotice} kind="resource" locale={locale} onDismiss={() => setFocusNotice(null)} />
 
       {/* ── A saved edit (always mounted, so it is announced) ── */}
-      <p role="status" data-testid="manage-status" className="sr-only">{status}</p>
+      <p role="status" data-testid="manage-status" className="sr-only"><AnnouncementText announcement={status} /></p>
 
       {/* ── Error (always mounted: announced when it appears) ── */}
       <div

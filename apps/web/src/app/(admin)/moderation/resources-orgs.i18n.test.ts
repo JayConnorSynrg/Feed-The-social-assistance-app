@@ -128,6 +128,7 @@ import { OrgMembers, OrgMembersView, rosterAddInputId, rosterRemoveId } from './
 import { OrgOverviewView, EndingSoonView } from './org/org-overview'
 import OrgAdminIndexPage from './org/page'
 import { OrganizerCheckinDisplay, kioskConfirmId } from './organizer-checkin-display'
+import { NO_ANNOUNCEMENT, type Announcement } from './row-focus'
 
 const LOCALES = Object.keys(messages) as Locale[]
 const html = (node: unknown) => renderToStaticMarkup(node as ReactElement)
@@ -262,7 +263,9 @@ function wireQueueFocus(tree: unknown) {
   ;(heading.props.ref as { current: unknown }).current = headingNode
   return { chevrons, heading: headingNode }
 }
-const statusText = (tree: unknown, id: string) => findAll(tree, (e) => e.props['data-testid'] === id)[0]?.props.children
+/** A status line's words: its AnnouncementText child's text. */
+const statusText = (tree: unknown, id: string) =>
+  (findAll(tree, (e) => e.props['data-testid'] === id)[0]?.props.children as { props: { announcement: Announcement } } | undefined)?.props.announcement.text
 
 // ---------------------------------------------------------------------------------------------
 // Rendered in the admin's language
@@ -394,7 +397,7 @@ describe('the organization admin screens', () => {
   it('the roster in Korean: labels, roles, date in the locale; user ids read left to right', () => {
     const out = html(
       el(OrgMembersView, {
-        orgId: 'org', locale: 'ko', members: MEMBERS, loading: false, loadError: null, rosterError: null, status: '', readOnly: false,
+        orgId: 'org', locale: 'ko', members: MEMBERS, loading: false, loadError: null, rosterError: null, status: NO_ANNOUNCEMENT, readOnly: false,
         add: { userId: '', role: 'member', adding: false, error: null },
         onAddUserIdChange: () => {}, onAddRoleChange: () => {}, onAdd: () => {}, onRemove: () => {}, onChangeRole: () => {},
       }),
@@ -412,7 +415,7 @@ describe('the organization admin screens', () => {
     expect(markupText(overview)).toContain(O('ko', 'overviewTitle'))
     expect(markupText(overview)).toContain(O('ko', 'tileCheckins'))
     expect(overview).toContain('>1,200</dd>')
-    const ending = html(el(EndingSoonView, { series: [{ eventId: 'e1', title: 'Despensa', lastDate: '2026-10-31', remaining: 3 }], state: 'ready', notice: '', orgId: 'o', locale: 'ko', onRetry: () => {}, onExtended: () => {} }))
+    const ending = html(el(EndingSoonView, { series: [{ eventId: 'e1', title: 'Despensa', lastDate: '2026-10-31', remaining: 3 }], state: 'ready', notice: NO_ANNOUNCEMENT, orgId: 'o', locale: 'ko', onRetry: () => {}, onExtended: () => {} }))
     expect(markupText(ending)).toContain(O('ko', 'endingTitle'))
     expect(markupText(ending)).toContain(eventFormT('ko', 'seriesExtend').slice(0, 2))
     expect(ending).toContain('<p id="ending-e1-title" lang="" dir="auto" class="text-sm font-medium text-stone-900">Despensa</p>')
@@ -521,7 +524,7 @@ describe('Label in Name', () => {
   it.each(LOCALES)('%s: the roster’s Remove and the kiosk’s Confirm', async (l) => {
     const roster = await mount(() =>
       OrgMembersView({
-        orgId: 'org', locale: l, members: MEMBERS, loading: false, loadError: null, rosterError: null, status: '', readOnly: false,
+        orgId: 'org', locale: l, members: MEMBERS, loading: false, loadError: null, rosterError: null, status: NO_ANNOUNCEMENT, readOnly: false,
         add: { userId: '', role: 'member', adding: false, error: null },
         onAddUserIdChange: () => {}, onAddRoleChange: () => {}, onAdd: () => {}, onRemove: () => {}, onChangeRole: () => {},
       }),
@@ -831,7 +834,7 @@ describe('the roster and the kiosk: focus and announcements', () => {
     runFrames()
     after = c.rerender()
     expect(next.focus).toHaveBeenCalledTimes(1)
-    expect((after as unknown as { props: { status: string } }).props.status).toBe(O('ko', 'memberRemoved'))
+    expect((after as unknown as { props: { status: Announcement } }).props.status.text).toBe(O('ko', 'memberRemoved'))
     const add = fakeNode()
     h.elements.set(rosterAddInputId('org'), add)
     h.from.organization_members = { data: [{ id: 'm2' }], error: null }
@@ -974,7 +977,7 @@ describe('failures show a translated line and write one row with their code only
 // ---------------------------------------------------------------------------------------------
 
 type RosterProps = {
-  status: string
+  status: Announcement
   removingId: string | null
   add: { error: string | null }
   rosterError: string | null
@@ -987,7 +990,7 @@ const rosterProps = (c: { tree: () => unknown }) => (c.tree() as { props: Roster
 const rosterView = (over: Record<string, unknown>) =>
   mount(() =>
     OrgMembersView({
-      orgId: 'org', locale: 'ko', members: MEMBERS, loading: false, loadError: null, rosterError: null, status: '', readOnly: false,
+      orgId: 'org', locale: 'ko', members: MEMBERS, loading: false, loadError: null, rosterError: null, status: NO_ANNOUNCEMENT, readOnly: false,
       add: { userId: 'u', role: 'member', adding: false, error: null },
       onAddUserIdChange: () => {}, onAddRoleChange: () => {}, onAdd: () => {}, onRemove: () => {}, onChangeRole: () => {},
       ...over,
@@ -995,7 +998,7 @@ const rosterView = (over: Record<string, unknown>) =>
   ).tree()
 
 describe('B1 — bulk approve: Confirm takes focus and is described by the question', () => {
-  it('opening the confirmation focuses Confirm, which points at the question', async () => {
+  it('the confirmation’s Confirm points at the question', async () => {
     const { c, tree } = await openQueue('ko')
     const open = findAll(tree, (e) => e.props.ref && String(markupText(html(el('span', null, e.props.children as never)))).includes(R('ko', 'bulkApprove').split('(')[0].trim()))[0]
     ;(open.props.onClick as () => void)()
@@ -1003,10 +1006,7 @@ describe('B1 — bulk approve: Confirm takes focus and is described by the quest
     const confirm = findAll(after, (e) => e.props['aria-describedby'] === 'resources-bulk-question')
     expect(confirm).toHaveLength(1)
     expect(findAll(after, (e) => e.props.id === 'resources-bulk-question')).toHaveLength(1)
-    const node = fakeNode()
-    ;(confirm[0].props.ref as { current: unknown }).current = node
-    runFrames()
-    expect(node.focus).toHaveBeenCalledTimes(1)
+    // That opening moves focus to Confirm is shown with real React in resources-orgs.dom.test.ts.
   })
 })
 
@@ -1085,14 +1085,15 @@ describe('H2 — the walk-in stepper is heard and safe at its bounds', () => {
   const kiosk = () => mount(() => OrganizerCheckinDisplay({ occurrence: OCCURRENCE, open: true, onOpenChange: () => {}, locale: 'en' }))
   const get = (tree: unknown, id: string) => findAll(tree, (e) => e.props['data-testid'] === id)[0]
 
-  it('the value is a polite, atomic live region with the people word', async () => {
+  it('one combined string in an sr-only polite live span; the visual number and word are aria-hidden', async () => {
     const c = kiosk()
     const tree = await c.flush()
-    const value = get(tree, 'walkin-size')
-    expect([value.props['aria-live'], value.props['aria-atomic']]).toEqual(['polite', 'true'])
-    expect(markupText(html(value as never))).toBe('1person')
+    const live = get(tree, 'walkin-size-live')
+    expect([live.props['aria-live'], live.props['aria-atomic'], live.props.className]).toEqual(['polite', 'true', 'sr-only'])
+    expect(live.props.children).toBe('1 person')
+    expect(get(tree, 'walkin-size').props['aria-hidden']).toBe('true')
     ;(get(tree, 'walkin-increase').props.onClick as () => void)()
-    expect(markupText(html(get(c.rerender(), 'walkin-size') as never))).toBe('2people')
+    expect(get(c.rerender(), 'walkin-size-live').props.children).toBe('2 people')
   })
 
   it('at a bound the button is aria-disabled (never disabled) and its press does nothing', async () => {
@@ -1102,52 +1103,51 @@ describe('H2 — the walk-in stepper is heard and safe at its bounds', () => {
     expect([dec.props['aria-disabled'], dec.props.disabled]).toEqual([true, undefined])
     ;(dec.props.onClick as () => void)()
     tree = c.rerender()
-    expect(markupText(html(get(tree, 'walkin-size') as never))).toBe('1person')
+    expect(get(tree, 'walkin-size-live').props.children).toBe('1 person')
     for (let i = 0; i < 25; i++) {
       ;(get(c.tree(), 'walkin-increase').props.onClick as () => void)()
       c.rerender()
     }
     tree = c.tree()
-    expect(markupText(html(get(tree, 'walkin-size') as never))).toBe('20people')
+    expect(get(tree, 'walkin-size-live').props.children).toBe('20 people')
     expect(get(tree, 'walkin-increase').props['aria-disabled']).toBe(true)
     expect(get(tree, 'walkin-decrease').props['aria-disabled']).toBeUndefined()
   })
 })
 
 describe('H3 — a repeated identical result is announced again', () => {
-  it('announce() empties the region, then fills it after layout', async () => {
+  it('announce() gives every call a new sequence number, so its keyed node is new', async () => {
     const { announce } = await import('./row-focus')
-    const seen: string[] = []
-    announce((v) => seen.push(v), 'Saved')
-    expect(seen).toEqual([''])
-    runFrames()
-    expect(seen).toEqual(['', 'Saved'])
+    let a: Announcement = NO_ANNOUNCEMENT
+    const set = (v: Announcement | ((p: Announcement) => Announcement)) => (a = typeof v === 'function' ? v(a) : v)
+    announce(set as never, 'Saved')
+    const first = a
+    announce(set as never, 'Saved')
+    expect([first.text, a.text]).toEqual(['Saved', 'Saved'])
+    expect(a.seq).toBe(first.seq + 1)
   })
 
-  it('two identical role changes in a row: the status goes text → empty → text', async () => {
+  it('two identical role changes in a row: same words, a new sequence number (a new node; see the DOM test)', async () => {
     const c = mount(() => OrgMembers({ orgId: 'org', locale: 'ko' }))
     await c.flush()
     h.from.organization_members = { data: [{ id: 'm2' }], error: null }
     await rosterProps(c).onChangeRole('m2', 'admin')
     await c.flush()
-    runFrames()
-    c.rerender()
-    expect(rosterProps(c).status).toBe(O('ko', 'roleChanged'))
+    const first = rosterProps(c).status
+    expect(first.text).toBe(O('ko', 'roleChanged'))
     h.from.organization_members = { data: [{ id: 'm2' }], error: null }
     await rosterProps(c).onChangeRole('m2', 'member')
     await c.flush()
-    expect(rosterProps(c).status).toBe('')
-    runFrames()
-    c.rerender()
-    expect(rosterProps(c).status).toBe(O('ko', 'roleChanged'))
+    expect(rosterProps(c).status).toEqual({ text: O('ko', 'roleChanged'), seq: first.seq + 1 })
   })
 
   it('every W4 status setter goes through announce()', () => {
     const SRC = fileURLToPath(new URL('.', import.meta.url))
     for (const f of ['resources-tab.tsx', 'manage-resources-tab.tsx', 'businesses-tab.tsx', 'orgs-section.tsx', 'organizer-checkin-display.tsx', 'org/[id]/org-admin-shell.tsx', 'org/org-overview.tsx']) {
       const src = readFileSync(SRC + f, 'utf8')
-      expect(src, f).not.toMatch(/\bset(Status|Notice)\((?!'')[^)]/)
-      expect(src, f).not.toMatch(/\bsetFlash\((?!null\))/)
+      // Set only through announce() / clearAnnouncement(), and rendered only through AnnouncementText.
+      expect(src, f).not.toMatch(/\bset(Status|Notice|Flash)\(/)
+      expect(src, f).toMatch(/<AnnouncementText announcement=\{(status|notice|flash)\} \/>/)
     }
   })
 
@@ -1235,5 +1235,24 @@ describe('security lows', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('the grey invalid state really is stone-700 on stone-200 (classes merged with cn)', () => {
+  const addButton = (userId: string) =>
+    findAll(rosterView({ add: { userId, role: 'member', adding: false, error: null } }), (e) => e.type === 'button' && e.props.children === O('ko', 'addMember'))[0]
+
+  it('an empty user id: the merged class list has no text-white and no bg-brand', () => {
+    const classes = String(addButton('').props.className).split(/\s+/)
+    expect(classes).toContain('bg-stone-200')
+    expect(classes).toContain('text-stone-700')
+    expect(classes).not.toContain('text-white')
+    expect(classes).not.toContain('bg-brand')
+  })
+
+  it('a user id typed: the brand fill and white text', () => {
+    const classes = String(addButton('u-1').props.className).split(/\s+/)
+    expect(classes).toContain('text-white')
+    expect(classes).toContain('bg-brand')
   })
 })

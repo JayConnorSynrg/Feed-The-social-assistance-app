@@ -6,6 +6,7 @@
 // every state so it is always there to receive focus.
 
 import { describe, it, expect, vi } from 'vitest'
+import { NO_ANNOUNCEMENT } from '../row-focus'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
@@ -55,7 +56,7 @@ describe('ending-soon list: loading and "Try again"', () => {
     const { EndingSoonView } = await import('./org-overview')
     for (const state of ['loading', 'ready', 'error'] as const) {
       const html = renderToStaticMarkup(
-        h(EndingSoonView, { series: state === 'ready' ? [] : null, state, notice: '', orgId: 'o', locale: 'en', onRetry: () => {}, onExtended: () => {} }),
+        h(EndingSoonView, { series: state === 'ready' ? [] : null, state, notice: NO_ANNOUNCEMENT, orgId: 'o', locale: 'en', onRetry: () => {}, onExtended: () => {} }),
       )
       expect(html, state).toMatch(/<h2 id="org-ending-soon-heading" tabindex="-1"/)
       if (state === 'loading') expect(html).toMatch(/<p [^>]*aria-live="polite"[^>]*>.*Loading…<\/p>/)

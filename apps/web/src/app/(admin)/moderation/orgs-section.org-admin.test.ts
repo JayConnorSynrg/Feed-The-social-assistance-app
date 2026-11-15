@@ -8,6 +8,7 @@
 // and write is filtered by the organization id.
 
 import { describe, it, expect, vi } from 'vitest'
+import { NO_ANNOUNCEMENT } from './row-focus'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import fs from 'node:fs'
@@ -93,7 +94,7 @@ const view = (readOnly: boolean) =>
       loading: false,
       loadError: null,
       rosterError: null,
-      status: '',
+      status: NO_ANNOUNCEMENT,
       readOnly,
       add: { userId: '', role: 'member', adding: false, error: null },
       onAddUserIdChange: () => {},

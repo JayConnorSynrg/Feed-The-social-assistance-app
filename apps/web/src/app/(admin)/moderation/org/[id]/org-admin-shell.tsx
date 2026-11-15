@@ -31,7 +31,7 @@ import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { formatMessage, isolate } from '@/lib/format-message'
-import { announce } from '../../row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, announce, type Announcement } from '../../row-focus'
 import { orgAdminT } from '@/lib/i18n-org-admin'
 import { ORG_ADMIN_INDEX } from '@/lib/org-admin-paths'
 import { orgTypeKey } from '@/components/org-form/org-labels'
@@ -93,7 +93,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
   }, [])
 
   const [panelOpen, setPanelOpen] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Announcement>(NO_ANNOUNCEMENT)
   const editButtonRef = useRef<HTMLButtonElement>(null)
   // "<name> was saved.", announced once the panel has fully closed.
   const savedNotice = useRef<string | null>(null)
@@ -142,7 +142,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
         <AdminFocusGateStatus row={focusGateRow} locale={locale} />
         {/* Always rendered (no empty:hidden) so screen readers announce the saved notice. */}
         <p aria-live="polite" className="mb-3 min-h-5 text-sm font-medium text-brand">
-          {notice}
+          <AnnouncementText announcement={notice} />
         </p>
         <Tabs value={tab} onValueChange={handleTabChange} dir={dir(locale)}>
           <div className="-mx-2 overflow-x-auto px-2 pb-1">

@@ -24,7 +24,7 @@ import { moderationCount } from '@/lib/i18n-admin-moderation'
 import { eventMemberT } from '@/lib/i18n-event-member'
 import { CHECKIN_COUNT, PEOPLE_CONFIRMED, PEOPLE_WORD, orgAdminT } from '@/lib/i18n-org-admin'
 import { namedControl } from '@/lib/i18n-admin-resources'
-import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, clearAnnouncement, focusAfterRowRemoval, type Announcement } from './row-focus'
 
 /** The walk-in stepper's +/- buttons; at a bound a solid grey (not a dim, so the ring keeps contrast). */
 const STEP_CLASS =
@@ -78,7 +78,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
   const [loadError, setLoadError] = useState<string | null>(null)
   const [walkinSize, setWalkinSize] = useState(1)
   const [busyId, setBusyId] = useState<string | null>(null) // user_id being confirmed, or 'walkin'
-  const [flash, setFlash] = useState<string | null>(null)
+  const [flash, setFlash] = useState<Announcement>(NO_ANNOUNCEMENT)
   const [actionError, setActionError] = useState<string | null>(null)
   const t = (key: Parameters<typeof orgAdminT>[1]) => orgAdminT(locale, key)
   // One log row per run of failed refreshes (the kiosk polls every 10 s).
@@ -89,11 +89,11 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showFlash = useCallback((text: string) => {
     if (flashTimer.current) clearTimeout(flashTimer.current)
-    // Emptied, then filled after layout: a repeated identical result is announced again.
+    // A new keyed node per result: a repeated identical result is announced again.
     announce(setFlash, text)
     flashTimer.current = setTimeout(() => {
       flashTimer.current = null
-      setFlash(null)
+      clearAnnouncement(setFlash)
     }, 2500)
   }, [])
   useEffect(() => () => {
@@ -128,7 +128,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
       Promise.resolve().then(() => {
         setWalkinSize(1)
         setBusyId(null)
-        setFlash(null)
+        clearAnnouncement(setFlash)
         setActionError(null)
       })
     }
@@ -183,6 +183,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
     setBusyId(null)
   }, [busyId, supabase, occurrence.id, walkinSize, fetchAttendance, locale, showFlash])
 
+  const walkinSizeText = `${formatCount(walkinSize, locale)} ${pluralMessage(PEOPLE_WORD[locale] ?? PEOPLE_WORD.en, walkinSize, locale)}`
   const atMin = walkinSize <= HOUSEHOLD_MIN
   const atMax = walkinSize >= HOUSEHOLD_MAX
   const when = formatEventWhen(occurrence.starts_at, occurrence.ends_at, occurrence.time_zone, locale)
@@ -230,8 +231,8 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
           <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
             {/* Inside the dialog (the page behind it is aria-hidden) and always mounted, so each
                 result and each failure is announced when its line appears. */}
-            <div role="status" className={flash ? 'rounded-lg bg-lime-50 border border-lime-700 px-4 py-2 text-sm text-lime-900' : 'sr-only'}>
-              {flash ?? ''}
+            <div role="status" className={flash.text ? 'rounded-lg bg-lime-50 border border-lime-700 px-4 py-2 text-sm text-lime-900' : 'sr-only'}>
+              <AnnouncementText announcement={flash} />
             </div>
             <div role="alert" className={actionError || loadError ? 'rounded-lg bg-red-50 border border-red-700 px-4 py-2 text-sm text-red-800' : 'sr-only'}>
               {actionError ?? loadError ?? ''}
@@ -293,7 +294,12 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
                   >
                     <Minus className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <span data-testid="walkin-size" aria-live="polite" aria-atomic="true" className="flex items-baseline gap-2">
+                  {/* What a screen reader hears: ONE string per press, in one polite region; the visual
+                      number and word beside it are hidden from assistive tech. */}
+                  <span data-testid="walkin-size-live" aria-live="polite" aria-atomic="true" className="sr-only">
+                    {walkinSizeText}
+                  </span>
+                  <span data-testid="walkin-size" aria-hidden="true" className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-stone-900 min-w-[2.5rem] text-center tabular-nums">{formatCount(walkinSize, locale)}</span>
                     <span className="text-xs text-stone-600">{pluralMessage(PEOPLE_WORD[locale] ?? PEOPLE_WORD.en, walkinSize, locale)}</span>
                   </span>

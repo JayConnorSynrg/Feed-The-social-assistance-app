@@ -22,7 +22,7 @@ import type { Locale } from '@/lib/i18n'
 import { formatCount } from '@/lib/i18n-intl'
 import { orgAdminT, type OrgAdminMessages } from '@/lib/i18n-org-admin'
 import { ExtendSeriesButton } from '../extend-series-button'
-import { announce } from '../row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, announce, clearAnnouncement, type Announcement } from '../row-focus'
 import { fetchEndingSoon, fetchOrgOverview, type EndingSoonSeries, type OrgOverviewCounts } from './org-overview-data'
 
 const TILES: Array<{ key: keyof OrgOverviewCounts; label: keyof OrgAdminMessages }> = [
@@ -101,7 +101,7 @@ function EndingSoonSection({ orgId, locale }: { orgId: string; locale: Locale })
   const [series, setSeries] = useState<EndingSoonSeries[] | null>(null)
   const [state, setState] = useState<LoadState>('loading')
   const [reload, setReload] = useState(0)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<Announcement>(NO_ANNOUNCEMENT)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const retryPending = useRef(false)
 
@@ -137,7 +137,7 @@ function EndingSoonSection({ orgId, locale }: { orgId: string; locale: Locale })
         setState('loading')
         setReload((n) => n + 1)
       }}
-      onStart={() => setNotice('')}
+      onStart={() => clearAnnouncement(setNotice)}
       onExtended={(until) => {
         announce(setNotice, formatMessage(eventFormT(locale, 'seriesExtended'), { date: formatCalendarDate(until.slice(0, 10), locale) }))
         // The extended series leaves this list (it now ends six months out): continue from the heading.
@@ -161,7 +161,7 @@ export function EndingSoonView({
 }: {
   series: EndingSoonSeries[] | null
   state: LoadState
-  notice: string
+  notice: Announcement
   orgId: string
   locale: Locale
   onRetry: () => void
@@ -180,7 +180,7 @@ export function EndingSoonView({
         {orgAdminT(locale, 'endingTitle')}
       </h2>
       <p role="status" className="mb-2 text-sm text-lime-800">
-        {notice}
+        <AnnouncementText announcement={notice} />
       </p>
       {state === 'loading' ? (
         <p className="flex items-center gap-2 text-sm text-stone-600" aria-live="polite">

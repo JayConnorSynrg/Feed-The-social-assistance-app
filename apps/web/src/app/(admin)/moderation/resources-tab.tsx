@@ -10,7 +10,7 @@
 // always-mounted status line and move focus to the next card (else the queue heading) before the
 // card leaves; while an action runs its buttons are aria-disabled, so they keep focus.
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   Search, Check, X, Loader2, Globe, MapPin, ExternalLink,
   AlertCircle, ChevronDown, ChevronUp, Map as MapIcon, List,
@@ -41,7 +41,7 @@ import {
   adminResourcesT, contentTypeLabel, namedControl,
 } from '@/lib/i18n-admin-resources'
 import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
-import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, focusAfterRowRemoval, type Announcement } from './row-focus'
 import {
   ResourceEditDialog,
   type ResourceEditDialogInput,
@@ -221,7 +221,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
   const [approveTarget, setApproveTarget] = useState<PendingItem | null>(null)
 
   // The result of the last approve / reject, announced by an always-mounted status line.
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   // Focus after a card leaves: chosen before the queue changes, applied after it re-renders.
   const focusTarget = useRef<{ id: string | null } | null>(null)
   const chevrons = useRef(new Map<string, HTMLButtonElement>())
@@ -270,13 +270,16 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
     })
   }, [pending])
 
-  // Cancel on the bulk confirmation brings back the Bulk approve button: focus returns to it;
-  // opening it moves focus to its Confirm (described by the question).
+  // Opening the bulk confirmation moves focus to its Confirm (described by the question) in the same
+  // commit that mounts it — before paint, so focus never rests on the removed button.
+  useLayoutEffect(() => {
+    if (!focusBulkConfirm.current) return
+    focusBulkConfirm.current = false
+    bulkConfirmButton.current?.focus()
+  })
+
+  // Cancel on the bulk confirmation brings back the Bulk approve button: focus returns to it.
   useEffect(() => {
-    if (focusBulkConfirm.current) {
-      focusBulkConfirm.current = false
-      afterLayout(() => bulkConfirmButton.current?.focus())
-    }
     if (!restoreBulk.current) return
     restoreBulk.current = false
     bulkButton.current?.focus()
@@ -778,7 +781,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
       </div>
 
       {/* ── Approve / reject results (always mounted: each one is announced) ── */}
-      <p role="status" data-testid="resources-queue-status" className="sr-only">{status}</p>
+      <p role="status" data-testid="resources-queue-status" className="sr-only"><AnnouncementText announcement={status} /></p>
 
       {/* ── Queue error (always mounted: announced when it appears) ── */}
       <div

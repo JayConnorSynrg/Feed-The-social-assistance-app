@@ -38,13 +38,14 @@ import { adminNavT, memberReasonText } from '@/lib/i18n-admin-nav'
 import { organizationMapVisibility, organizationVisibility, showsMapControl, type MemberVisibility } from '@/lib/member-visibility'
 import { orgFormT, type OrgFormMessages } from '@/lib/i18n-org-forms'
 import { formatMessage } from '@/lib/format-message'
+import { cn } from '@/lib/utils'
 import { orgAdminT, orgRoleLabel, type OrgAdminMessages } from '@/lib/i18n-org-admin'
 import { namedControl } from '@/lib/i18n-admin-resources'
 import { formatDate } from '@/lib/i18n-intl'
 import { browserTimeZone } from '@/lib/event-time'
 import { logger } from '@/lib/logger'
 import { failureCode } from '@/lib/failure-code'
-import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, focusAfterRowRemoval, type Announcement } from './row-focus'
 import { fetchAdminOrgList, type AdminOrgListRow } from '@/lib/org-data'
 import { adminSetOrgActive } from '@/lib/org-admin-rpc'
 import { orgTypeKey } from '@/components/org-form/org-labels'
@@ -466,7 +467,7 @@ export function OrgMembers({ orgId, readOnly = false, locale }: { orgId: string;
   const [addRole, setAddRole] = useState<MemberRole>('member')
   const [addingMember, setAddingMember] = useState(false)
   const [addMemberError, setAddMemberError] = useState<string | null>(null)
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   // The member whose Remove is running (a second press on that row does nothing).
   const [removingId, setRemovingId] = useState<string | null>(null)
   // After a role change: the row's role trigger, focused once the roster has re-rendered.
@@ -598,7 +599,7 @@ export interface OrgMembersViewProps {
   loadError: string | null
   rosterError: string | null
   /** The last change's result, announced by an always-mounted status line. */
-  status: string
+  status: Announcement
   /** The member whose Remove is running, if any. */
   removingId?: string | null
   readOnly: boolean
@@ -654,7 +655,7 @@ export function OrgMembersView(props: OrgMembersViewProps) {
             type="button"
             onClick={() => { if (!addDisabled) props.onAdd() }}
             aria-disabled={addDisabled || undefined}
-            className={addInvalid ? `${PRIMARY} bg-stone-200 text-stone-700 hover:bg-stone-200` : PRIMARY}
+            className={cn(PRIMARY, addInvalid && 'bg-stone-200 text-stone-700 hover:bg-stone-200')}
           >
             {add.adding ? t('adding') : t('addMember')}
           </button>
@@ -668,7 +669,7 @@ export function OrgMembersView(props: OrgMembersViewProps) {
         </p>
       )}
       {/* Always mounted, so a change or a failure is announced when its line appears. */}
-      <p role="status" data-testid={`roster-status-${orgId}`} className="sr-only">{status}</p>
+      <p role="status" data-testid={`roster-status-${orgId}`} className="sr-only"><AnnouncementText announcement={status} /></p>
       <p role="alert" data-testid={`roster-alert-${orgId}`} className={alert ? 'mb-2 text-xs text-red-700' : 'sr-only'}>
         {alert ?? ''}
       </p>

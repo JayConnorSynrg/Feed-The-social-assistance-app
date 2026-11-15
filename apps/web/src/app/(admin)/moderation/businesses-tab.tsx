@@ -74,7 +74,7 @@ import { adminResourcesT, namedControl } from '@/lib/i18n-admin-resources'
 import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 import { useAdminFocusSession } from './use-admin-focus'
 import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
-import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
+import { AnnouncementText, NO_ANNOUNCEMENT, afterLayout, announce, focusAfterRowRemoval, type Announcement } from './row-focus'
 
 // The editable-field draft the inline edit form holds while open (mirrors AdminBusinessEdit; empty
 // strings in the inputs, coerced to the null/trimmed shape by adminUpdateBusiness at write time).
@@ -126,7 +126,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
   const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(() => new Set())
 
   // The result of the last action (always mounted, so each one is announced).
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const pendingHeading = useRef<HTMLHeadingElement | null>(null)
   const approvedHeading = useRef<HTMLHeadingElement | null>(null)
   // Where focus goes once the list it waits for has re-rendered (an element id, or the heading).
@@ -361,7 +361,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
   const liveLines = (
     <>
       <AdminFocusNoticeLine notice={focusNotice} kind="business" locale={locale} onDismiss={() => setFocusNotice(null)} />
-      <p role="status" data-testid="businesses-status" className="sr-only">{status}</p>
+      <p role="status" data-testid="businesses-status" className="sr-only"><AnnouncementText announcement={status} /></p>
     </>
   )
 
