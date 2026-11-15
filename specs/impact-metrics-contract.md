@@ -75,6 +75,7 @@ The carry is written **at deletion time, in the deleting transaction**:
 
 ```sql
 CREATE TABLE public.community_impact_rollup (
+  id              bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,   -- append-only: one row per carry and month
   metric_id       text        NOT NULL,   -- 'petition_signers', 'needs_met', 'alerts_verified', 'member_resources_approved', 'people_served_at_events'
   period_start    date        NOT NULL,   -- first day of the UTC month of the carried rows / visits
   period_end      date        NOT NULL,   -- first day of the next month (exclusive)
@@ -82,22 +83,25 @@ CREATE TABLE public.community_impact_rollup (
   contributors    bigint      NOT NULL DEFAULT 0 CHECK (contributors >= 0),     -- carried accounts (guests included)
   k_contributors  bigint      NOT NULL DEFAULT 0 CHECK (k_contributors >= 0),   -- carried member accounts / identities
   written_at      timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (metric_id, period_start),
   CHECK (metric_id IN ('petition_signers','needs_met','alerts_verified','member_resources_approved','people_served_at_events')),
   CHECK (period_end > period_start),
   CHECK (k_contributors <= contributors)
 );
 ALTER TABLE public.community_impact_rollup ENABLE ROW LEVEL SECURITY;   -- no policies: no client reads or writes
 REVOKE ALL ON public.community_impact_rollup FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON SEQUENCE public.community_impact_rollup_id_seq FROM PUBLIC, anon, authenticated;
 ```
 
-No user id, no target id, counts only. Read only through `community_impact_summary()`.
+No user id, no target id, counts only. Append-only (2026-11-15, review low L1): each carry inserts its own rows and the
+read sums them, so two deletions never wait on each other's row (an upsert into a shared (metric, month) row made a
+member's deletion queue behind the nightly guest cleanup). Read only through `community_impact_summary()`.
 
 Writer — one row-level BEFORE DELETE trigger on `auth.users` (the only writer):
 
 ```sql
 CREATE FUNCTION public.community_impact_carry_departed()
-  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$ ... $$;
+  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp SET lock_timeout = '100ms'
+  AS $$ ... $$;
 REVOKE ALL ON FUNCTION public.community_impact_carry_departed() FROM PUBLIC, anon, authenticated;
 CREATE TRIGGER trg_community_impact_carry_departed
   BEFORE DELETE ON auth.users
@@ -120,9 +124,14 @@ Body rule, for the deleted account `OLD`:
    visit. The visits and their sum stay live; a visit with a `household_key` keeps its identity and carries nothing.
 3. `k_contributors` receives the same `+1` only when `OLD.is_anonymous` is not true: a guest's rows add to values, its
    account to no k, before and after the nightly guest cleanup alike.
-4. `INSERT ... ON CONFLICT (metric_id, period_start) DO UPDATE` adding `count`, `contributors`, `k_contributors`.
-5. A failure inside the carry must not block an account deletion: `BEGIN ... EXCEPTION WHEN OTHERS` calls
-   `public.log_engagement_failure('impact_carry', SQLERRM)` and the trigger returns `OLD`.
+4. One plain `INSERT` of the carried rows (no `ON CONFLICT`): no row lock is shared with any other transaction.
+5. The carry never cancels or blocks an account deletion, under any timeout setting. Everything except `RETURN OLD`
+   (the `is_anonymous` read included) runs inside `BEGIN ... EXCEPTION WHEN OTHERS OR query_canceled`, which calls
+   `public.log_engagement_failure('impact_carry', SQLSTATE || ' ' || SQLERRM)` (itself guarded the same way).
+   `OTHERS` does not include `query_canceled`, the error a statement timeout raises. `SET lock_timeout = '100ms'`
+   bounds the only wait left, a table-level lock on the rollup (DDL), and turns it into a logged 55P03; prod's
+   `supabase_auth_admin` has no statement timeout and `lock_timeout` is 0, so without it that wait would be unbounded.
+   A function-level `SET statement_timeout` would not help: the timer is set once per top-level statement.
 
 Exactly once: the trigger runs once per deleted `auth.users` row; a delete that finds no row (the same path firing
 twice) runs none. A deleted account is never live again, so live + carried is the exact count. The preflight refuses

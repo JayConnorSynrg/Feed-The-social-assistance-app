@@ -4,10 +4,12 @@
 -- c2, c3, plus c4 (a failing carry never blocks a deletion). Each outcome carries two controls:
 --   [instrument] the measurement can see the failure it guards against;
 --   [aim]        the measurement is pointed at the object the migration created.
+-- The preflight case (pf) reads the migration file itself: pass its path as -v mig=<absolute path>.
 -- DISPOSABLE DATABASE ONLY (a copy with the migration applied; never prod): the helper schema smk below is created
 -- and kept; every test runs in BEGIN ... ROLLBACK. Run as a superuser (the deletion tests SET ROLE supabase_auth_admin
 -- and service_role, as GoTrue and the delete-account function do):
---   psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d <copy> -f supabase/tests/community_impact.smoke.sql 2>&1 | grep -E 'PASS|FAIL|ERROR'
+--   psql -X -v ON_ERROR_STOP=1 -v mig=$PWD/supabase/migrations/20261027500000_community_impact_v1.sql -U supabase_admin -d <copy> \
+--     -f supabase/tests/community_impact.smoke.sql 2>&1 | grep -E 'PASS|FAIL|ERROR'
 -- Expected: every line PASS (count printed by the runner), 0 FAIL, 0 ERROR.
 
 -- smoke helpers for 20261027500000_community_impact_v1 (disposable database feed_smk only)
@@ -114,7 +116,7 @@ DO $t$ DECLARE v text; BEGIN
     SELECT 'rel:' || relname x FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname LIKE 'community_impact%'
     UNION ALL SELECT 'fn:' || proname FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname LIKE 'community_impact%'
     UNION ALL SELECT 'trg:' || tgname FROM pg_trigger WHERE tgname LIKE '%community_impact%') s;
-  PERFORM smk.ok('a  new objects are exactly the named ones', v = 'fn:community_impact_carry_departed, fn:community_impact_summary, rel:community_impact_rollup, rel:community_impact_rollup_pkey, trg:trg_community_impact_carry_departed', v);
+  PERFORM smk.ok('a  new objects are exactly the named ones', v = 'fn:community_impact_carry_departed, fn:community_impact_summary, rel:community_impact_rollup, rel:community_impact_rollup_id_seq, rel:community_impact_rollup_pkey, trg:trg_community_impact_carry_departed', v);
 END $t$;
 
 -- ============================== (b) 9 people suppressed; 10 shown, rounded down to 5 ==============================
@@ -228,9 +230,9 @@ DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - inter
 DO $t$ BEGIN
   PERFORM smk.ok('c  guest deleted by cleanup-anonymous-users: RPC JSON identical', (SELECT j FROM c_before) = public.community_impact_summary(), public.community_impact_summary()::text);
   PERFORM smk.ok('c  rollup needs_met Oct now count 3 / contributors 1 / k 0 (the guest adds to the value, not to k)',
-    (SELECT count = 3 AND contributors = 1 AND k_contributors = 0 FROM public.community_impact_rollup WHERE metric_id = 'needs_met' AND period_start = '2026-10-01'), 'row');
+    (SELECT sum(count) = 3 AND sum(contributors) = 1 AND sum(k_contributors) = 0 FROM public.community_impact_rollup WHERE metric_id = 'needs_met' AND period_start = '2026-10-01'), 'rows (append-only)');
   PERFORM smk.ok('c  rollup stores no user id (columns)', (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid = 'public.community_impact_rollup'::regclass AND attnum > 0 AND NOT attisdropped)
-     = ARRAY['metric_id','period_start','period_end','count','contributors','k_contributors','written_at'], 'seven count/period columns');
+     = ARRAY['id','metric_id','period_start','period_end','count','contributors','k_contributors','written_at'], 'row id + seven count/period columns');
 END $t$;
 ROLLBACK;
 -- [instrument] the same deletion with the carry disabled DOES lower the figure, so (c) can fail
@@ -342,7 +344,7 @@ DO $t$ DECLARE a text; BEGIN
      FROM pg_proc WHERE oid = 'public.community_impact_summary()'::regprocedure), (SELECT array_to_string(proconfig, ',') FROM pg_proc WHERE oid = 'public.community_impact_summary()'::regprocedure));
   SELECT proacl::text INTO a FROM pg_proc WHERE oid = 'public.community_impact_carry_departed()'::regprocedure;
   PERFORM smk.ok('d  carry: pinned, SECDEF, no PUBLIC/anon/authenticated EXECUTE', a !~ '(^|[{,])=X' AND a !~ 'anon=' AND a !~ 'authenticated='
-     AND (SELECT proconfig = ARRAY['search_path=public, pg_temp'] AND prosecdef FROM pg_proc WHERE oid = 'public.community_impact_carry_departed()'::regprocedure), a);
+     AND (SELECT proconfig = ARRAY['search_path=public, pg_temp', 'lock_timeout=100ms'] AND prosecdef FROM pg_proc WHERE oid = 'public.community_impact_carry_departed()'::regprocedure), a);
   PERFORM smk.ok('d  [instrument] has_function_privilege agrees: anon yes / PUBLIC-only role no',
     has_function_privilege('anon', 'public.community_impact_summary()', 'EXECUTE') AND NOT has_function_privilege('pgbouncer', 'public.community_impact_summary()', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.community_impact_carry_departed()', 'EXECUTE'), 'has_function_privilege');
@@ -358,6 +360,8 @@ DO $t$ BEGIN
   PERFORM smk.ok('e  [instrument] the same relacl test flags authenticated on engagement_events',
     (SELECT relacl::text ~ 'authenticated=' FROM pg_class WHERE oid = 'public.engagement_events'::regclass), (SELECT relacl::text FROM pg_class WHERE oid = 'public.engagement_events'::regclass));
   PERFORM smk.ok('e  [aim] no column-level grant on the rollup', NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.community_impact_rollup'::regclass AND attacl IS NOT NULL), 'attacl');
+  PERFORM smk.ok('e  rollup id sequence: no anon/authenticated/PUBLIC grant', (SELECT coalesce(relacl::text, '') !~ '(anon|authenticated)=' AND coalesce(relacl::text, '') !~ '(^|[{,])='
+     FROM pg_class WHERE oid = 'public.community_impact_rollup_id_seq'::regclass), (SELECT relacl::text FROM pg_class WHERE oid = 'public.community_impact_rollup_id_seq'::regclass));
 END $t$;
 
 -- ============================== (f) staff and admin rows count ==============================
@@ -520,5 +524,28 @@ DO $t$ BEGIN
   PERFORM smk.ok('sybil [aim] the cron removed 50 guests; their rows carried with k 0',
     (SELECT count(*) = 0 FROM auth.users WHERE is_anonymous) AND (SELECT sum(k_contributors) = 0 AND sum(contributors) = 50 FROM public.community_impact_rollup),
     (SELECT sum(count) || '/' || sum(contributors) || '/' || sum(k_contributors) FROM public.community_impact_rollup));
+END $t$;
+ROLLBACK;
+
+-- ============================== (pf) a second BEFORE DELETE row trigger on auth.users refuses the migration ==============================
+-- the preflight block of the migration file itself, run on this database put back to its pre-migration shape (rolled back)
+SELECT set_config('smk.preflight', substring(pg_read_file(:'mig') FROM '(DO \$preflight\$.*?\$preflight\$;)'), false);
+BEGIN;
+DROP TRIGGER trg_community_impact_carry_departed ON auth.users;
+DROP FUNCTION public.community_impact_carry_departed();
+DROP FUNCTION public.community_impact_summary();
+DROP TABLE public.community_impact_rollup;
+DELETE FROM supabase_migrations.schema_migrations WHERE version = '20261027500000';
+DO $t$ DECLARE st text := 'none'; dt text := ''; BEGIN
+  PERFORM smk.ok('pf [aim] the preflight block was read from the migration file', current_setting('smk.preflight') LIKE 'DO $preflight$%no BEFORE DELETE row trigger on auth.users%', length(current_setting('smk.preflight')) || ' chars');
+  BEGIN EXECUTE current_setting('smk.preflight'); EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS st = RETURNED_SQLSTATE, dt = PG_EXCEPTION_DETAIL; END;
+  PERFORM smk.ok('pf [instrument] on the pre-migration shape the preflight passes', st = 'none', st || ' ' || dt);
+END $t$;
+CREATE FUNCTION public.smk_other_before_delete() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN OLD; END';
+CREATE TRIGGER zz_other_before_delete BEFORE DELETE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.smk_other_before_delete();
+DO $t$ DECLARE st text := 'none'; dt text := ''; BEGIN
+  BEGIN EXECUTE current_setting('smk.preflight'); EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS st = RETURNED_SQLSTATE, dt = PG_EXCEPTION_DETAIL; END;
+  PERFORM smk.ok('pf another BEFORE DELETE row trigger on auth.users: refused 55000 naming it',
+    st = '55000' AND dt = 'no BEFORE DELETE row trigger on auth.users yet (this file adds the only one)', st || ' ' || dt);
 END $t$;
 ROLLBACK;

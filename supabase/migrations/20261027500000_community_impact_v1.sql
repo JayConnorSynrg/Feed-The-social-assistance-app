@@ -13,15 +13,18 @@
 --
 -- What this migration does
 --   (A) community_impact_rollup: what an account deletion would otherwise take away, per figure and month: carried
---       rows (count), carried accounts (contributors) and carried member accounts (k_contributors). Counts only (no
+--       rows (count), carried accounts (contributors) and carried member accounts (k_contributors). Append-only: each
+--       carry inserts its own rows, so two deletions never wait on each other's row; the read sums. Counts only (no
 --       user id, no target id); RLS on with no policy and no client grant, so it is read only through the RPC.
 --   (B) community_impact_carry_departed(): one row-level BEFORE DELETE trigger on auth.users, the only writer. Every
 --       deletion path is a DELETE FROM auth.users (the member's delete-account function, the admin delete route, the
 --       nightly cleanup-anonymous-users job). The trigger runs once per deleted account, before the cascades, while the
 --       account's ledger rows, its check-ins and its is_anonymous flag are still readable; it carries the ledger rows
 --       the cascade will remove and, for a member, the event identity that ON DELETE SET NULL will erase. A delete that
---       finds no row runs no trigger, so a repeated delete adds nothing. A failure inside the carry is logged
---       (log_engagement_failure 'impact_carry') and never blocks the deletion.
+--       finds no row runs no trigger, so a repeated delete adds nothing. The carry never cancels or blocks a deletion:
+--       its lock waits are capped (SET lock_timeout = '100ms'; an append insert only ever waits on a table-level lock),
+--       and any error, a lock timeout or a statement timeout (query_canceled) inside it is logged
+--       (log_engagement_failure 'impact_carry') and the deletion goes on.
 --   (C) community_impact_summary(): SECURITY DEFINER, STABLE, pinned search_path, no arguments; anon and
 --       authenticated may call it, PUBLIC may not. Suppression and rounding happen here; a suppressed figure's
 --       count never leaves the database.
@@ -94,6 +97,7 @@ $preflight$;
 -- (2) Core table: carried counts. No user id, no target id.
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.community_impact_rollup (
+  id              bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,   -- append-only: one row per carry and month
   metric_id       text        NOT NULL,
   period_start    date        NOT NULL,   -- first day of the UTC month of the carried rows / visits
   period_end      date        NOT NULL,   -- first day of the next month (exclusive)
@@ -101,24 +105,25 @@ CREATE TABLE public.community_impact_rollup (
   contributors    bigint      NOT NULL DEFAULT 0 CHECK (contributors >= 0),     -- carried accounts (guests included)
   k_contributors  bigint      NOT NULL DEFAULT 0 CHECK (k_contributors >= 0),   -- carried member accounts / identities
   written_at      timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (metric_id, period_start),
   CHECK (metric_id IN ('petition_signers', 'needs_met', 'alerts_verified', 'member_resources_approved', 'people_served_at_events')),
   CHECK (period_end > period_start),
   CHECK (k_contributors <= contributors)
 );
 COMMENT ON TABLE public.community_impact_rollup IS
-  'What an account deletion would take from the impact figures: carried ledger rows, accounts and member accounts (k), per figure and month. Written only by community_impact_carry_departed (BEFORE DELETE on auth.users); read only through community_impact_summary(). specs/impact-metrics-contract.md section 3.';
+  'What an account deletion would take from the impact figures: carried ledger rows, accounts and member accounts (k), per figure and month; append-only, the read sums. Written only by community_impact_carry_departed (BEFORE DELETE on auth.users); read only through community_impact_summary(). specs/impact-metrics-contract.md section 3.';
 
 -- ---------------------------------------------------------------------------
 -- (3a) The carry: once per deleted account, before its cascades.
 -- ---------------------------------------------------------------------------
 CREATE FUNCTION public.community_impact_carry_departed()
-  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
+  RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp SET lock_timeout = '100ms'
 AS $fn$
 DECLARE
-  v_member constant boolean := OLD.is_anonymous IS NOT TRUE;   -- a guest adds to values, never to k
+  v_member boolean;
 BEGIN
+  -- everything but RETURN OLD is inside this block: the deletion goes on whatever happens here
   BEGIN
+    v_member := OLD.is_anonymous IS NOT TRUE;   -- a guest adds to values, never to k
     WITH mine AS (
       -- the ledger rows ON DELETE CASCADE is about to remove
       SELECT CASE e.kind WHEN 'petition_signature'      THEN 'petition_signers'
@@ -149,16 +154,15 @@ BEGIN
       SELECT metric_id, period_start, n, d FROM ledger
       UNION ALL SELECT metric_id, period_start, n, d FROM event_identity
     )
-    INSERT INTO public.community_impact_rollup AS r (metric_id, period_start, period_end, count, contributors, k_contributors)
+    INSERT INTO public.community_impact_rollup (metric_id, period_start, period_end, count, contributors, k_contributors)
     SELECT metric_id, period_start, (period_start + interval '1 month')::date, n, d, CASE WHEN v_member THEN d ELSE 0 END
-      FROM carried
-    ON CONFLICT (metric_id, period_start) DO UPDATE
-      SET count          = r.count + EXCLUDED.count,
-          contributors   = r.contributors + EXCLUDED.contributors,
-          k_contributors = r.k_contributors + EXCLUDED.k_contributors,
-          written_at     = now();
-  EXCEPTION WHEN OTHERS THEN
-    PERFORM public.log_engagement_failure('impact_carry', SQLERRM);
+      FROM carried;
+  EXCEPTION WHEN OTHERS OR query_canceled THEN
+    -- OTHERS does not include query_canceled (a statement timeout); both are logged and the deletion goes on
+    BEGIN
+      PERFORM public.log_engagement_failure('impact_carry', SQLSTATE || ' ' || SQLERRM);
+    EXCEPTION WHEN OTHERS OR query_canceled THEN NULL;
+    END;
   END;
   RETURN OLD;
 END;
@@ -255,6 +259,7 @@ REVOKE ALL ON FUNCTION public.community_impact_carry_departed() FROM PUBLIC, ano
 
 ALTER TABLE public.community_impact_rollup ENABLE ROW LEVEL SECURITY;   -- no policies: no client reads or writes
 REVOKE ALL ON public.community_impact_rollup FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON SEQUENCE public.community_impact_rollup_id_seq FROM PUBLIC, anon, authenticated;   -- default ACL grants rwU
 
 -- ---------------------------------------------------------------------------
 -- Ledger row in the SAME transaction.

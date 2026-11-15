@@ -593,6 +593,7 @@ export type Database = {
         Row: {
           contributors: number
           count: number
+          id: number
           k_contributors: number
           metric_id: string
           period_end: string
@@ -602,6 +603,7 @@ export type Database = {
         Insert: {
           contributors?: number
           count?: number
+          id?: never
           k_contributors?: number
           metric_id: string
           period_end: string
@@ -611,6 +613,7 @@ export type Database = {
         Update: {
           contributors?: number
           count?: number
+          id?: never
           k_contributors?: number
           metric_id?: string
           period_end?: string
