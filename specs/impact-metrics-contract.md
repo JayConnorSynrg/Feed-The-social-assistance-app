@@ -75,26 +75,38 @@ The carry is written **at deletion time, in the deleting transaction**:
 
 ```sql
 CREATE TABLE public.community_impact_rollup (
-  id              bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,   -- append-only: one row per carry and month
+  id              uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,   -- random: no order, no time
   metric_id       text        NOT NULL,   -- 'petition_signers', 'needs_met', 'alerts_verified', 'member_resources_approved', 'people_served_at_events'
-  period_start    date        NOT NULL,   -- first day of the UTC month of the carried rows / visits
-  period_end      date        NOT NULL,   -- first day of the next month (exclusive)
   count           bigint      NOT NULL DEFAULT 0 CHECK (count >= 0),            -- carried ledger rows
   contributors    bigint      NOT NULL DEFAULT 0 CHECK (contributors >= 0),     -- carried accounts (guests included)
   k_contributors  bigint      NOT NULL DEFAULT 0 CHECK (k_contributors >= 0),   -- carried member accounts / identities
-  written_at      timestamptz NOT NULL DEFAULT now(),
   CHECK (metric_id IN ('petition_signers','needs_met','alerts_verified','member_resources_approved','people_served_at_events')),
-  CHECK (period_end > period_start),
   CHECK (k_contributors <= contributors)
 );
 ALTER TABLE public.community_impact_rollup ENABLE ROW LEVEL SECURITY;   -- no policies: no client reads or writes
 REVOKE ALL ON public.community_impact_rollup FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON SEQUENCE public.community_impact_rollup_id_seq FROM PUBLIC, anon, authenticated;
 ```
 
-No user id, no target id, counts only. Append-only (2026-11-15, review low L1): each carry inserts its own rows and the
-read sums them, so two deletions never wait on each other's row (an upsert into a shared (metric, month) row made a
-member's deletion queue behind the nightly guest cleanup). Read only through `community_impact_summary()`.
+Counts only: no user id, no target id. All-time totals, normally one row per figure. Read only through
+`community_impact_summary()`, which sums the rows of each figure.
+
+Nothing in it can be tied to one deleted account (2026-11-15, review low L5). An operator who can read the table and
+`auth.audit_log_entries` learns no more than "accounts were deleted", because:
+- there is no timestamp (a `written_at` matched the `user_deleted` audit entry to the microsecond) and no period (the
+  month of an account's earliest activity described that account);
+- the key is a random uuid, so neither it nor an identity sequence orders rows by deletion;
+- every deletion updates **all five** figure rows, adding zero where the account had nothing, so a tuple's `xmin`
+  (the deleting transaction, which can be matched to GoTrue's audit entry if that entry is written in the same transaction) and its heap position say only "the latest
+  deletion touched every figure". A row written only for the figures one account touched would name that account's
+  activity;
+- the values are cumulative, so no row holds one account's counts. The exception is the state after the very first
+  deletion, or after only one overlap (below), until the next deletion.
+
+Contention without waiting (review low L1): the carry takes a figure's row with `FOR UPDATE SKIP LOCKED`. If another
+deletion's open transaction holds it, the carry inserts a separate row rather than wait. The next carry that holds the
+figure's row folds every other unlocked row of that figure into it, with totals unchanged, in one statement. A row that
+an overlap leaves describes one account until it is folded; it carries no time or period, only the `xmin` of one of
+the overlapping deletions.
 
 Writer — one row-level BEFORE DELETE trigger on `auth.users` (the only writer):
 
@@ -117,20 +129,21 @@ tables on a trigger with a column list (`AFTER UPDATE OF user_id ... REFERENCING
 Body rule, for the deleted account `OLD`:
 1. Its ledger rows of a carried kind (`petition_signature -> petition_signers`, `opt_in_completed_seeker -> needs_met`,
    `safety_alert_verified -> alerts_verified`, `resource_approved -> member_resources_approved`), which
-   `ON DELETE CASCADE` is about to remove: per (metric, month of `created_at`) `count += rows`; per metric
-   `contributors += 1` in the month of its earliest row of that kind.
+   `ON DELETE CASCADE` is about to remove: `count += rows`; `contributors += 1` when it has any.
 2. Its event identity: if it has a confirmed visit with no `household_key` (its identity is the account, which
-   `ON DELETE SET NULL` erases), `people_served_at_events` gets `contributors += 1` in the month of its earliest such
-   visit. The visits and their sum stay live; a visit with a `household_key` keeps its identity and carries nothing.
+   `ON DELETE SET NULL` erases), `people_served_at_events` gets `contributors += 1`. The visits and their sum stay live;
+   a visit with a `household_key` keeps its identity and carries nothing.
 3. `k_contributors` receives the same `+1` only when `OLD.is_anonymous` is not true: a guest's rows add to values, its
    account to no k, before and after the nightly guest cleanup alike.
-4. One plain `INSERT` of the carried rows (no `ON CONFLICT`): no row lock is shared with any other transaction.
+4. All five figures, zeros included: take the figure's row `FOR UPDATE SKIP LOCKED`, add this account and fold the
+   figure's other unlocked rows into it; when none can be taken, `INSERT` a row. Nothing waits on another deletion.
 5. The carry never cancels or blocks an account deletion, under any timeout setting. Everything except `RETURN OLD`
    (the `is_anonymous` read included) runs inside `BEGIN ... EXCEPTION WHEN OTHERS OR query_canceled`, which calls
    `public.log_engagement_failure('impact_carry', SQLSTATE || ' ' || SQLERRM)` (itself guarded the same way).
    `OTHERS` does not include `query_canceled`, the error a statement timeout raises. `SET lock_timeout = '100ms'`
    bounds the only wait left, a table-level lock on the rollup (DDL), and turns it into a logged 55P03; prod's
    `supabase_auth_admin` has no statement timeout and `lock_timeout` is 0, so without it that wait would be unbounded.
+   Row locks are never waited on (`SKIP LOCKED`, rule 4).
    A function-level `SET statement_timeout` would not help: the timer is set once per top-level statement.
 
 Exactly once: the trigger runs once per deleted `auth.users` row; a delete that finds no row (the same path firing
@@ -145,8 +158,7 @@ Catalog figures are not about people.
 never missing, and never runs twice. A monthly snapshot job (the evidence's first sketch) was compared and not
 chosen: it would give all-time people figures only as person-periods (distinct people cannot be re-derived from
 per-month counts), leave the current month unprotected until close, and add a cron job plus a backfill.
-The `period_start` key keeps the carried counts monthly, so a per-month view can be added with no table change if
-one is asked for. Decision recorded for the orchestrator in the build report.
+The rollup keeps no period: a per-month carried view would need per-deletion time, which L5 rules out.
 
 ### Tables not used (candidates to drop in P7, owner's words needed)
 
@@ -251,6 +263,9 @@ unless the owner asks), plus the live read-only checks marked *prod*.
 | p2 | Anonymous walk-ins open nothing and reveal nothing | 19 walk-ins + 1 member household: suppressed, value null; 30 more size-1 walk-ins one at a time: the answer never changes |
 | p3 | A deleted account's visits never become many households | one member with 20 visits deletes the account: still suppressed; 1 identity carried; members deleted in one statement, two statements and repeats: JSON identical |
 | sybil | Guest accounts add to values, never to k | 9 members + 20 guests: suppressed; +1 member: shown with the guests' rows in the value; the guest cleanup cron: JSON identical, carried k 0 |
+| l3 | A statement timeout inside the carry never cancels the deletion | a slowed carry under `statement_timeout = 200ms`: the DELETE completes, 57014 logged, nothing half-written |
+| l4 | Live + carried land exactly at k, also across two rows | 8 live + 2 carried: shown 10; 8 live + 1 + 1 carried in two rows: shown 10; the next deletion folds them, totals unchanged |
+| l5 | No rollup row is tied to one deletion | columns are id, metric and three counts; the key is a random uuid; after any deletion all five rows carry that carry's xmin |
 | c3 | Re-running cannot double-count | delete two accounts in one statement and in two statements: carried totals equal the rows removed, each account counted once |
 | d | EXECUTE is revoked from PUBLIC and search_path is pinned (*prod* after apply) | `SELECT proacl, proconfig, prosecdef FROM pg_proc WHERE proname = 'community_impact_summary'`: `proacl` has no `=X/` (PUBLIC) entry, has `anon=X` and `authenticated=X`; `proconfig = {search_path=public, pg_temp}`; `prosecdef = true`; same `proconfig`/`prosecdef` and no anon/authenticated EXECUTE on `community_impact_carry_departed` |
 | e | The rollup table is closed to clients (*prod*) | `relrowsecurity = true`, no row in `pg_policies` for it, `relacl` has no anon/authenticated grant |

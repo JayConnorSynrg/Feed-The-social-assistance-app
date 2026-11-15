@@ -58,8 +58,8 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA smk TO anon, authenticated;
 
 -- ============================== (a) anon: numbers, nothing else ==============================
 BEGIN;
-INSERT INTO public.community_impact_rollup (metric_id, period_start, period_end, count, contributors)
-VALUES ('needs_met', '2026-10-01', '2026-11-01', 3, 1);   -- a row anon would see if it could read the table
+INSERT INTO public.community_impact_rollup (metric_id, count, contributors)
+VALUES ('needs_met', 3, 1);   -- a row anon would see if it could read the table
 SELECT set_config('request.jwt.claims', '{"role":"anon"}', true);
 SET LOCAL ROLE anon;
 DO $t$
@@ -75,7 +75,7 @@ BEGIN
   PERFORM smk.ok('a  each value object = {value,suppressed,unit,window}', bad IS NULL, coalesce(array_to_string(bad, ','), 'all 11 exact'));
   BEGIN PERFORM count(*) FROM public.community_impact_rollup; EXCEPTION WHEN insufficient_privilege THEN denied_rollup := '42501'; END;
   BEGIN PERFORM count(*) FROM public.engagement_events; EXCEPTION WHEN insufficient_privilege THEN denied_ledger := '42501'; END;
-  BEGIN INSERT INTO public.community_impact_rollup (metric_id, period_start, period_end) VALUES ('needs_met','2020-01-01','2020-02-01');
+  BEGIN INSERT INTO public.community_impact_rollup (metric_id) VALUES ('needs_met');
   EXCEPTION WHEN insufficient_privilege THEN denied_write := '42501'; END;
   PERFORM smk.ok('a  anon SELECT community_impact_rollup', denied_rollup = '42501', denied_rollup);
   PERFORM smk.ok('a  anon SELECT engagement_events', denied_ledger = '42501', denied_ledger);
@@ -97,7 +97,7 @@ ROLLBACK;
 
 -- authenticated: the same RPC; no rollup access; the ledger stays own-rows only
 BEGIN;
-INSERT INTO public.community_impact_rollup (metric_id, period_start, period_end, count, contributors) VALUES ('needs_met', '2026-10-01', '2026-11-01', 3, 1);
+INSERT INTO public.community_impact_rollup (metric_id, count, contributors) VALUES ('needs_met', 3, 1);
 SELECT smk.crowd('opt_in_completed_seeker', 3, 1);
 SELECT set_config('request.jwt.claims', json_build_object('role','authenticated','sub',smk.u()::text)::text, true);
 SET LOCAL ROLE authenticated;
@@ -116,7 +116,7 @@ DO $t$ DECLARE v text; BEGIN
     SELECT 'rel:' || relname x FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname LIKE 'community_impact%'
     UNION ALL SELECT 'fn:' || proname FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname LIKE 'community_impact%'
     UNION ALL SELECT 'trg:' || tgname FROM pg_trigger WHERE tgname LIKE '%community_impact%') s;
-  PERFORM smk.ok('a  new objects are exactly the named ones', v = 'fn:community_impact_carry_departed, fn:community_impact_summary, rel:community_impact_rollup, rel:community_impact_rollup_id_seq, rel:community_impact_rollup_pkey, trg:trg_community_impact_carry_departed', v);
+  PERFORM smk.ok('a  new objects are exactly the named ones', v = 'fn:community_impact_carry_departed, fn:community_impact_summary, rel:community_impact_rollup, rel:community_impact_rollup_pkey, trg:trg_community_impact_carry_departed', v);
 END $t$;
 
 -- ============================== (b) 9 people suppressed; 10 shown, rounded down to 5 ==============================
@@ -218,21 +218,20 @@ DELETE FROM auth.users WHERE id = current_setting('smk.victim')::uuid;
 RESET ROLE;
 DO $t$ BEGIN
   PERFORM smk.ok('c  member deleted (as supabase_auth_admin): RPC JSON identical', (SELECT j FROM c_before) = public.community_impact_summary(), public.community_impact_summary()::text);
-  PERFORM smk.ok('c  rollup (metric|month|end|count|contributors|k): needs_met Sept 2/1/1, Oct 1/0/0',
-    (SELECT array_agg(format('%s|%s|%s|%s|%s|%s', metric_id, period_start, period_end, count, contributors, k_contributors) ORDER BY metric_id, period_start) FROM public.community_impact_rollup)
-      = ARRAY['alerts_verified|2026-10-01|2026-11-01|1|1|1', 'member_resources_approved|2026-10-01|2026-11-01|1|1|1', 'needs_met|2026-09-01|2026-10-01|2|1|1',
-              'needs_met|2026-10-01|2026-11-01|1|0|0', 'petition_signers|2026-10-01|2026-11-01|1|1|1'],
-    (SELECT string_agg(format('%s|%s|%s|%s|%s', metric_id, period_start, count, contributors, k_contributors), '; ' ORDER BY metric_id, period_start) FROM public.community_impact_rollup));
+  PERFORM smk.ok('c  rollup (metric|count|contributors|k): one row per figure, all five touched, needs_met 3/1/1',
+    (SELECT array_agg(format('%s|%s|%s|%s', metric_id, count, contributors, k_contributors) ORDER BY metric_id) FROM public.community_impact_rollup)
+      = ARRAY['alerts_verified|1|1|1', 'member_resources_approved|1|1|1', 'needs_met|3|1|1', 'people_served_at_events|0|0|0', 'petition_signers|1|1|1'],
+    (SELECT string_agg(format('%s|%s|%s|%s', metric_id, count, contributors, k_contributors), '; ' ORDER BY metric_id) FROM public.community_impact_rollup));
   PERFORM smk.ok('c  [aim] the member''s ledger rows are gone (the cascade ran)', (SELECT count(*) = 0 FROM public.engagement_events WHERE actor_id = (SELECT id FROM c_one)), 'live rows');
 END $t$;
 -- guest-cleanup cron statement, verbatim
 DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';
 DO $t$ BEGIN
   PERFORM smk.ok('c  guest deleted by cleanup-anonymous-users: RPC JSON identical', (SELECT j FROM c_before) = public.community_impact_summary(), public.community_impact_summary()::text);
-  PERFORM smk.ok('c  rollup needs_met Oct now count 3 / contributors 1 / k 0 (the guest adds to the value, not to k)',
-    (SELECT sum(count) = 3 AND sum(contributors) = 1 AND sum(k_contributors) = 0 FROM public.community_impact_rollup WHERE metric_id = 'needs_met' AND period_start = '2026-10-01'), 'rows (append-only)');
+  PERFORM smk.ok('c  rollup needs_met now count 5 / contributors 2 / k 1 (the guest adds to the value, not to k)',
+    (SELECT sum(count) = 5 AND sum(contributors) = 2 AND sum(k_contributors) = 1 AND count(*) = 1 FROM public.community_impact_rollup WHERE metric_id = 'needs_met'), 'one row');
   PERFORM smk.ok('c  rollup stores no user id (columns)', (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid = 'public.community_impact_rollup'::regclass AND attnum > 0 AND NOT attisdropped)
-     = ARRAY['id','metric_id','period_start','period_end','count','contributors','k_contributors','written_at'], 'row id + seven count/period columns');
+     = ARRAY['id','metric_id','count','contributors','k_contributors'], 'random id + metric + three counts: no time, no period');
 END $t$;
 ROLLBACK;
 -- [instrument] the same deletion with the carry disabled DOES lower the figure, so (c) can fail
@@ -360,8 +359,12 @@ DO $t$ BEGIN
   PERFORM smk.ok('e  [instrument] the same relacl test flags authenticated on engagement_events',
     (SELECT relacl::text ~ 'authenticated=' FROM pg_class WHERE oid = 'public.engagement_events'::regclass), (SELECT relacl::text FROM pg_class WHERE oid = 'public.engagement_events'::regclass));
   PERFORM smk.ok('e  [aim] no column-level grant on the rollup', NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.community_impact_rollup'::regclass AND attacl IS NOT NULL), 'attacl');
-  PERFORM smk.ok('e  rollup id sequence: no anon/authenticated/PUBLIC grant', (SELECT coalesce(relacl::text, '') !~ '(anon|authenticated)=' AND coalesce(relacl::text, '') !~ '(^|[{,])='
-     FROM pg_class WHERE oid = 'public.community_impact_rollup_id_seq'::regclass), (SELECT relacl::text FROM pg_class WHERE oid = 'public.community_impact_rollup_id_seq'::regclass));
+  PERFORM smk.ok('e  rollup key is a random uuid: no sequence, no identity, nothing that orders rows',
+    (SELECT pg_get_expr(d.adbin, d.adrelid) = 'gen_random_uuid()' FROM pg_attrdef d JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+      WHERE d.adrelid = 'public.community_impact_rollup'::regclass AND a.attname = 'id')
+    AND NOT EXISTS (SELECT 1 FROM pg_depend WHERE refobjid = 'public.community_impact_rollup'::regclass AND classid = 'pg_class'::regclass
+                     AND objid IN (SELECT oid FROM pg_class WHERE relkind = 'S'))
+    AND NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.community_impact_rollup'::regclass AND attidentity <> ''), 'pg_attrdef / pg_depend');
 END $t$;
 
 -- ============================== (f) staff and admin rows count ==============================
@@ -547,5 +550,84 @@ DO $t$ DECLARE st text := 'none'; dt text := ''; BEGIN
   BEGIN EXECUTE current_setting('smk.preflight'); EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS st = RETURNED_SQLSTATE, dt = PG_EXCEPTION_DETAIL; END;
   PERFORM smk.ok('pf another BEFORE DELETE row trigger on auth.users: refused 55000 naming it',
     st = '55000' AND dt = 'no BEFORE DELETE row trigger on auth.users yet (this file adds the only one)', st || ' ' || dt);
+END $t$;
+ROLLBACK;
+
+-- ============================== (l5) no rollup row can be tied to one deletion ==============================
+-- every carry runs in its own subtransaction, so a tuple's xmin names the carry that wrote it
+BEGIN;
+CREATE TEMP TABLE l5 ON COMMIT DROP AS SELECT smk.u() a, smk.u() b;
+SELECT smk.led((SELECT a FROM l5), 'opt_in_completed_seeker', 2), smk.led((SELECT b FROM l5), 'petition_signature', 1);
+DELETE FROM auth.users WHERE id = (SELECT a FROM l5);
+CREATE TEMP TABLE l5_x1 ON COMMIT DROP AS SELECT array_agg(DISTINCT xmin::text) x FROM public.community_impact_rollup;
+DELETE FROM auth.users WHERE id = (SELECT b FROM l5);     -- this account has no needs_met row
+DO $t$ BEGIN
+  PERFORM smk.ok('l5 [aim] after the first deletion all five rows carry that carry''s xmin', (SELECT cardinality(x) = 1 FROM l5_x1)
+    AND (SELECT count(*) = 5 FROM public.community_impact_rollup), (SELECT x::text FROM l5_x1));
+  PERFORM smk.ok('l5 a deletion that touched one figure rewrote all five rows: one xmin, the newest',
+    (SELECT count(DISTINCT xmin::text) = 1 AND count(*) = 5 FROM public.community_impact_rollup)
+    AND NOT EXISTS (SELECT 1 FROM public.community_impact_rollup WHERE xmin::text = ANY ((SELECT x FROM l5_x1)::text[])),
+    (SELECT string_agg(DISTINCT xmin::text, ',') FROM public.community_impact_rollup));
+  PERFORM smk.ok('l5 totals only: needs_met 2/1/1 and petition_signers 1/1/1 sit in one row each',
+    (SELECT array_agg(format('%s|%s|%s|%s', metric_id, count, contributors, k_contributors) ORDER BY metric_id) FROM public.community_impact_rollup)
+      = ARRAY['alerts_verified|0|0|0', 'member_resources_approved|0|0|0', 'needs_met|2|1|1', 'people_served_at_events|0|0|0', 'petition_signers|1|1|1'],
+    (SELECT string_agg(format('%s|%s|%s|%s', metric_id, count, contributors, k_contributors), '; ' ORDER BY metric_id) FROM public.community_impact_rollup));
+END $t$;
+ROLLBACK;
+
+-- ============================== (l4) live + carried land exactly at k, including a row left by an overlap ==============================
+BEGIN;
+CREATE TEMP TABLE l4 ON COMMIT DROP AS SELECT unnest(smk.crowd('opt_in_completed_seeker', 10, 1)) id;
+DELETE FROM auth.users WHERE id IN (SELECT id FROM l4 ORDER BY id LIMIT 2);   -- 8 live + 2 carried
+DO $t$ BEGIN
+  PERFORM smk.ok('l4 8 live members + 2 deleted members carried: exactly k, shown 10', smk.f('needs_met')->'value' = '10'::jsonb, smk.f('needs_met')::text);
+  PERFORM smk.ok('l4 [aim] the two carries folded into one needs_met row (2/2/2)',
+    (SELECT count(*) = 1 AND sum(count) = 2 AND sum(k_contributors) = 2 FROM public.community_impact_rollup WHERE metric_id = 'needs_met'), 'rollup');
+END $t$;
+ROLLBACK;
+BEGIN;
+CREATE TEMP TABLE l4b ON COMMIT DROP AS SELECT unnest(smk.crowd('opt_in_completed_seeker', 9, 1)) id;
+DELETE FROM auth.users WHERE id = (SELECT id FROM l4b ORDER BY id LIMIT 1);   -- 8 live + 1 carried
+-- the second carried member as a concurrent deletion leaves it: a separate row (taken with SKIP LOCKED elsewhere)
+INSERT INTO public.community_impact_rollup (metric_id, count, contributors, k_contributors) VALUES ('needs_met', 1, 1, 1);
+DO $t$ BEGIN
+  PERFORM smk.ok('l4 [aim] k carried split over two needs_met rows (1 + 1)', (SELECT count(*) = 2 AND sum(k_contributors) = 2 FROM public.community_impact_rollup WHERE metric_id = 'needs_met'), 'rollup');
+  PERFORM smk.ok('l4 8 live + 1 + 1 carried over two rows: k sums to 10, shown 10', smk.f('needs_met')->'value' = '10'::jsonb, smk.f('needs_met')::text);
+END $t$;
+SELECT smk.led(smk.u(), 'petition_signature', 1);
+DELETE FROM auth.users WHERE id = (SELECT actor_id FROM public.engagement_events WHERE kind = 'petition_signature' LIMIT 1);
+DO $t$ BEGIN
+  PERFORM smk.ok('l4 the next deletion folds the two rows into one; totals unchanged (2/2/2), still shown 10',
+    (SELECT count(*) = 1 AND sum(count) = 2 AND sum(contributors) = 2 AND sum(k_contributors) = 2 FROM public.community_impact_rollup WHERE metric_id = 'needs_met')
+    AND smk.f('needs_met')->'value' = '10'::jsonb,
+    (SELECT string_agg(format('%s/%s/%s', count, contributors, k_contributors), ';') FROM public.community_impact_rollup WHERE metric_id = 'needs_met'));
+END $t$;
+ROLLBACK;
+
+-- ============================== (l3) a statement timeout inside the carry: the deletion completes ==============================
+BEGIN;
+CREATE TEMP TABLE l3 ON COMMIT DROP AS SELECT smk.u() id;
+SELECT smk.led((SELECT id FROM l3), 'opt_in_completed_seeker', 2);
+-- make the carry slow: every rollup write sleeps 1s (test-only trigger, rolled back)
+CREATE FUNCTION public.smk_slow_rollup() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN PERFORM pg_sleep(1); RETURN NEW; END';
+CREATE TRIGGER smk_slow BEFORE INSERT OR UPDATE ON public.community_impact_rollup FOR EACH ROW EXECUTE FUNCTION public.smk_slow_rollup();
+SELECT set_config('smk.victim', (SELECT id FROM l3)::text, true);
+SET LOCAL statement_timeout = '200ms';
+DO $t$ BEGIN
+  BEGIN
+    DELETE FROM auth.users WHERE id = current_setting('smk.victim')::uuid;
+    PERFORM set_config('smk.l3', 'completed', true);
+  EXCEPTION WHEN query_canceled THEN PERFORM set_config('smk.l3', 'cancelled', true);
+  END;
+END $t$;
+SET LOCAL statement_timeout = 0;
+DO $t$ BEGIN
+  PERFORM smk.ok('l3 statement_timeout 200ms fires inside the carry: the DELETE completed', current_setting('smk.l3') = 'completed'
+    AND NOT EXISTS (SELECT 1 FROM auth.users WHERE id = current_setting('smk.victim')::uuid), current_setting('smk.l3'));
+  PERFORM smk.ok('l3 the timeout is logged as 57014 (impact_carry); nothing half-written',
+    (SELECT count(*) = 1 FROM public.app_logs WHERE event = 'engagement.ledger.skipped' AND context->>'context' = 'impact_carry' AND context->>'detail' LIKE '57014 %')
+    AND (SELECT count(*) = 0 FROM public.community_impact_rollup),
+    (SELECT string_agg(context->>'detail', ' | ') FROM public.app_logs WHERE context->>'context' = 'impact_carry'));
+  PERFORM smk.ok('l3 [aim] the deletion''s cascade ran (ledger rows gone)', NOT EXISTS (SELECT 1 FROM public.engagement_events WHERE actor_id = current_setting('smk.victim')::uuid), 'live rows');
 END $t$;
 ROLLBACK;

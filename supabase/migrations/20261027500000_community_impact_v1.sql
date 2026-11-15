@@ -12,19 +12,21 @@
 -- the identities.
 --
 -- What this migration does
---   (A) community_impact_rollup: what an account deletion would otherwise take away, per figure and month: carried
---       rows (count), carried accounts (contributors) and carried member accounts (k_contributors). Append-only: each
---       carry inserts its own rows, so two deletions never wait on each other's row; the read sums. Counts only (no
---       user id, no target id); RLS on with no policy and no client grant, so it is read only through the RPC.
+--   (A) community_impact_rollup: what account deletions took away, as all-time totals per figure: carried rows
+--       (count), carried accounts (contributors) and carried member accounts (k_contributors). No row can be tied to
+--       one deletion: no timestamp, no period, a random key, and every deletion updates every figure's row (adding
+--       zero where the account had nothing), so a row's xmin / heap position say only "the latest deletion". Counts
+--       only (no user id, no target id); RLS on with no policy and no client grant, so it is read only through the RPC.
 --   (B) community_impact_carry_departed(): one row-level BEFORE DELETE trigger on auth.users, the only writer. Every
 --       deletion path is a DELETE FROM auth.users (the member's delete-account function, the admin delete route, the
 --       nightly cleanup-anonymous-users job). The trigger runs once per deleted account, before the cascades, while the
 --       account's ledger rows, its check-ins and its is_anonymous flag are still readable; it carries the ledger rows
 --       the cascade will remove and, for a member, the event identity that ON DELETE SET NULL will erase. A delete that
 --       finds no row runs no trigger, so a repeated delete adds nothing. The carry never cancels or blocks a deletion:
---       its lock waits are capped (SET lock_timeout = '100ms'; an append insert only ever waits on a table-level lock),
---       and any error, a lock timeout or a statement timeout (query_canceled) inside it is logged
---       (log_engagement_failure 'impact_carry') and the deletion goes on.
+--       it takes a figure's row with FOR UPDATE SKIP LOCKED and, when another deletion holds it, adds a separate row
+--       instead of waiting (the next carry folds such rows back in); its only other wait, a table-level lock, is capped
+--       by SET lock_timeout = '100ms'; any error, a lock timeout or a statement timeout (query_canceled) inside it is
+--       logged (log_engagement_failure 'impact_carry') and the deletion goes on.
 --   (C) community_impact_summary(): SECURITY DEFINER, STABLE, pinned search_path, no arguments; anon and
 --       authenticated may call it, PUBLIC may not. Suppression and rounding happen here; a suppressed figure's
 --       count never leaves the database.
@@ -97,20 +99,16 @@ $preflight$;
 -- (2) Core table: carried counts. No user id, no target id.
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.community_impact_rollup (
-  id              bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,   -- append-only: one row per carry and month
+  id              uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,   -- random: no order, no time
   metric_id       text        NOT NULL,
-  period_start    date        NOT NULL,   -- first day of the UTC month of the carried rows / visits
-  period_end      date        NOT NULL,   -- first day of the next month (exclusive)
   count           bigint      NOT NULL DEFAULT 0 CHECK (count >= 0),            -- carried ledger rows
   contributors    bigint      NOT NULL DEFAULT 0 CHECK (contributors >= 0),     -- carried accounts (guests included)
   k_contributors  bigint      NOT NULL DEFAULT 0 CHECK (k_contributors >= 0),   -- carried member accounts / identities
-  written_at      timestamptz NOT NULL DEFAULT now(),
   CHECK (metric_id IN ('petition_signers', 'needs_met', 'alerts_verified', 'member_resources_approved', 'people_served_at_events')),
-  CHECK (period_end > period_start),
   CHECK (k_contributors <= contributors)
 );
 COMMENT ON TABLE public.community_impact_rollup IS
-  'What an account deletion would take from the impact figures: carried ledger rows, accounts and member accounts (k), per figure and month; append-only, the read sums. Written only by community_impact_carry_departed (BEFORE DELETE on auth.users); read only through community_impact_summary(). specs/impact-metrics-contract.md section 3.';
+  'All-time totals of what account deletions took from the impact figures (carried ledger rows, accounts, member accounts for k), normally one row per figure. Written only by community_impact_carry_departed (BEFORE DELETE on auth.users), which updates every figure on every deletion; read only through community_impact_summary(). specs/impact-metrics-contract.md section 3.';
 
 -- ---------------------------------------------------------------------------
 -- (3a) The carry: once per deleted account, before its cascades.
@@ -120,43 +118,55 @@ CREATE FUNCTION public.community_impact_carry_departed()
 AS $fn$
 DECLARE
   v_member boolean;
+  r        record;
+  v_keep   uuid;
 BEGIN
   -- everything but RETURN OLD is inside this block: the deletion goes on whatever happens here
   BEGIN
     v_member := OLD.is_anonymous IS NOT TRUE;   -- a guest adds to values, never to k
-    WITH mine AS (
-      -- the ledger rows ON DELETE CASCADE is about to remove
-      SELECT CASE e.kind WHEN 'petition_signature'      THEN 'petition_signers'
-                         WHEN 'opt_in_completed_seeker' THEN 'needs_met'
-                         WHEN 'safety_alert_verified'   THEN 'alerts_verified'
-                         WHEN 'resource_approved'       THEN 'member_resources_approved' END AS metric_id,
-             date_trunc('month', e.created_at AT TIME ZONE 'UTC')::date AS period_start
-        FROM public.engagement_events e
-       WHERE e.actor_id = OLD.id
-         AND e.kind IN ('petition_signature', 'opt_in_completed_seeker', 'safety_alert_verified', 'resource_approved')
-    ), per_month AS (
-      SELECT metric_id, period_start, count(*) AS n FROM mine GROUP BY metric_id, period_start
-    ), first_month AS (
-      -- the account counts once per figure, in the month of its earliest row of that kind
-      SELECT metric_id, min(period_start) AS period_start FROM mine GROUP BY metric_id
-    ), ledger AS (
-      SELECT m.metric_id, m.period_start, m.n, (f.metric_id IS NOT NULL)::int AS d
-        FROM per_month m LEFT JOIN first_month f USING (metric_id, period_start)
-    ), event_identity AS (
-      -- the account's own identity at events (a confirmed visit with no household_key): ON DELETE SET NULL erases it,
-      -- the visits and their sum stay
-      SELECT 'people_served_at_events'::text AS metric_id,
-             date_trunc('month', min(c.checked_in_at) AT TIME ZONE 'UTC')::date AS period_start, 0::bigint AS n, 1 AS d
-        FROM public.event_checkins c
-       WHERE c.user_id = OLD.id AND c.status = 'confirmed' AND c.household_key IS NULL
-      HAVING count(*) > 0
-    ), carried AS (
-      SELECT metric_id, period_start, n, d FROM ledger
-      UNION ALL SELECT metric_id, period_start, n, d FROM event_identity
-    )
-    INSERT INTO public.community_impact_rollup (metric_id, period_start, period_end, count, contributors, k_contributors)
-    SELECT metric_id, period_start, (period_start + interval '1 month')::date, n, d, CASE WHEN v_member THEN d ELSE 0 END
-      FROM carried;
+    FOR r IN
+      -- this account's share of every figure, zeros included: each deletion touches all five rows alike
+      SELECT f.metric_id,
+             coalesce(l.n, 0) AS n,
+             CASE WHEN f.metric_id = 'people_served_at_events' THEN coalesce(ev.d, 0)
+                  ELSE (coalesce(l.n, 0) > 0)::int END AS d
+        FROM (VALUES ('petition_signers', 'petition_signature'), ('needs_met', 'opt_in_completed_seeker'),
+                     ('alerts_verified', 'safety_alert_verified'), ('member_resources_approved', 'resource_approved'),
+                     ('people_served_at_events', NULL)) f(metric_id, kind)
+        LEFT JOIN LATERAL (
+          -- the ledger rows ON DELETE CASCADE is about to remove
+          SELECT count(*) AS n FROM public.engagement_events e WHERE e.actor_id = OLD.id AND e.kind = f.kind
+        ) l ON f.kind IS NOT NULL
+        LEFT JOIN LATERAL (
+          -- the account's own identity at events (a confirmed visit with no household_key): ON DELETE SET NULL erases
+          -- it, the visits and their sum stay
+          SELECT 1 AS d WHERE EXISTS (SELECT 1 FROM public.event_checkins c
+                                       WHERE c.user_id = OLD.id AND c.status = 'confirmed' AND c.household_key IS NULL)
+        ) ev ON f.kind IS NULL
+    LOOP
+      v_keep := NULL;
+      SELECT id INTO v_keep FROM public.community_impact_rollup WHERE metric_id = r.metric_id
+       ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED;
+      IF v_keep IS NULL THEN
+        -- no row yet, or another deletion holds it: add a row rather than wait
+        INSERT INTO public.community_impact_rollup (metric_id, count, contributors, k_contributors)
+        VALUES (r.metric_id, r.n, r.d, CASE WHEN v_member THEN r.d ELSE 0 END);
+      ELSE
+        -- add this account and fold every other unlocked row of the figure into the kept one (totals unchanged)
+        WITH folded AS (
+          DELETE FROM public.community_impact_rollup
+           WHERE id IN (SELECT id FROM public.community_impact_rollup
+                         WHERE metric_id = r.metric_id AND id <> v_keep FOR UPDATE SKIP LOCKED)
+          RETURNING count, contributors, k_contributors
+        )
+        UPDATE public.community_impact_rollup
+           SET count          = count + r.n + coalesce((SELECT sum(count) FROM folded), 0),
+               contributors   = contributors + r.d + coalesce((SELECT sum(contributors) FROM folded), 0),
+               k_contributors = k_contributors + CASE WHEN v_member THEN r.d ELSE 0 END
+                                + coalesce((SELECT sum(k_contributors) FROM folded), 0)
+         WHERE id = v_keep;
+      END IF;
+    END LOOP;
   EXCEPTION WHEN OTHERS OR query_canceled THEN
     -- OTHERS does not include query_canceled (a statement timeout); both are logged and the deletion goes on
     BEGIN
@@ -259,7 +269,6 @@ REVOKE ALL ON FUNCTION public.community_impact_carry_departed() FROM PUBLIC, ano
 
 ALTER TABLE public.community_impact_rollup ENABLE ROW LEVEL SECURITY;   -- no policies: no client reads or writes
 REVOKE ALL ON public.community_impact_rollup FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON SEQUENCE public.community_impact_rollup_id_seq FROM PUBLIC, anon, authenticated;   -- default ACL grants rwU
 
 -- ---------------------------------------------------------------------------
 -- Ledger row in the SAME transaction.

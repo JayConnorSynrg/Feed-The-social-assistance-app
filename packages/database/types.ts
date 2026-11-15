@@ -593,32 +593,23 @@ export type Database = {
         Row: {
           contributors: number
           count: number
-          id: number
+          id: string
           k_contributors: number
           metric_id: string
-          period_end: string
-          period_start: string
-          written_at: string
         }
         Insert: {
           contributors?: number
           count?: number
-          id?: never
+          id?: string
           k_contributors?: number
           metric_id: string
-          period_end: string
-          period_start: string
-          written_at?: string
         }
         Update: {
           contributors?: number
           count?: number
-          id?: never
+          id?: string
           k_contributors?: number
           metric_id?: string
-          period_end?: string
-          period_start?: string
-          written_at?: string
         }
         Relationships: []
       }
