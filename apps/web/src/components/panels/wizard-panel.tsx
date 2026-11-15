@@ -133,7 +133,7 @@ export function WizardPanel() {
         <p className="text-stone-600 mt-1 text-sm">{getHelpT(locale, 'subtitle')}</p>
       </div>
 
-      <div role="group" aria-labelledby={headingId} className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div role="group" aria-labelledby={headingId} className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 gap-4">
         {CATEGORY_WIZARDS.map((category) => (
           <CategoryCard
             key={category.id}

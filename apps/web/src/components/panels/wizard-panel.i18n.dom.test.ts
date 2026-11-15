@@ -41,6 +41,7 @@ import { usStateName } from '@/lib/i18n-us-states'
 import { CATEGORY_WIZARDS } from '@/lib/ai/resource-wizard-config'
 import { buildWizardPrompt, parseWizardContext } from '@/lib/ai/wizard-prompt'
 import { WizardPanel } from './wizard-panel'
+import { FILTER_ANNOUNCE_DELAY_MS } from './resource-wizard'
 
 const LOCALES = Object.keys(messages) as Locale[]
 let container: HTMLDivElement
@@ -76,6 +77,11 @@ const heading = () => container.querySelector('h2') as HTMLHeadingElement
 const group = () => container.querySelector('[role="group"]') as HTMLElement
 const optionButtons = () => [...group().querySelectorAll('button')] as HTMLButtonElement[]
 const continueButton = () => byText(assistantT(h.language as Locale, 'flowContinue'))
+// Wait out the filter's pause in short act() slices, so each timer that fires renders on its own
+// (one act() around the whole wait would batch several announcements into one).
+async function pause() {
+  for (let t = 0; t < FILTER_ANNOUNCE_DELAY_MS + 100; t += 25) await act(async () => { await new Promise((r) => setTimeout(r, 25)) })
+}
 async function typeFilter(value: string) {
   const input = container.querySelector('input') as HTMLInputElement
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -108,6 +114,8 @@ describe('the cards and the steps in the member’s language', () => {
     }
     expect(container.textContent).not.toMatch(/Find Resources|Select a category|SNAP, food pantries/)
     expect(container.querySelector('[lang="en"]')).toBeNull()
+    // One column on a narrow phone, two from 420px, three from md.
+    expect(container.querySelector('[role="group"]')?.className).toContain('grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3')
   })
 
   it('Korean: a step — Back, Step line, Cancel, question, hint, options, Continue', async () => {
@@ -300,12 +308,58 @@ describe('groups, hints and live regions', () => {
     expect(container.querySelector(`label[for="${input.id}"]`)?.textContent).toBe(getHelpT('ru', 'filterLabel'))
     expect(input.getAttribute('placeholder')).toBeNull()
     await typeFilter('Нью')
+    await pause()
     const n = optionButtons().length
     expect(n).toBeGreaterThan(1)
     expect(container.querySelector('[role="status"]')?.textContent).toBe(filterMatches(n, 'ru'))
     await typeFilter('zzz')
+    await pause()
     expect(container.querySelector('[role="status"]')?.textContent).toBe(getHelpT('ru', 'filterNone'))
     expect(container.textContent).toContain(getHelpT('ru', 'filterNone'))
+  })
+})
+
+describe('the filter, typed fast (P6 W7 review F2)', () => {
+  async function toStateStep(locale: Locale) {
+    await render(locale)
+    await click(card('food'))
+    await click(optionButtons()[0])
+    await click(continueButton())
+    await click(optionButtons()[0])
+  }
+
+  it('four quick keystrokes: nothing spoken while typing, then exactly one status node with the final count', async () => {
+    await toStateStep('en')
+    const status = container.querySelector('[role="status"]')!
+    const inserted: Node[] = []
+    const obs = new MutationObserver((ms) => ms.forEach((m) => inserted.push(...[...m.addedNodes].filter((n) => n.nodeType === 1))))
+    obs.observe(status, { childList: true, subtree: true })
+    for (const v of ['N', 'Ne', 'New', 'New ']) {
+      await typeFilter(v)
+      await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
+    }
+    expect(status.textContent).toBe('')
+    await pause()
+    obs.disconnect()
+    expect(optionButtons()).toHaveLength(4)
+    expect(inserted).toHaveLength(1)
+    expect(status.textContent).toBe(filterMatches(4, 'en'))
+  })
+
+  it('clearing the box before the pause speaks nothing', async () => {
+    await toStateStep('en')
+    await typeFilter('Tex')
+    await typeFilter('')
+    await pause()
+    expect(container.querySelector('[role="status"]')?.textContent).toBe('')
+  })
+
+  it('a Russian member typing the English name finds the state (matched on the value too)', async () => {
+    await toStateStep('ru')
+    await typeFilter('Texas')
+    expect(optionButtons().map((b) => b.textContent)).toEqual([usStateName('TX', 'ru')])
+    await pause()
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(filterMatches(1, 'ru'))
   })
 })
 

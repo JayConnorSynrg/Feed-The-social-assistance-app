@@ -175,12 +175,15 @@ interface LabelledOption {
   lang?: 'en'
 }
 
-/** The options a filter query leaves, matched on the words the member reads. */
+/** The options a filter query leaves: matched on the words the member reads, or on the English value. */
 export function filterOptions(options: LabelledOption[], query: string): LabelledOption[] {
   const q = query.trim().toLowerCase()
   if (!q) return options
-  return options.filter((o) => o.text.toLowerCase().includes(q))
+  return options.filter((o) => o.text.toLowerCase().includes(q) || o.value.toLowerCase().includes(q))
 }
+
+/** How long typing must pause before the filter's result is spoken. */
+export const FILTER_ANNOUNCE_DELAY_MS = 500
 
 function OptionText({ option }: { option: LabelledOption }) {
   // A US program name written the same in every language is marked English.
@@ -211,11 +214,30 @@ export function StepOptions({
   const isManyOptions = labelled.length > 10
   const visible = isManyOptions ? filterOptions(labelled, filterQuery) : labelled
 
+  // The result is spoken once, when typing pauses, and counted then from the latest query and
+  // options — never a count left over from an earlier keystroke.
+  const latest = useRef({ query: '', labelled, locale, onFilterResult })
+  useEffect(() => {
+    latest.current = { query: filterQuery, labelled, locale, onFilterResult }
+  })
+  const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (announceTimer.current) clearTimeout(announceTimer.current)
+  }, [])
+
   function handleFilter(value: string) {
     setFilterQuery(value)
+    latest.current = { ...latest.current, query: value }
+    if (announceTimer.current) clearTimeout(announceTimer.current)
+    announceTimer.current = null
     if (!value.trim()) return onFilterResult('')
-    const n = filterOptions(labelled, value).length
-    onFilterResult(n === 0 ? getHelpT(locale, 'filterNone') : filterMatches(n, locale))
+    announceTimer.current = setTimeout(() => {
+      announceTimer.current = null
+      const now = latest.current
+      if (!now.query.trim()) return
+      const n = filterOptions(now.labelled, now.query).length
+      now.onFilterResult(n === 0 ? getHelpT(now.locale, 'filterNone') : filterMatches(n, now.locale))
+    }, FILTER_ANNOUNCE_DELAY_MS)
   }
 
   if (step.type === 'single-select') {

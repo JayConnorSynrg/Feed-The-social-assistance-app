@@ -707,13 +707,13 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     sendMessage(prompt).finally(() => {
       wizardSentRef.current = false
     })
-    // The wizard has closed (its panel unmounted): focus goes to the message box, and follows to the
-    // conversation's box when the reply replaces the greeting (the effect on showGreeting below).
+    // The wizard has closed (its panel unmounted), so focus is on <body>: it goes to the message box
+    // when that box is enabled, and in every case to the conversation's box once the sent message
+    // replaces the greeting (the effect on showGreeting below) — also for a visitor with no session,
+    // whose greeting box is disabled but whose conversation box is not.
     const composer = composerRef.current
-    if (composer && !composer.disabled) {
-      composer.focus()
-      refocusComposerRef.current = true
-    }
+    if (composer && !composer.disabled) composer.focus()
+    refocusComposerRef.current = true
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParams?.wizardContext, isLoading])
 
@@ -773,8 +773,13 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const showGreeting = messages.length === 0
 
   // After a flow, the greeting's message box held focus; when the conversation replaces it, focus
-  // moves to the conversation's message box (only if it would otherwise be lost).
+  // moves to the conversation's message box (only if it would otherwise be lost). It acts on a
+  // CHANGE of view only: on mount (arriving from the wizard, whose effect above has just asked for
+  // the refocus) the greeting is still showing, and the request waits for the conversation.
+  const shownGreetingRef = useRef(showGreeting)
   useEffect(() => {
+    if (shownGreetingRef.current === showGreeting) return
+    shownGreetingRef.current = showGreeting
     if (!refocusComposerRef.current) return
     refocusComposerRef.current = false
     const active = typeof document === 'undefined' ? null : document.activeElement
