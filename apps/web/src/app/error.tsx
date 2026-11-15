@@ -1,9 +1,18 @@
 'use client'
 
+// apps/web/src/app/error.tsx
+// The app's error boundary: a recovery card in the viewer's language (useProfileLocale; the shared
+// heading / body / Try again / Go home of lib/i18n.ts), marked lang/dir on its own root, and one
+// app.error.boundary row (code + capped message + digest).
+
 import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { logger } from '@/lib/logger'
 import { retryWithFocus } from '@/lib/focus-after-reset'
+import { dir, t } from '@/lib/i18n'
+import { formatMessage } from '@/lib/format-message'
+import { errorsT } from '@/lib/i18n-errors'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 
 export default function GlobalError({
   error,
@@ -15,6 +24,7 @@ export default function GlobalError({
   // Move focus to the heading so screen-reader and keyboard users land on the
   // fallback instead of a now-removed element.
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const locale = useProfileLocale()
   useEffect(() => {
     headingRef.current?.focus()
   }, [])
@@ -33,34 +43,32 @@ export default function GlobalError({
       }}
     >
       <div className="absolute inset-0 bg-gradient-to-b from-lime-50/60 via-stone-50/40 to-lime-100/50" />
-      <div className="relative z-10 text-center space-y-4 bg-stone-50/95 text-stone-800 backdrop-blur-sm border border-lime-200/60 rounded-2xl p-10 shadow-xl max-w-md w-full">
+      <div lang={locale} dir={dir(locale)} className="relative z-10 text-center space-y-4 bg-stone-50/95 text-stone-800 backdrop-blur-sm border border-lime-200/60 rounded-2xl p-10 shadow-xl max-w-md w-full">
         <div className="text-4xl" aria-hidden="true">🌾</div>
         <h1
           ref={headingRef}
           tabIndex={-1}
           className="text-2xl font-bold text-stone-800 rounded focus:outline-none focus:ring-2 focus:ring-lime-700 focus:ring-offset-2"
         >
-          Something went wrong
+          {t(locale, 'heading')}
         </h1>
-        <p className="text-stone-500 text-sm">
-          An unexpected error occurred. Your data is safe — please try again.
-        </p>
+        <p className="text-stone-600 text-sm">{t(locale, 'body')}</p>
         {error.digest && (
-          <p className="text-xs text-stone-500 font-mono">ref: {error.digest}</p>
+          <p className="text-xs text-stone-600 font-mono">{formatMessage(errorsT(locale, 'errorRef'), { digest: error.digest })}</p>
         )}
-        <div className="flex gap-3 justify-center pt-2">
+        <div className="flex flex-wrap gap-3 justify-center pt-2">
           <Button
             onClick={() => retryWithFocus(reset, 'app-content')}
             className="bg-lime-700 hover:bg-lime-800 text-white"
           >
-            Try again
+            {t(locale, 'tryAgain')}
           </Button>
           {/* A plain anchor: FEED is a single page at '/', and Next resets an error
               boundary only on a path change, so a client-side Link to '/' would do
               nothing here. A full load always recovers. */}
-          <Button asChild variant="outline" className="border-lime-300">
+          <Button asChild variant="outline" className="border-stone-500 text-stone-800">
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a href="/">Go home</a>
+            <a href="/">{t(locale, 'goHome')}</a>
           </Button>
         </div>
       </div>

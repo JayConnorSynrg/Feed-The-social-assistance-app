@@ -2,7 +2,7 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // "Share to Feed" on a program: a refused share shows the reason in the member's language, and the
-// message is marked with that language (the dialog around it is still English) and its direction.
+// message is marked with that language and its direction, in the dialog's one always-mounted alert.
 
 import { describe, it, expect, vi } from 'vitest'
 
@@ -22,7 +22,10 @@ describe('Share to Feed', () => {
     const c = mount(() => ShareToFeedDialog({ resource: { id: 'r1', name: 'Pantry', description: null } as never, onClose: () => {}, onShared: () => {} }))
     ;(findAll(c.tree(), (e) => e.props['data-testid'] === 'share-to-feed-submit')[0].props.onClick as () => Promise<void>)()
     const tree = await c.flush()
-    const alert = findAll(tree, (e) => e.props.role === 'alert')[0]
-    expect(alert.props).toMatchObject({ lang: 'ar', dir: 'auto', children: failureText('ar', { kind: 'network' }) })
+    const alerts = findAll(tree, (e) => e.props.role === 'alert')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].props).toMatchObject({ lang: 'ar', dir: 'auto' })
+    const line = alerts[0].props.children as { props: { announcement: { text: string } } }
+    expect(line.props.announcement.text).toBe(failureText('ar', { kind: 'network' }))
   })
 })

@@ -2,6 +2,8 @@
 
 // apps/web/src/components/auth/mfa-verify.tsx
 // MFA Verification UI - Verify TOTP code during login
+// Its words are in the viewer's language (lib/i18n-auth.ts, mfa* keys); the verification, focus and
+// alert logic are unchanged.
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Shield, AlertCircle, ArrowLeft } from 'lucide-react'
@@ -9,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
+import { authT, type AuthKey } from '@/lib/i18n-auth'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 
 interface MFAVerifyProps {
   factorId: string
@@ -24,6 +28,8 @@ const ERROR_ID = 'mfa-code-error'
 const HINT_ID = 'mfa-code-hint'
 
 export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true }: MFAVerifyProps) {
+  const locale = useProfileLocale()
+  const a = (key: AuthKey) => authT(locale, key)
   const [code, setCode] = useState('')
   const [useBackupCode, setUseBackupCode] = useState(false)
   const [backupCode, setBackupCode] = useState('')
@@ -46,10 +52,12 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
       if (id) {
         setChallengeId(id)
       } else {
-        setError('Failed to initialize MFA verification')
+        setError(a('mfaInitFailed'))
       }
     }
     createChallenge()
+    // `a` only words the failure line; a language change must not create a second challenge.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [factorId])
 
   const finishVerified = async () => {
@@ -66,7 +74,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
     }
     if (inFlight.current) return
     if (!challengeId || value.length !== 6) {
-      setError('Please enter a valid 6-digit code')
+      setError(a('mfaInvalidFormat'))
       codeInputRef.current?.focus()
       return
     }
@@ -86,7 +94,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
           resourceId: factorId,
           details: { method: 'totp' },
         })
-        throw new Error('Invalid verification code')
+        throw new Error(a('mfaInvalidCode'))
       }
 
       // Log successful MFA verification
@@ -99,7 +107,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
 
       await finishVerified()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed')
+      setError(err instanceof Error ? err.message : a('mfaVerifyFailed'))
       setCode('')
       codeInputRef.current?.focus()
     } finally {
@@ -111,7 +119,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
   const handleVerifyBackupCode = async () => {
     if (inFlight.current) return
     if (backupCode.length === 0) {
-      setError('Please enter a backup code')
+      setError(a('mfaEnterBackup'))
       return
     }
 
@@ -129,7 +137,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
           resourceType: 'mfa_backup_code',
           details: { method: 'backup_code' },
         })
-        throw new Error('Invalid backup code')
+        throw new Error(a('mfaInvalidBackup'))
       }
 
       // Log successful backup code verification
@@ -141,7 +149,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
 
       await finishVerified()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed')
+      setError(err instanceof Error ? err.message : a('mfaVerifyFailed'))
       setBackupCode('')
     } finally {
       inFlight.current = false
@@ -174,11 +182,11 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
           <Shield aria-hidden="true" className="w-6 h-6 text-[#4a5d23]" />
         </div>
         <div>
-          <h1 className="font-semibold text-lg">Two-Factor Authentication</h1>
+          <h1 className="font-semibold text-lg">{a('mfaTitle')}</h1>
           <p className="text-sm text-muted-foreground">
             {useBackupCode
-              ? 'Enter a backup code to sign in'
-              : 'Enter the code from your authenticator app'}
+              ? a('mfaBackupPrompt')
+              : a('mfaAppPrompt')}
           </p>
         </div>
       </div>
@@ -208,7 +216,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
           >
             <div className="space-y-2">
               <label htmlFor={CODE_ID} className="block text-sm font-medium text-stone-800">
-                6-digit code
+                {a('mfaCodeLabel')}
               </label>
               <Input
                 ref={codeInputRef}
@@ -228,7 +236,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
                 readOnly={loading}
               />
               <p id={HINT_ID} className="text-xs text-stone-600 text-center">
-                The code is checked when you enter the 6th digit. It changes every 30 seconds.
+                {a('mfaCodeHint')}
               </p>
             </div>
 
@@ -237,7 +245,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
               disabled={loading || code.length !== 6 || !challengeId}
               className="w-full bg-green-700 hover:bg-green-800 text-white"
             >
-              {loading ? 'Verifying...' : 'Verify'}
+              {loading ? a('mfaVerifying') : a('mfaVerify')}
             </Button>
           </form>
 
@@ -248,7 +256,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
                   <span className="w-full border-t border-lime-300" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-lime-50/80 px-2 text-stone-500">Or</span>
+                  <span className="bg-lime-50/80 px-2 text-stone-500">{a('mfaOr')}</span>
                 </div>
               </div>
 
@@ -257,7 +265,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
                 onClick={() => setUseBackupCode(true)}
                 className="w-full border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
               >
-                Use Backup Code
+                {a('mfaUseBackup')}
               </Button>
             </>
           )}
@@ -266,7 +274,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
         <>
           <div className="space-y-2">
             <label htmlFor="mfa-backup-code" className="block text-sm font-medium text-stone-800">
-              Backup code
+              {a('mfaBackupLabel')}
             </label>
             <Input
               id="mfa-backup-code"
@@ -284,7 +292,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
               readOnly={loading}
             />
             <p className="text-xs text-muted-foreground text-center">
-              Each backup code can only be used once
+              {a('mfaBackupHint')}
             </p>
           </div>
 
@@ -293,7 +301,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
             disabled={loading || backupCode.length === 0}
             className="w-full bg-green-700 hover:bg-green-800 text-white"
           >
-            {loading ? 'Verifying...' : 'Verify Backup Code'}
+            {loading ? a('mfaVerifying') : a('mfaVerifyBackup')}
           </Button>
 
           <Button
@@ -306,7 +314,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
             className="w-full border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Authenticator Code
+            {a('mfaBackToApp')}
           </Button>
         </>
       )}
@@ -318,7 +326,7 @@ export function MFAVerify({ factorId, onSuccess, onBack, allowBackupCode = true 
           className="w-full text-stone-500 hover:text-stone-700"
           disabled={loading}
         >
-          Sign in as different user
+          {a('mfaDifferentUser')}
         </Button>
       )}
     </div>

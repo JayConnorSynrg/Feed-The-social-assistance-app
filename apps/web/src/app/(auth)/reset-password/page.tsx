@@ -1,6 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+// apps/web/src/app/(auth)/reset-password/page.tsx
+// Set a new password, in the visitor's language (useProfileLocale; lib/i18n-auth.ts). A failure line
+// comes from the error's code and writes one auth.password.failed row {code, step: 'reset'}; the
+// Supabase call, its timeout and the redirects are unchanged.
+
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -8,26 +13,45 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { logger } from '@/lib/logger'
+import { dir } from '@/lib/i18n'
+import { authT, passwordFailureKey, type AuthKey } from '@/lib/i18n-auth'
+import { failureCode } from '@/lib/failure-code'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+
+/** The input classes of this page: 3:1 border, readable placeholder. */
+const INPUT = 'bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600 focus:border-lime-700 focus:ring-lime-500/20'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const locale = useProfileLocale()
+  const a = (key: AuthKey) => authT(locale, key)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // The one alert region's text (always mounted with the form; one node per failure).
+  const [alertLine, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const setError = (text: string | null) => (text ? announce(setAlert, text) : clearAnnouncement(setAlert))
   const [success, setSuccess] = useState(false)
+  // The form is replaced by the confirmation: focus goes to it.
+  const doneRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (success) doneRef.current?.focus()
+  }, [success])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // The submit button is aria-disabled (not disabled) while busy: a press does nothing.
+    if (loading) return
     setError(null)
 
     if (newPassword.length < 12) {
-      setError('Password must be at least 12 characters.')
+      setError(a('passwordTooShort'))
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.')
+      setError(a('passwordsMismatch'))
       return
     }
 
@@ -73,7 +97,9 @@ export default function ResetPasswordPage() {
         return
       }
       timer.error(err, { step: 'password_update' })
-      setError(err instanceof Error ? err.message : 'An error occurred. Please try again.')
+      const code = failureCode(err)
+      logger.warn('auth.password.failed', { code, step: 'reset' })
+      setError(a(passwordFailureKey(code, 'resetFailed')))
     } finally {
       setLoading(false)
     }
@@ -81,6 +107,8 @@ export default function ResetPasswordPage() {
 
   return (
     <div
+      lang={locale}
+      dir={dir(locale)}
       className="min-h-screen flex items-center justify-center p-4 relative"
       style={{
         backgroundImage: 'url(/images/wheat-field-bg.jpg)',
@@ -93,73 +121,78 @@ export default function ResetPasswordPage() {
 
       <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-lime-800">Set new password</CardTitle>
-          <CardDescription className="text-stone-600">
-            Choose a strong password of at least 12 characters
+          <CardTitle className="text-2xl font-bold text-lime-800">{a('resetTitle')}</CardTitle>
+          <CardDescription className="text-stone-700">
+            {a('resetSubtitle')}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4 bg-lime-50/30 mx-4 rounded-lg p-4 -mt-2 mb-4">
           {success ? (
             <div className="text-center space-y-2 py-2">
-              <p className="text-stone-700 font-medium">Password updated successfully.</p>
-              <p className="text-stone-500 text-sm">Redirecting you to sign in...</p>
-              <p className="text-stone-400 text-xs mt-2">If your new password doesn&apos;t work, please request another reset link.</p>
+              <p ref={doneRef} tabIndex={-1} className="text-stone-800 font-medium rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700">{a('resetDone')}</p>
+              <p className="text-stone-700 text-sm">{a('resetRedirecting')}</p>
+              <p className="text-stone-700 text-xs mt-2">{a('resetHelp')}</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                  {error}
-                </div>
-              )}
+              {/* One alert region, always mounted; each failure inserts a new node. */}
+              <div role="alert" className={alertLine.text ? 'bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md' : undefined}>
+                <AnnouncementText announcement={alertLine} />
+              </div>
 
               <div className="space-y-2">
-                <label htmlFor="new-password" className="text-sm font-medium text-stone-700">
-                  New Password
+                <label htmlFor="new-password" className="block text-sm font-medium text-stone-800">
+                  {a('newPassword')}
                 </label>
                 <Input
                   id="new-password"
                   type="password"
-                  placeholder="At least 12 characters"
+                  dir="ltr"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  disabled={loading}
-                  className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                  aria-required="true"
+                  aria-describedby="new-password-hint"
+                  readOnly={loading}
+                  className={INPUT}
                 />
+                <p id="new-password-hint" className="text-xs text-stone-700">{a('passwordHint')}</p>
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="confirm-password" className="text-sm font-medium text-stone-700">
-                  Confirm Password
+                <label htmlFor="confirm-password" className="block text-sm font-medium text-stone-800">
+                  {a('confirmPassword')}
                 </label>
                 <Input
                   id="confirm-password"
                   type="password"
-                  placeholder="Repeat your new password"
+                  dir="ltr"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  disabled={loading}
-                  className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                  aria-required="true"
+                  readOnly={loading}
+                  className={INPUT}
                 />
               </div>
 
               <Button
                 type="submit"
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
-                disabled={loading}
+                className="w-full bg-green-700 hover:bg-green-800 text-white font-medium"
+                aria-disabled={loading}
               >
-                {loading ? 'Updating...' : 'Update password'}
+                {loading ? a('updating') : a('updatePassword')}
               </Button>
 
               <div className="text-center">
                 <Link
                   href="/login"
-                  className="text-sm text-stone-500 hover:text-lime-700"
+                  className="inline-flex min-h-6 items-center text-sm text-stone-700 underline hover:text-lime-800"
                 >
-                  Back to sign in
+                  {a('backToSignIn')}
                 </Link>
               </div>
             </form>

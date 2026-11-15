@@ -1,5 +1,13 @@
 'use client'
 
+// apps/web/src/app/(auth)/login/page.tsx
+// Sign in, in the visitor's language: useProfileLocale() — before any profile, the locale the root
+// layout resolved from the feed_locale cookie, else Accept-Language (lib/request-locale.ts) — with
+// lang/dir on the card's root. The headings and labels shared with lib/i18n.ts come from t(); the
+// rest from lib/i18n-auth.ts. A failure line is chosen from the error's code, never its text, and
+// Supabase's own text is never shown. The Supabase calls, redirects, redirectTo validation and the
+// step-up flow are the same in every language.
+
 import { useState, useRef, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -17,7 +25,17 @@ import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
 import { safeRelativePath } from '@/lib/safe-redirect'
 import { requiresMfa } from '@/lib/mfa-routes'
-import { t, resolveLocale, dir } from '@/lib/i18n'
+import { t, dir } from '@/lib/i18n'
+import { authT, authCount, ATTEMPTS_REMAINING, LOCKED_MINUTES, oauthErrorKey, signInFailureKey, type AuthKey } from '@/lib/i18n-auth'
+import { failureCode } from '@/lib/failure-code'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { cn } from '@/lib/utils'
+import { afterLayout, announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+
+/** The input classes of this page: 3:1 border, readable placeholder. */
+const INPUT = 'bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600 focus:border-lime-700 focus:ring-lime-500/20'
+/** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
+const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
 
 function LoginForm() {
   const router = useRouter()
@@ -27,20 +45,17 @@ function LoginForm() {
   const redirectTo = safeRelativePath(searchParams.get('redirectTo'), '/')
   // Step-up: the proxy sends a signed-in session with an unverified factor here from an admin route.
   const isStepUp = searchParams.get('step') === 'mfa'
+  // The callback's error code; its `detail` (the provider's or Supabase's own text) is not shown.
   const oauthError = searchParams.get('error')
-  const oauthDetail = searchParams.get('detail')
 
-  // i18n — resolve once at the top, try/catch for SSR safety
-  let locale = 'en' as ReturnType<typeof resolveLocale>
-  try {
-    locale = resolveLocale()
-  } catch {
-    // SSR or restricted context — fall back to en
-  }
+  const locale = useProfileLocale()
+  const a = (key: AuthKey) => authT(locale, key)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // The one alert region's text (always mounted while the form shows; one node per failure).
+  const [alertLine, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const setError = (text: string | null) => (text ? announce(setAlert, text) : clearAnnouncement(setAlert))
   const [loading, setLoading] = useState(false)
   const [guestLoading, setGuestLoading] = useState(false)
   const [showMFA, setShowMFA] = useState(false)
@@ -75,11 +90,13 @@ function LoginForm() {
   const { execute: executeRateLimited, isLimited, remainingRequests } = useRateLimitedAction({
     limiterType: 'auth',
     identifier: email || 'anonymous',
-    onRateLimited: () => setError('Too many login attempts. Please wait 15 minutes before trying again.'),
+    onRateLimited: () => setError(a('loginRateLimited')),
   })
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    // The submit button is aria-disabled (not disabled) while busy or locked: a press does nothing.
+    if (loading || isLimited) return
     setError(null)
 
     // SECURITY: Validate CSRF token before any auth action. The token is
@@ -90,7 +107,7 @@ function LoginForm() {
     // form was submitted by a cross-origin request or a forged page, not by
     // the legitimate session that generated the token.
     if (!validateCsrf(csrfToken || '')) {
-      setError('Security validation failed. Please refresh the page and try again.')
+      setError(a('securityCheckFailed'))
       return
     }
 
@@ -112,7 +129,7 @@ function LoginForm() {
             const minutes = lockoutData.lockedUntil
               ? Math.max(1, Math.ceil((new Date(lockoutData.lockedUntil).getTime() - Date.now()) / 60000))
               : 15
-            setError(`Account temporarily locked. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`)
+            setError(authCount(LOCKED_MINUTES, minutes, locale))
             setLoading(false)
             return
           }
@@ -159,9 +176,11 @@ function LoginForm() {
         }
 
         // Log successful login
+        // The audit row carries the method only; the actor is the signed-in user (no email: the
+        // audit log is admin-readable).
         logPredefinedEvent('AUTH_LOGIN_SUCCESS', {
           action: 'verify',
-          details: { email, method: 'password' },
+          details: { method: 'password' },
         })
 
         // 4. Check if MFA is required
@@ -201,7 +220,9 @@ function LoginForm() {
           return
         }
         timer.error(err, { step: 'email_login' })
-        setError(err instanceof Error ? err.message : 'An error occurred')
+        // A refused password sign-in is recorded server-side (check-lockout record_attempt); the line
+        // shown comes from the error's code.
+        setError(a(signInFailureKey(failureCode(err))))
       } finally {
         setLoading(false)
         // Turnstile tokens are single-use — reset so any retry gets a fresh one.
@@ -216,6 +237,7 @@ function LoginForm() {
   }
 
   const handleOAuthLogin = async (provider: 'google' | 'apple') => {
+    if (loading) return
     setError(null)
     setLoading(true)
 
@@ -231,11 +253,12 @@ function LoginForm() {
       })
 
       if (error) {
-        logger.error('oauth.start.error', error, { provider })
+        // Code only: the provider's message is neither stored nor shown.
+        logger.error('oauth.start.error', { code: failureCode(error) }, { provider })
         throw error
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch {
+      setError(a('oauthStartFailed'))
       setLoading(false)
     }
   }
@@ -247,7 +270,7 @@ function LoginForm() {
   const destinationNeedsAal2 = requiresMfa(redirectTo.split(/[?#]/)[0])
   const handleMFASuccess = async (): Promise<string | null> => {
     if (destinationNeedsAal2 && (await mfaService.getAssuranceLevel()) !== 'aal2') {
-      return 'Enter the 6-digit code from your authenticator app to continue.'
+      return a('mfaCodeNeeded')
     }
     router.push(redirectTo)
     router.refresh()
@@ -259,9 +282,12 @@ function LoginForm() {
     setMfaFactorId(null)
     setEmail('')
     setPassword('')
+    // The code prompt is gone: focus goes to the email field of the sign-in form that replaces it.
+    afterLayout(() => document.getElementById('email')?.focus())
   }
 
   const handleGuestAccess = async () => {
+    if (loading || guestLoading) return
     setError(null)
     setGuestLoading(true)
     try {
@@ -279,7 +305,8 @@ function LoginForm() {
         router.refresh()
         return
       }
-      setError(err instanceof Error ? err.message : 'Unable to start guest session')
+      logger.warn('auth.guest.failed', { code: failureCode(err), step: 'login' })
+      setError(a('guestFailed'))
     } finally {
       setGuestLoading(false)
     }
@@ -287,6 +314,7 @@ function LoginForm() {
 
   return (
     <div
+      lang={locale}
       dir={dir(locale)}
       className="min-h-screen flex items-center justify-center p-4 relative"
       style={{
@@ -304,77 +332,71 @@ function LoginForm() {
           <>
             <CardHeader className="text-center">
               <CardTitle className="text-2xl font-bold text-lime-800">{t(locale, 'welcome')}</CardTitle>
-              <CardDescription className="text-stone-600">
+              <CardDescription className="text-stone-700">
                 {t(locale, 'signInSubtitle')}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4 bg-lime-50/30 mx-4 rounded-lg p-4 -mt-2">
-              {error && (
-                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                  {error}
-                </div>
-              )}
+              {/* One alert region, always mounted; each failure inserts a new node. */}
+              <div role="alert" className={alertLine.text ? 'bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md' : undefined}>
+                <AnnouncementText announcement={alertLine} />
+              </div>
 
+              {/* The callback's error code (the provider's own text in `detail` is not shown). */}
               {oauthError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md space-y-1">
-                  <p className="font-medium">
-                    Sign-in failed
-                    {oauthError === 'oauth_provider' && ' (provider rejected the request)'}
-                    {oauthError === 'exchange_failed' && ' (session exchange failed)'}
-                    {oauthError === 'no_code' && ' (no authorization code received)'}
-                    {oauthError === 'no_session' && ' (session was not created)'}
-                  </p>
-                  {oauthDetail && (
-                    <p className="text-xs text-red-600 break-words font-mono">{decodeURIComponent(oauthDetail)}</p>
-                  )}
+                <div className="bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md">
+                  <p className="font-medium">{a(oauthErrorKey(oauthError))}</p>
                 </div>
               )}
 
               {isLimited && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm p-3 rounded-md">
-                  Too many login attempts. Please wait 15 minutes before trying again.
+                <div className="bg-amber-50 border border-amber-700 text-amber-800 text-sm p-3 rounded-md">
+                  {a('loginRateLimited')}
                 </div>
               )}
 
-              {!isLimited && remainingRequests <= 2 && remainingRequests > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm p-3 rounded-md">
-                  Warning: {remainingRequests} login attempt{remainingRequests === 1 ? '' : 's'} remaining before temporary lockout.
-                </div>
-              )}
+              <p role="status" className={!isLimited && remainingRequests <= 2 && remainingRequests > 0 ? 'bg-yellow-50 border border-yellow-700 text-yellow-800 text-sm p-3 rounded-md' : undefined}>
+                {!isLimited && remainingRequests <= 2 && remainingRequests > 0 ? authCount(ATTEMPTS_REMAINING, remainingRequests, locale) : null}
+              </p>
 
               <form onSubmit={handleEmailLogin} className="space-y-4">
                 {/* CSRF Token */}
                 <input type="hidden" name="csrf_token" value={csrfToken || ''} />
                 <div className="space-y-2">
-                  <label htmlFor="email" className="text-sm font-medium text-stone-700">
+                  <label htmlFor="email" className="block text-sm font-medium text-stone-800">
                     {t(locale, 'emailLabel')}
                   </label>
                   <Input
                     id="email"
                     type="email"
+                    dir="ltr"
+                    autoComplete="email"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    disabled={loading}
-                    className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                    aria-required="true"
+                    readOnly={loading}
+                    className={INPUT}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="password" className="text-sm font-medium text-stone-700">
+                  <label htmlFor="password" className="block text-sm font-medium text-stone-800">
                     {t(locale, 'passwordLabel')}
                   </label>
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Your password"
+                    dir="ltr"
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    disabled={loading}
-                    className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                    aria-required="true"
+                    readOnly={loading}
+                    className={INPUT}
                   />
                 </div>
 
@@ -386,10 +408,10 @@ function LoginForm() {
 
                 <Button
                   type="submit"
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
-                  disabled={loading || isLimited}
+                  className={cn('w-full bg-green-700 hover:bg-green-800 text-white font-medium', isLimited && UNAVAILABLE)}
+                  aria-disabled={loading || isLimited}
                 >
-                  {loading ? 'Signing in...' : isLimited ? 'Locked - Wait 15 minutes' : t(locale, 'signIn')}
+                  {loading ? a('signingIn') : isLimited ? a('lockedWait') : t(locale, 'signIn')}
                 </Button>
               </form>
 
@@ -398,8 +420,8 @@ function LoginForm() {
                   <span className="w-full border-t border-lime-300" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-lime-50/80 px-2 text-stone-500">
-                    Or continue with
+                  <span className="bg-lime-50 px-2 text-stone-700">
+                    {a('orContinueWith')}
                   </span>
                 </div>
               </div>
@@ -407,11 +429,11 @@ function LoginForm() {
               <div className="grid grid-cols-2 gap-4">
                 <Button
                   variant="outline"
-                  className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
+                  className="border-stone-500 bg-white/90 hover:bg-lime-100 text-stone-800"
                   onClick={() => handleOAuthLogin('google')}
-                  disabled={loading}
+                  aria-disabled={loading}
                 >
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                  <svg aria-hidden="true" className="me-2 h-4 w-4" viewBox="0 0 24 24">
                     <path
                       fill="currentColor"
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -433,11 +455,11 @@ function LoginForm() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
+                  className="border-stone-500 bg-white/90 hover:bg-lime-100 text-stone-800"
                   onClick={() => handleOAuthLogin('apple')}
-                  disabled={loading}
+                  aria-disabled={loading}
                 >
-                  <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+                  <svg aria-hidden="true" className="me-2 h-4 w-4" viewBox="0 0 24 24">
                     <path
                       fill="currentColor"
                       d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
@@ -454,32 +476,32 @@ function LoginForm() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full border-lime-400 bg-lime-50 hover:bg-lime-100 text-lime-800 font-semibold py-2.5"
+                  className="w-full h-auto min-h-9 whitespace-normal border-lime-700 bg-lime-50 hover:bg-lime-100 text-lime-800 font-semibold py-2.5"
                   onClick={handleGuestAccess}
-                  disabled={loading || guestLoading}
+                  aria-disabled={loading || guestLoading}
                   data-testid="guest-access-btn"
                 >
-                  <Eye className="mr-2 h-4 w-4" />
-                  {guestLoading ? 'Opening...' : t(locale, 'findHelpNow')}
+                  <Eye aria-hidden="true" className="me-2 h-4 w-4" />
+                  {guestLoading ? a('opening') : t(locale, 'findHelpNow')}
                 </Button>
-                <p className="text-xs text-stone-500 mt-1">Browse map, programs, and community resources instantly</p>
+                <p className="text-xs text-stone-700 mt-1">{a('guestHint')}</p>
               </div>
 
               <div className="relative w-full">
                 <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-stone-200" />
+                  <span className="w-full border-t border-stone-300" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-stone-50/95 px-2 text-stone-400">or sign in</span>
+                  <span className="bg-stone-50 px-2 text-stone-700">{a('orSignIn')}</span>
                 </div>
               </div>
 
-              <Link href="/forgot-password" className="text-stone-500 hover:text-lime-700">
+              <Link href="/forgot-password" className="inline-flex min-h-6 items-center text-stone-700 underline hover:text-lime-800">
                 {t(locale, 'forgotPassword')}
               </Link>
-              <div className="text-stone-500">
+              <div className="text-stone-700">
                 {t(locale, 'noAccountText')}{' '}
-                <Link href="/signup" className="text-lime-700 hover:underline font-medium">
+                <Link href="/signup" className="text-lime-800 underline font-medium">
                   {t(locale, 'signUpLabel')}
                 </Link>
               </div>
@@ -502,20 +524,27 @@ function LoginForm() {
   )
 }
 
+function LoginLoading() {
+  const locale = useProfileLocale()
+  return (
+    <div
+      lang={locale}
+      dir={dir(locale)}
+      className="min-h-screen flex items-center justify-center"
+      style={{
+        backgroundImage: 'url(/images/wheat-field-bg.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
+      <div role="status" className="bg-stone-50/90 p-6 rounded-lg animate-pulse text-stone-800">{authT(locale, 'loading')}</div>
+    </div>
+  )
+}
+
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{
-          backgroundImage: 'url(/images/wheat-field-bg.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        <div className="bg-stone-50/90 p-6 rounded-lg animate-pulse text-stone-700">Loading...</div>
-      </div>
-    }>
+    <Suspense fallback={<LoginLoading />}>
       <LoginForm />
     </Suspense>
   )

@@ -322,6 +322,7 @@ describe('English marks across the member app', () => {
     'components/ui/select.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
     'components/panels/feed-panel.tsx': { marks: 1, what: 'the safety strip (Release 3, the safety-alert lane)' },
     'components/panels/businesses-panel.tsx': { marks: 2, what: "the data layer's own English text beside a translated sentence (submit failure, photo warning)" },
+    'app/(auth)/signup/page.tsx': { marks: 1, what: 'the Terms of Service / Privacy Policy row: placeholder copy until the legal pages exist (P6 W6, owner ruling)' },
   }
   // Translated in Release 3.5: each held an island before.
   const TRANSLATED = [

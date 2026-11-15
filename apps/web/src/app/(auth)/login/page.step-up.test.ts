@@ -48,6 +48,8 @@ vi.mock('next/link', async () => {
   return { default: (p: { href: string; children?: unknown }) => createElement('a', { href: p.href }, p.children as string) }
 })
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ auth: {} }) }))
+// Signed out: no profile, so the page reads the request's locale (English here).
+vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ profile: null }) }))
 vi.mock('@/hooks/use-rate-limited-action', () => ({ useRateLimitedAction: () => ({ execute: vi.fn(), isLimited: false, remainingRequests: 5 }) }))
 vi.mock('@/hooks/use-csrf-token', () => ({ useCsrfToken: () => ({ token: 'tok', validate: () => true }) }))
 vi.mock('@/components/auth/turnstile-widget', () => ({ TurnstileWidget: () => null }))

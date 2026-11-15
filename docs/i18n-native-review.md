@@ -1588,6 +1588,434 @@ step in that test, and the test fails until the list below is regenerated.
 | `fhInProgress` | hmn | Yes, partway through | Tau, kuv sau tau ib nrab | 2026-11-15 | machine-drafted, needs native review |
 | `fhAlmostDone` | hmn | Yes, almost done | Tau, kuv yuav luag tiav | 2026-11-15 | machine-drafted, needs native review |
 
+### `lib/i18n-auth.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `securityCheckFailed` | ht | Security validation failed. Please refresh the page and try again. | Verifikasyon sekirite a echwe. Tanpri rafrechi paj la epi eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `orContinueWith` | ht | Or continue with | Oswa kontinye avèk | 2026-11-15 | machine-drafted, needs native review |
+| `opening` | ht | Opening… | N ap louvri… | 2026-11-15 | machine-drafted, needs native review |
+| `guestHint` | ht | Browse map, programs, and community resources instantly | Gade kat la, pwogram yo ak resous kominote a touswit | 2026-11-15 | machine-drafted, needs native review |
+| `guestFailed` | ht | We couldn't start a guest session. Please try again. | Nou pa t ka kòmanse yon sesyon envite. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthStartFailed` | ht | We couldn't reach the sign-in provider. Please try again. | Nou pa t ka jwenn founisè koneksyon an. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `lockedWait` | ht | Locked — wait 15 minutes | Bloke — tann 15 minit | 2026-11-15 | machine-drafted, needs native review |
+| `captchaFailed` | ht | The security check didn't complete. Please try again. | Verifikasyon sekirite a pa t fini. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | ht | Loading… | N ap chaje… | 2026-11-15 | machine-drafted, needs native review |
+| `emailInvalid` | ht | Enter a valid email address. | Antre yon adrès imèl ki valab. | 2026-11-15 | machine-drafted, needs native review |
+| `emailRateLimited` | ht | Too many emails were sent. Please wait a few minutes and try again. | Twòp imèl voye. Tanpri tann kèk minit epi eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `backToSignIn` | ht | Back to sign in | Retounen nan koneksyon | 2026-11-15 | machine-drafted, needs native review |
+| `haveAccount` | ht | Already have an account? | Ou gen yon kont deja? | 2026-11-15 | machine-drafted, needs native review |
+| `loginRateLimited` | ht | Too many login attempts. Please wait 15 minutes before trying again. | Twòp tantativ koneksyon. Tanpri tann 15 minit anvan ou eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `invalidCredentials` | ht | That email and password don't match. Please try again. | Imèl la ak modpas la pa koresponn. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `emailNotConfirmed` | ht | Please confirm your email first. Check your inbox for the link. | Tanpri konfime imèl ou an premye. Gade lyen an nan bwat resepsyon w. | 2026-11-15 | machine-drafted, needs native review |
+| `signInFailed` | ht | We couldn't sign you in. Please try again. | Nou pa t ka konekte w. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeNeeded` | ht | Enter the 6-digit code from your authenticator app to continue. | Antre kòd 6 chif ki nan aplikasyon otantifikasyon w lan pou kontinye. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthProvider` | ht | Sign-in failed: the provider rejected the request. | Koneksyon an echwe: founisè a refize demann lan. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthExchange` | ht | Sign-in failed: the session could not be started. | Koneksyon an echwe: sesyon an pa t ka kòmanse. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoCode` | ht | Sign-in failed: no authorization code was received. | Koneksyon an echwe: pa gen kòd otorizasyon ki rive. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoSession` | ht | Sign-in failed: the session was not created. | Koneksyon an echwe: sesyon an pa t kreye. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmationFailed` | ht | That confirmation link didn't work. It may have expired — sign in or request a new link. | Lyen konfimasyon sa a pa t mache. Li ka ekspire — konekte oswa mande yon nouvo lyen. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthFailed` | ht | Sign-in failed. Please try again. | Koneksyon an echwe. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `signingIn` | ht | Signing in… | N ap konekte… | 2026-11-15 | machine-drafted, needs native review |
+| `orSignIn` | ht | or sign in | oswa konekte | 2026-11-15 | machine-drafted, needs native review |
+| `signupRateLimited` | ht | Too many signup attempts. Please wait 15 minutes before trying again. | Twòp tantativ enskripsyon. Tanpri tann 15 minit anvan ou eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordsMismatch` | ht | Passwords do not match. | Modpas yo pa menm. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooWeak` | ht | Password does not meet security requirements. | Modpas la pa satisfè kondisyon sekirite yo. | 2026-11-15 | machine-drafted, needs native review |
+| `acceptTermsRequired` | ht | You must accept the terms of service. | Ou dwe aksepte kondisyon sèvis yo. | 2026-11-15 | machine-drafted, needs native review |
+| `accountExists` | ht | An account with this email already exists. Please sign in instead. | Gen yon kont ak imèl sa a deja. Tanpri konekte pito. | 2026-11-15 | machine-drafted, needs native review |
+| `signupFailed` | ht | We couldn't create your account. Please try again. | Nou pa t ka kreye kont ou. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `signupUnavailable` | ht | New accounts can't be created right now. Please try again later. | Nou pa ka kreye nouvo kont kounye a. Tanpri eseye pita. | 2026-11-15 | machine-drafted, needs native review |
+| `resendFailed` | ht | We couldn't resend the confirmation email. Please try again. | Nou pa t ka voye imèl konfimasyon an ankò. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailTitle` | ht | Check your email | Gade imèl ou | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailSent` | ht | We've sent a confirmation link to {email}. Click the link to verify your account. | Nou voye yon lyen konfimasyon bay {email}. Klike sou lyen an pou verifye kont ou. | 2026-11-15 | machine-drafted, needs native review |
+| `checkSpam` | ht | Didn't receive it? Check your spam or junk folder. | Ou pa resevwa l? Gade nan dosye spam oswa jonk ou. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmEmailCorrect` | ht | Make sure {email} is correct. | Asire w ke {email} kòrèk. | 2026-11-15 | machine-drafted, needs native review |
+| `sending` | ht | Sending… | N ap voye… | 2026-11-15 | machine-drafted, needs native review |
+| `resendEmail` | ht | Resend email | Voye imèl la ankò | 2026-11-15 | machine-drafted, needs native review |
+| `useDifferentEmail` | ht | Use a different email | Sèvi ak yon lòt imèl | 2026-11-15 | machine-drafted, needs native review |
+| `joinTitle` | ht | Join FEED | Antre nan FEED | 2026-11-15 | machine-drafted, needs native review |
+| `joinSubtitle` | ht | Create an account to access community resources and support | Kreye yon kont pou jwenn resous ak sipò kominote a | 2026-11-15 | machine-drafted, needs native review |
+| `firstName` | ht | First name | Prenon | 2026-11-15 | machine-drafted, needs native review |
+| `firstNameHint` | ht | Public — shown to the community | Piblik — kominote a ap wè l | 2026-11-15 | machine-drafted, needs native review |
+| `lastName` | ht | Last name | Non fanmi | 2026-11-15 | machine-drafted, needs native review |
+| `lastNameHint` | ht | Private — shared only with a helper you message | Prive — se sèlman yon moun k ap ede w ou ekri ki wè l | 2026-11-15 | machine-drafted, needs native review |
+| `passwordHint` | ht | At least 12 characters | Omwen 12 karaktè | 2026-11-15 | machine-drafted, needs native review |
+| `confirmPassword` | ht | Confirm password | Konfime modpas la | 2026-11-15 | machine-drafted, needs native review |
+| `strengthWeak` | ht | Weak | Fèb | 2026-11-15 | machine-drafted, needs native review |
+| `strengthFair` | ht | Fair | Pasab | 2026-11-15 | machine-drafted, needs native review |
+| `strengthGood` | ht | Good | Bon | 2026-11-15 | machine-drafted, needs native review |
+| `strengthStrong` | ht | Strong | Fò | 2026-11-15 | machine-drafted, needs native review |
+| `pwMinLength` | ht | Use at least 12 characters | Sèvi ak omwen 12 karaktè | 2026-11-15 | machine-drafted, needs native review |
+| `pwLowercase` | ht | Add lowercase letters | Ajoute lèt miniskil | 2026-11-15 | machine-drafted, needs native review |
+| `pwUppercase` | ht | Add uppercase letters | Ajoute lèt majiskil | 2026-11-15 | machine-drafted, needs native review |
+| `pwNumbers` | ht | Add numbers | Ajoute chif | 2026-11-15 | machine-drafted, needs native review |
+| `pwSpecial` | ht | Add special characters (!@#$%^&*) | Ajoute karaktè espesyal (!@#$%^&*) | 2026-11-15 | machine-drafted, needs native review |
+| `pwCommon` | ht | Avoid common password patterns | Evite modèl modpas moun konn itilize | 2026-11-15 | machine-drafted, needs native review |
+| `creatingAccount` | ht | Creating account… | N ap kreye kont lan… | 2026-11-15 | machine-drafted, needs native review |
+| `createAccount` | ht | Create account | Kreye kont | 2026-11-15 | machine-drafted, needs native review |
+| `orCreateAccount` | ht | or create an account | oswa kreye yon kont | 2026-11-15 | machine-drafted, needs native review |
+| `forgotTitle` | ht | Reset your password | Chanje modpas ou | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSubtitle` | ht | Enter your email and we'll send you a reset link | Antre imèl ou epi n ap voye yon lyen pou chanje l | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSent` | ht | Check your email for a password reset link. | Gade imèl ou pou lyen pou chanje modpas la. | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSpam` | ht | If you don't see it, check your spam folder. | Si ou pa wè l, gade nan dosye spam ou. | 2026-11-15 | machine-drafted, needs native review |
+| `emailAddress` | ht | Email address | Adrès imèl | 2026-11-15 | machine-drafted, needs native review |
+| `sendResetLink` | ht | Send reset link | Voye lyen an | 2026-11-15 | machine-drafted, needs native review |
+| `forgotFailed` | ht | We couldn't send the reset link. Please try again. | Nou pa t ka voye lyen an. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `resetTitle` | ht | Set new password | Mete yon nouvo modpas | 2026-11-15 | machine-drafted, needs native review |
+| `resetSubtitle` | ht | Choose a strong password of at least 12 characters | Chwazi yon modpas solid ki gen omwen 12 karaktè | 2026-11-15 | machine-drafted, needs native review |
+| `resetDone` | ht | Password updated successfully. | Modpas la chanje. | 2026-11-15 | machine-drafted, needs native review |
+| `resetRedirecting` | ht | Redirecting you to sign in… | N ap mennen w nan koneksyon… | 2026-11-15 | machine-drafted, needs native review |
+| `resetHelp` | ht | If your new password doesn't work, please request another reset link. | Si nouvo modpas ou pa mache, tanpri mande yon lòt lyen. | 2026-11-15 | machine-drafted, needs native review |
+| `newPassword` | ht | New password | Nouvo modpas | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooShort` | ht | Password must be at least 12 characters. | Modpas la dwe gen omwen 12 karaktè. | 2026-11-15 | machine-drafted, needs native review |
+| `updating` | ht | Updating… | N ap mete ajou… | 2026-11-15 | machine-drafted, needs native review |
+| `updatePassword` | ht | Update password | Mete modpas la ajou | 2026-11-15 | machine-drafted, needs native review |
+| `samePassword` | ht | Choose a password different from your current one. | Chwazi yon modpas ki diferan de sa w genyen an. | 2026-11-15 | machine-drafted, needs native review |
+| `resetFailed` | ht | We couldn't update your password. Please request a new reset link and try again. | Nou pa t ka chanje modpas ou. Tanpri mande yon nouvo lyen epi eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaTitle` | ht | Two-Factor Authentication | Verifikasyon de etap | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupPrompt` | ht | Enter a backup code to sign in | Antre yon kòd sekou pou konekte | 2026-11-15 | machine-drafted, needs native review |
+| `mfaAppPrompt` | ht | Enter the code from your authenticator app | Antre kòd ki nan aplikasyon otantifikasyon w lan | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInitFailed` | ht | Failed to initialize MFA verification | Nou pa t ka kòmanse verifikasyon de etap la | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidFormat` | ht | Please enter a valid 6-digit code | Tanpri antre yon kòd 6 chif ki valab | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidCode` | ht | Invalid verification code | Kòd verifikasyon an pa valab | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyFailed` | ht | Verification failed | Verifikasyon an echwe | 2026-11-15 | machine-drafted, needs native review |
+| `mfaEnterBackup` | ht | Please enter a backup code | Tanpri antre yon kòd sekou | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidBackup` | ht | Invalid backup code | Kòd sekou a pa valab | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeLabel` | ht | 6-digit code | Kòd 6 chif | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeHint` | ht | The code is checked when you enter the 6th digit. It changes every 30 seconds. | Nou verifye kòd la lè ou antre 6yèm chif la. Li chanje chak 30 segonn. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifying` | ht | Verifying... | N ap verifye… | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerify` | ht | Verify | Verifye | 2026-11-15 | machine-drafted, needs native review |
+| `mfaOr` | ht | Or | Oswa | 2026-11-15 | machine-drafted, needs native review |
+| `mfaUseBackup` | ht | Use Backup Code | Sèvi ak yon kòd sekou | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupLabel` | ht | Backup code | Kòd sekou | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupHint` | ht | Each backup code can only be used once | Ou ka sèvi ak chak kòd sekou yon sèl fwa | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyBackup` | ht | Verify Backup Code | Verifye kòd sekou a | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackToApp` | ht | Back to Authenticator Code | Retounen nan kòd aplikasyon an | 2026-11-15 | machine-drafted, needs native review |
+| `mfaDifferentUser` | ht | Sign in as different user | Konekte ak yon lòt kont | 2026-11-15 | machine-drafted, needs native review |
+| `securityCheckFailed` | so | Security validation failed. Please refresh the page and try again. | Hubinta amniga way fashilantay. Fadlan dib u cusboonaysii bogga oo isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `orContinueWith` | so | Or continue with | Ama ku sii wad | 2026-11-15 | machine-drafted, needs native review |
+| `opening` | so | Opening… | Waa la furayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `guestHint` | so | Browse map, programs, and community resources instantly | Isla markiiba daalaco khariidadda, barnaamijyada iyo kheyraadka bulshada | 2026-11-15 | machine-drafted, needs native review |
+| `guestFailed` | so | We couldn't start a guest session. Please try again. | Lama bilaabi karin fadhi marti. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthStartFailed` | so | We couldn't reach the sign-in provider. Please try again. | Lama gaari karin bixiyaha galitaanka. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `lockedWait` | so | Locked — wait 15 minutes | Waa la xiray — sug 15 daqiiqo | 2026-11-15 | machine-drafted, needs native review |
+| `captchaFailed` | so | The security check didn't complete. Please try again. | Hubinta amniga ma dhammaystirmin. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | so | Loading… | Waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `emailInvalid` | so | Enter a valid email address. | Geli ciwaan iimayl oo sax ah. | 2026-11-15 | machine-drafted, needs native review |
+| `emailRateLimited` | so | Too many emails were sent. Please wait a few minutes and try again. | Iimayllo aad u badan ayaa la diray. Fadlan sug dhowr daqiiqo oo isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `backToSignIn` | so | Back to sign in | Ku noqo galitaanka | 2026-11-15 | machine-drafted, needs native review |
+| `haveAccount` | so | Already have an account? | Horay ma u leedahay akoon? | 2026-11-15 | machine-drafted, needs native review |
+| `loginRateLimited` | so | Too many login attempts. Please wait 15 minutes before trying again. | Isku dayo galitaan oo aad u badan. Fadlan sug 15 daqiiqo ka hor intaadan mar kale isku dayin. | 2026-11-15 | machine-drafted, needs native review |
+| `invalidCredentials` | so | That email and password don't match. Please try again. | Iimaylka iyo furaha sirta ah isma waafaqaan. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `emailNotConfirmed` | so | Please confirm your email first. Check your inbox for the link. | Fadlan marka hore xaqiiji iimaylkaaga. Ka eeg xiriirka sanduuqa fariimahaaga. | 2026-11-15 | machine-drafted, needs native review |
+| `signInFailed` | so | We couldn't sign you in. Please try again. | Kuma gelin karin. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeNeeded` | so | Enter the 6-digit code from your authenticator app to continue. | Geli koodhka 6-da god ah ee abka xaqiijinta si aad u sii wadato. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthProvider` | so | Sign-in failed: the provider rejected the request. | Galitaanku wuu fashilmay: bixiyuhu wuu diiday codsiga. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthExchange` | so | Sign-in failed: the session could not be started. | Galitaanku wuu fashilmay: fadhiga lama bilaabi karin. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoCode` | so | Sign-in failed: no authorization code was received. | Galitaanku wuu fashilmay: lama helin koodh oggolaansho. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoSession` | so | Sign-in failed: the session was not created. | Galitaanku wuu fashilmay: fadhiga lama abuurin. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmationFailed` | so | That confirmation link didn't work. It may have expired — sign in or request a new link. | Xiriirka xaqiijintu ma shaqayn. Waxaa laga yaabaa inuu dhacay — gal ama codso xiriir cusub. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthFailed` | so | Sign-in failed. Please try again. | Galitaanku wuu fashilmay. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `signingIn` | so | Signing in… | Waa la galayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `orSignIn` | so | or sign in | ama gal | 2026-11-15 | machine-drafted, needs native review |
+| `signupRateLimited` | so | Too many signup attempts. Please wait 15 minutes before trying again. | Isku dayo diiwaangelin oo aad u badan. Fadlan sug 15 daqiiqo ka hor intaadan mar kale isku dayin. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordsMismatch` | so | Passwords do not match. | Furayaasha sirta ahi isma waafaqaan. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooWeak` | so | Password does not meet security requirements. | Furaha sirta ahi ma buuxinayo shuruudaha amniga. | 2026-11-15 | machine-drafted, needs native review |
+| `acceptTermsRequired` | so | You must accept the terms of service. | Waa inaad aqbashaa shuruudaha adeegga. | 2026-11-15 | machine-drafted, needs native review |
+| `accountExists` | so | An account with this email already exists. Please sign in instead. | Akoon leh iimaylkan horay ayuu u jiray. Fadlan gal halkii. | 2026-11-15 | machine-drafted, needs native review |
+| `signupFailed` | so | We couldn't create your account. Please try again. | Lama abuuri karin akoonkaaga. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `signupUnavailable` | so | New accounts can't be created right now. Please try again later. | Hadda lama abuuri karo akoono cusub. Fadlan isku day mar dambe. | 2026-11-15 | machine-drafted, needs native review |
+| `resendFailed` | so | We couldn't resend the confirmation email. Please try again. | Lama dib u diri karin iimaylka xaqiijinta. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailTitle` | so | Check your email | Eeg iimaylkaaga | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailSent` | so | We've sent a confirmation link to {email}. Click the link to verify your account. | Waxaan xiriir xaqiijin u dirnay {email}. Guji xiriirka si aad u xaqiijiso akoonkaaga. | 2026-11-15 | machine-drafted, needs native review |
+| `checkSpam` | so | Didn't receive it? Check your spam or junk folder. | Ma helin? Eeg galka spam-ka ama qashinka. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmEmailCorrect` | so | Make sure {email} is correct. | Hubi in {email} uu sax yahay. | 2026-11-15 | machine-drafted, needs native review |
+| `sending` | so | Sending… | Waa la dirayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `resendEmail` | so | Resend email | Dib u dir iimaylka | 2026-11-15 | machine-drafted, needs native review |
+| `useDifferentEmail` | so | Use a different email | Isticmaal iimayl kale | 2026-11-15 | machine-drafted, needs native review |
+| `joinTitle` | so | Join FEED | Ku biir FEED | 2026-11-15 | machine-drafted, needs native review |
+| `joinSubtitle` | so | Create an account to access community resources and support | Samee akoon si aad u hesho kheyraadka iyo taageerada bulshada | 2026-11-15 | machine-drafted, needs native review |
+| `firstName` | so | First name | Magaca koowaad | 2026-11-15 | machine-drafted, needs native review |
+| `firstNameHint` | so | Public — shown to the community | Guud — bulshada ayaa arka | 2026-11-15 | machine-drafted, needs native review |
+| `lastName` | so | Last name | Magaca qoyska | 2026-11-15 | machine-drafted, needs native review |
+| `lastNameHint` | so | Private — shared only with a helper you message | Gaar — waxaa arka oo keliya caawiye aad fariin u dirto | 2026-11-15 | machine-drafted, needs native review |
+| `passwordHint` | so | At least 12 characters | Ugu yaraan 12 xaraf | 2026-11-15 | machine-drafted, needs native review |
+| `confirmPassword` | so | Confirm password | Xaqiiji furaha sirta ah | 2026-11-15 | machine-drafted, needs native review |
+| `strengthWeak` | so | Weak | Daciif | 2026-11-15 | machine-drafted, needs native review |
+| `strengthFair` | so | Fair | Dhexdhexaad | 2026-11-15 | machine-drafted, needs native review |
+| `strengthGood` | so | Good | Wanaagsan | 2026-11-15 | machine-drafted, needs native review |
+| `strengthStrong` | so | Strong | Xoog leh | 2026-11-15 | machine-drafted, needs native review |
+| `pwMinLength` | so | Use at least 12 characters | Isticmaal ugu yaraan 12 xaraf | 2026-11-15 | machine-drafted, needs native review |
+| `pwLowercase` | so | Add lowercase letters | Ku dar xarfo yaryar | 2026-11-15 | machine-drafted, needs native review |
+| `pwUppercase` | so | Add uppercase letters | Ku dar xarfo waaweyn | 2026-11-15 | machine-drafted, needs native review |
+| `pwNumbers` | so | Add numbers | Ku dar tirooyin | 2026-11-15 | machine-drafted, needs native review |
+| `pwSpecial` | so | Add special characters (!@#$%^&*) | Ku dar calaamado gaar ah (!@#$%^&*) | 2026-11-15 | machine-drafted, needs native review |
+| `pwCommon` | so | Avoid common password patterns | Iska ilaali qaababka furaha sirta ah ee caadiga ah | 2026-11-15 | machine-drafted, needs native review |
+| `creatingAccount` | so | Creating account… | Akoonka waa la abuurayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `createAccount` | so | Create account | Samee akoon | 2026-11-15 | machine-drafted, needs native review |
+| `orCreateAccount` | so | or create an account | ama samee akoon | 2026-11-15 | machine-drafted, needs native review |
+| `forgotTitle` | so | Reset your password | Dib u deji furahaaga sirta ah | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSubtitle` | so | Enter your email and we'll send you a reset link | Geli iimaylkaaga waxaanan kuu soo diri doonnaa xiriir dib-u-dejin | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSent` | so | Check your email for a password reset link. | Ka eeg iimaylkaaga xiriirka dib-u-dejinta furaha sirta ah. | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSpam` | so | If you don't see it, check your spam folder. | Haddii aadan arkin, eeg galka spam-ka. | 2026-11-15 | machine-drafted, needs native review |
+| `emailAddress` | so | Email address | Ciwaanka iimaylka | 2026-11-15 | machine-drafted, needs native review |
+| `sendResetLink` | so | Send reset link | Dir xiriirka dib-u-dejinta | 2026-11-15 | machine-drafted, needs native review |
+| `forgotFailed` | so | We couldn't send the reset link. Please try again. | Lama diri karin xiriirka dib-u-dejinta. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `resetTitle` | so | Set new password | Deji fure sir ah oo cusub | 2026-11-15 | machine-drafted, needs native review |
+| `resetSubtitle` | so | Choose a strong password of at least 12 characters | Dooro fure sir ah oo adag oo ugu yaraan 12 xaraf ah | 2026-11-15 | machine-drafted, needs native review |
+| `resetDone` | so | Password updated successfully. | Furaha sirta ah si guul leh ayaa loo cusboonaysiiyay. | 2026-11-15 | machine-drafted, needs native review |
+| `resetRedirecting` | so | Redirecting you to sign in… | Waxaa laguu wareejinayaa galitaanka… | 2026-11-15 | machine-drafted, needs native review |
+| `resetHelp` | so | If your new password doesn't work, please request another reset link. | Haddii furaha cusubi uusan shaqayn, fadlan codso xiriir kale. | 2026-11-15 | machine-drafted, needs native review |
+| `newPassword` | so | New password | Fure sir ah oo cusub | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooShort` | so | Password must be at least 12 characters. | Furaha sirta ahi waa inuu ahaadaa ugu yaraan 12 xaraf. | 2026-11-15 | machine-drafted, needs native review |
+| `updating` | so | Updating… | Waa la cusboonaysiinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `updatePassword` | so | Update password | Cusboonaysii furaha sirta ah | 2026-11-15 | machine-drafted, needs native review |
+| `samePassword` | so | Choose a password different from your current one. | Dooro fure sir ah oo ka duwan kan aad hadda haysato. | 2026-11-15 | machine-drafted, needs native review |
+| `resetFailed` | so | We couldn't update your password. Please request a new reset link and try again. | Lama cusboonaysiin karin furahaaga sirta ah. Fadlan codso xiriir cusub oo isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaTitle` | so | Two-Factor Authentication | Xaqiijinta laba-tallaabo | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupPrompt` | so | Enter a backup code to sign in | Geli koodh kayd ah si aad u gasho | 2026-11-15 | machine-drafted, needs native review |
+| `mfaAppPrompt` | so | Enter the code from your authenticator app | Geli koodhka ka yimid abka xaqiijinta | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInitFailed` | so | Failed to initialize MFA verification | Lama bilaabi karin xaqiijinta laba-tallaabo | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidFormat` | so | Please enter a valid 6-digit code | Fadlan geli koodh sax ah oo 6 god ah | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidCode` | so | Invalid verification code | Koodhka xaqiijintu ma saxna | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyFailed` | so | Verification failed | Xaqiijintu way fashilantay | 2026-11-15 | machine-drafted, needs native review |
+| `mfaEnterBackup` | so | Please enter a backup code | Fadlan geli koodh kayd ah | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidBackup` | so | Invalid backup code | Koodhka kaydku ma saxna | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeLabel` | so | 6-digit code | Koodh 6 god ah | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeHint` | so | The code is checked when you enter the 6th digit. It changes every 30 seconds. | Koodhka waa la hubiyaa marka aad geliso godka 6aad. Wuxuu is beddelaa 30-kii ilbiriqsi kasta. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifying` | so | Verifying... | Waa la xaqiijinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerify` | so | Verify | Xaqiiji | 2026-11-15 | machine-drafted, needs native review |
+| `mfaOr` | so | Or | Ama | 2026-11-15 | machine-drafted, needs native review |
+| `mfaUseBackup` | so | Use Backup Code | Isticmaal koodh kayd ah | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupLabel` | so | Backup code | Koodh kayd ah | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupHint` | so | Each backup code can only be used once | Koodh kayd kasta mar keliya ayaa la isticmaali karaa | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyBackup` | so | Verify Backup Code | Xaqiiji koodhka kaydka | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackToApp` | so | Back to Authenticator Code | Ku noqo koodhka abka | 2026-11-15 | machine-drafted, needs native review |
+| `mfaDifferentUser` | so | Sign in as different user | Ku gal akoon kale | 2026-11-15 | machine-drafted, needs native review |
+| `securityCheckFailed` | am | Security validation failed. Please refresh the page and try again. | የደህንነት ማረጋገጫው አልተሳካም። እባክዎ ገጹን ያድሱና እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `orContinueWith` | am | Or continue with | ወይም በዚህ ይቀጥሉ | 2026-11-15 | machine-drafted, needs native review |
+| `opening` | am | Opening… | በመክፈት ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `guestHint` | am | Browse map, programs, and community resources instantly | ካርታውን፣ ፕሮግራሞችንና የማህበረሰብ ሀብቶችን ወዲያውኑ ያስሱ | 2026-11-15 | machine-drafted, needs native review |
+| `guestFailed` | am | We couldn't start a guest session. Please try again. | የእንግዳ ክፍለ ጊዜ መጀመር አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `oauthStartFailed` | am | We couldn't reach the sign-in provider. Please try again. | የመግቢያ አገልግሎት ሰጪውን ማግኘት አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `lockedWait` | am | Locked — wait 15 minutes | ተቆልፏል — 15 ደቂቃ ይጠብቁ | 2026-11-15 | machine-drafted, needs native review |
+| `captchaFailed` | am | The security check didn't complete. Please try again. | የደህንነት ፍተሻው አልተጠናቀቀም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | am | Loading… | በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `emailInvalid` | am | Enter a valid email address. | ትክክለኛ የኢሜይል አድራሻ ያስገቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `emailRateLimited` | am | Too many emails were sent. Please wait a few minutes and try again. | በጣም ብዙ ኢሜይሎች ተልከዋል። እባክዎ ጥቂት ደቂቃዎች ጠብቀው እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `backToSignIn` | am | Back to sign in | ወደ መግቢያ ተመለስ | 2026-11-15 | machine-drafted, needs native review |
+| `haveAccount` | am | Already have an account? | መለያ አለዎት? | 2026-11-15 | machine-drafted, needs native review |
+| `loginRateLimited` | am | Too many login attempts. Please wait 15 minutes before trying again. | በጣም ብዙ የመግቢያ ሙከራዎች። እባክዎ እንደገና ከመሞከርዎ በፊት 15 ደቂቃ ይጠብቁ። | 2026-11-15 | machine-drafted, needs native review |
+| `invalidCredentials` | am | That email and password don't match. Please try again. | ኢሜይሉና የይለፍ ቃሉ አይዛመዱም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `emailNotConfirmed` | am | Please confirm your email first. Check your inbox for the link. | እባክዎ መጀመሪያ ኢሜይልዎን ያረጋግጡ። ሊንኩን በገቢ መልእክት ሳጥንዎ ይፈልጉ። | 2026-11-15 | machine-drafted, needs native review |
+| `signInFailed` | am | We couldn't sign you in. Please try again. | ልናስገባዎ አልቻልንም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeNeeded` | am | Enter the 6-digit code from your authenticator app to continue. | ለመቀጠል ከማረጋገጫ መተግበሪያዎ ባለ 6 አሃዝ ኮዱን ያስገቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `oauthProvider` | am | Sign-in failed: the provider rejected the request. | መግባት አልተሳካም፦ አገልግሎት ሰጪው ጥያቄውን አልተቀበለም። | 2026-11-15 | machine-drafted, needs native review |
+| `oauthExchange` | am | Sign-in failed: the session could not be started. | መግባት አልተሳካም፦ ክፍለ ጊዜውን መጀመር አልተቻለም። | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoCode` | am | Sign-in failed: no authorization code was received. | መግባት አልተሳካም፦ የፈቃድ ኮድ አልደረሰም። | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoSession` | am | Sign-in failed: the session was not created. | መግባት አልተሳካም፦ ክፍለ ጊዜው አልተፈጠረም። | 2026-11-15 | machine-drafted, needs native review |
+| `confirmationFailed` | am | That confirmation link didn't work. It may have expired — sign in or request a new link. | ያ የማረጋገጫ ሊንክ አልሰራም። ጊዜው አልፎበት ሊሆን ይችላል — ይግቡ ወይም አዲስ ሊንክ ይጠይቁ። | 2026-11-15 | machine-drafted, needs native review |
+| `oauthFailed` | am | Sign-in failed. Please try again. | መግባት አልተሳካም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `signingIn` | am | Signing in… | በመግባት ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `orSignIn` | am | or sign in | ወይም ይግቡ | 2026-11-15 | machine-drafted, needs native review |
+| `signupRateLimited` | am | Too many signup attempts. Please wait 15 minutes before trying again. | በጣም ብዙ የምዝገባ ሙከራዎች። እባክዎ እንደገና ከመሞከርዎ በፊት 15 ደቂቃ ይጠብቁ። | 2026-11-15 | machine-drafted, needs native review |
+| `passwordsMismatch` | am | Passwords do not match. | የይለፍ ቃሎቹ አይዛመዱም። | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooWeak` | am | Password does not meet security requirements. | የይለፍ ቃሉ የደህንነት መስፈርቶችን አያሟላም። | 2026-11-15 | machine-drafted, needs native review |
+| `acceptTermsRequired` | am | You must accept the terms of service. | የአገልግሎት ውሉን መቀበል አለብዎት። | 2026-11-15 | machine-drafted, needs native review |
+| `accountExists` | am | An account with this email already exists. Please sign in instead. | በዚህ ኢሜይል መለያ አስቀድሞ አለ። እባክዎ በምትኩ ይግቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `signupFailed` | am | We couldn't create your account. Please try again. | መለያዎን መፍጠር አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `signupUnavailable` | am | New accounts can't be created right now. Please try again later. | አሁን አዲስ መለያ መፍጠር አይቻልም። እባክዎ ቆይተው ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `resendFailed` | am | We couldn't resend the confirmation email. Please try again. | የማረጋገጫ ኢሜይሉን እንደገና መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailTitle` | am | Check your email | ኢሜይልዎን ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailSent` | am | We've sent a confirmation link to {email}. Click the link to verify your account. | ወደ {email} የማረጋገጫ ሊንክ ልከናል። መለያዎን ለማረጋገጥ ሊንኩን ይጫኑ። | 2026-11-15 | machine-drafted, needs native review |
+| `checkSpam` | am | Didn't receive it? Check your spam or junk folder. | አልደረሰዎትም? የአይፈለጌ መልእክት ማህደሩን ይመልከቱ። | 2026-11-15 | machine-drafted, needs native review |
+| `confirmEmailCorrect` | am | Make sure {email} is correct. | {email} ትክክል መሆኑን ያረጋግጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `sending` | am | Sending… | በመላክ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `resendEmail` | am | Resend email | ኢሜይሉን እንደገና ላክ | 2026-11-15 | machine-drafted, needs native review |
+| `useDifferentEmail` | am | Use a different email | ሌላ ኢሜይል ተጠቀም | 2026-11-15 | machine-drafted, needs native review |
+| `joinTitle` | am | Join FEED | FEEDን ይቀላቀሉ | 2026-11-15 | machine-drafted, needs native review |
+| `joinSubtitle` | am | Create an account to access community resources and support | የማህበረሰብ ሀብቶችንና ድጋፍን ለማግኘት መለያ ይፍጠሩ | 2026-11-15 | machine-drafted, needs native review |
+| `firstName` | am | First name | የመጀመሪያ ስም | 2026-11-15 | machine-drafted, needs native review |
+| `firstNameHint` | am | Public — shown to the community | ይፋዊ — ለማህበረሰቡ ይታያል | 2026-11-15 | machine-drafted, needs native review |
+| `lastName` | am | Last name | የአባት ስም | 2026-11-15 | machine-drafted, needs native review |
+| `lastNameHint` | am | Private — shared only with a helper you message | የግል — መልእክት ለሚልኩለት ረዳት ብቻ ይታያል | 2026-11-15 | machine-drafted, needs native review |
+| `passwordHint` | am | At least 12 characters | ቢያንስ 12 ቁምፊዎች | 2026-11-15 | machine-drafted, needs native review |
+| `confirmPassword` | am | Confirm password | የይለፍ ቃሉን ያረጋግጡ | 2026-11-15 | machine-drafted, needs native review |
+| `strengthWeak` | am | Weak | ደካማ | 2026-11-15 | machine-drafted, needs native review |
+| `strengthFair` | am | Fair | መካከለኛ | 2026-11-15 | machine-drafted, needs native review |
+| `strengthGood` | am | Good | ጥሩ | 2026-11-15 | machine-drafted, needs native review |
+| `strengthStrong` | am | Strong | ጠንካራ | 2026-11-15 | machine-drafted, needs native review |
+| `pwMinLength` | am | Use at least 12 characters | ቢያንስ 12 ቁምፊዎችን ይጠቀሙ | 2026-11-15 | machine-drafted, needs native review |
+| `pwLowercase` | am | Add lowercase letters | ትናንሽ ፊደላትን ያክሉ | 2026-11-15 | machine-drafted, needs native review |
+| `pwUppercase` | am | Add uppercase letters | ትላልቅ ፊደላትን ያክሉ | 2026-11-15 | machine-drafted, needs native review |
+| `pwNumbers` | am | Add numbers | ቁጥሮችን ያክሉ | 2026-11-15 | machine-drafted, needs native review |
+| `pwSpecial` | am | Add special characters (!@#$%^&*) | ልዩ ምልክቶችን ያክሉ (!@#$%^&*) | 2026-11-15 | machine-drafted, needs native review |
+| `pwCommon` | am | Avoid common password patterns | የተለመዱ የይለፍ ቃል ቅጦችን ያስወግዱ | 2026-11-15 | machine-drafted, needs native review |
+| `creatingAccount` | am | Creating account… | መለያ በመፍጠር ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `createAccount` | am | Create account | መለያ ፍጠር | 2026-11-15 | machine-drafted, needs native review |
+| `orCreateAccount` | am | or create an account | ወይም መለያ ይፍጠሩ | 2026-11-15 | machine-drafted, needs native review |
+| `forgotTitle` | am | Reset your password | የይለፍ ቃልዎን ዳግም ያስጀምሩ | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSubtitle` | am | Enter your email and we'll send you a reset link | ኢሜይልዎን ያስገቡና የዳግም ማስጀመሪያ ሊንክ እንልክልዎታለን | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSent` | am | Check your email for a password reset link. | የይለፍ ቃል ዳግም ማስጀመሪያ ሊንኩን በኢሜይልዎ ይፈልጉ። | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSpam` | am | If you don't see it, check your spam folder. | ካላዩት የአይፈለጌ መልእክት ማህደሩን ይመልከቱ። | 2026-11-15 | machine-drafted, needs native review |
+| `emailAddress` | am | Email address | የኢሜይል አድራሻ | 2026-11-15 | machine-drafted, needs native review |
+| `sendResetLink` | am | Send reset link | የዳግም ማስጀመሪያ ሊንክ ላክ | 2026-11-15 | machine-drafted, needs native review |
+| `forgotFailed` | am | We couldn't send the reset link. Please try again. | የዳግም ማስጀመሪያ ሊንኩን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `resetTitle` | am | Set new password | አዲስ የይለፍ ቃል ያዘጋጁ | 2026-11-15 | machine-drafted, needs native review |
+| `resetSubtitle` | am | Choose a strong password of at least 12 characters | ቢያንስ 12 ቁምፊዎች ያሉት ጠንካራ የይለፍ ቃል ይምረጡ | 2026-11-15 | machine-drafted, needs native review |
+| `resetDone` | am | Password updated successfully. | የይለፍ ቃሉ በተሳካ ሁኔታ ተዘምኗል። | 2026-11-15 | machine-drafted, needs native review |
+| `resetRedirecting` | am | Redirecting you to sign in… | ወደ መግቢያ በማዛወር ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `resetHelp` | am | If your new password doesn't work, please request another reset link. | አዲሱ የይለፍ ቃልዎ ካልሰራ እባክዎ ሌላ የዳግም ማስጀመሪያ ሊንክ ይጠይቁ። | 2026-11-15 | machine-drafted, needs native review |
+| `newPassword` | am | New password | አዲስ የይለፍ ቃል | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooShort` | am | Password must be at least 12 characters. | የይለፍ ቃሉ ቢያንስ 12 ቁምፊዎች ሊኖሩት ይገባል። | 2026-11-15 | machine-drafted, needs native review |
+| `updating` | am | Updating… | በማዘመን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `updatePassword` | am | Update password | የይለፍ ቃሉን አዘምን | 2026-11-15 | machine-drafted, needs native review |
+| `samePassword` | am | Choose a password different from your current one. | ከአሁኑ የተለየ የይለፍ ቃል ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `resetFailed` | am | We couldn't update your password. Please request a new reset link and try again. | የይለፍ ቃልዎን ማዘመን አልተቻለም። እባክዎ አዲስ ሊንክ ጠይቀው እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `mfaTitle` | am | Two-Factor Authentication | ባለሁለት ደረጃ ማረጋገጫ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupPrompt` | am | Enter a backup code to sign in | ለመግባት የመጠባበቂያ ኮድ ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaAppPrompt` | am | Enter the code from your authenticator app | ከማረጋገጫ መተግበሪያዎ ኮዱን ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInitFailed` | am | Failed to initialize MFA verification | ባለሁለት ደረጃ ማረጋገጫውን መጀመር አልተቻለም | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidFormat` | am | Please enter a valid 6-digit code | እባክዎ ትክክለኛ ባለ 6 አሃዝ ኮድ ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidCode` | am | Invalid verification code | የማረጋገጫ ኮዱ ልክ አይደለም | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyFailed` | am | Verification failed | ማረጋገጫው አልተሳካም | 2026-11-15 | machine-drafted, needs native review |
+| `mfaEnterBackup` | am | Please enter a backup code | እባክዎ የመጠባበቂያ ኮድ ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidBackup` | am | Invalid backup code | የመጠባበቂያ ኮዱ ልክ አይደለም | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeLabel` | am | 6-digit code | ባለ 6 አሃዝ ኮድ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeHint` | am | The code is checked when you enter the 6th digit. It changes every 30 seconds. | ኮዱ 6ኛውን አሃዝ ሲያስገቡ ይፈተሻል። በየ30 ሰከንዱ ይቀየራል። | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifying` | am | Verifying... | በማረጋገጥ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerify` | am | Verify | አረጋግጥ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaOr` | am | Or | ወይም | 2026-11-15 | machine-drafted, needs native review |
+| `mfaUseBackup` | am | Use Backup Code | የመጠባበቂያ ኮድ ተጠቀም | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupLabel` | am | Backup code | የመጠባበቂያ ኮድ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupHint` | am | Each backup code can only be used once | እያንዳንዱ የመጠባበቂያ ኮድ አንድ ጊዜ ብቻ ነው የሚያገለግለው | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyBackup` | am | Verify Backup Code | የመጠባበቂያ ኮዱን አረጋግጥ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackToApp` | am | Back to Authenticator Code | ወደ መተግበሪያ ኮድ ተመለስ | 2026-11-15 | machine-drafted, needs native review |
+| `mfaDifferentUser` | am | Sign in as different user | በሌላ መለያ ይግቡ | 2026-11-15 | machine-drafted, needs native review |
+| `securityCheckFailed` | hmn | Security validation failed. Please refresh the page and try again. | Kev kuaj xyuas kev nyab xeeb tsis tiav. Thov rov thauj nplooj ntawv thiab sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `orContinueWith` | hmn | Or continue with | Lossis txuas ntxiv nrog | 2026-11-15 | machine-drafted, needs native review |
+| `opening` | hmn | Opening… | Tab tom qhib… | 2026-11-15 | machine-drafted, needs native review |
+| `guestHint` | hmn | Browse map, programs, and community resources instantly | Saib daim ntawv qhia, cov kev pab cuam thiab cov kev pab hauv zej zog tam sim ntawd | 2026-11-15 | machine-drafted, needs native review |
+| `guestFailed` | hmn | We couldn't start a guest session. Please try again. | Pib tsis tau qhov kev siv ua qhua. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthStartFailed` | hmn | We couldn't reach the sign-in provider. Please try again. | Mus tsis txog tus muab kev nkag. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `lockedWait` | hmn | Locked — wait 15 minutes | Xauv lawm — tos 15 feeb | 2026-11-15 | machine-drafted, needs native review |
+| `captchaFailed` | hmn | The security check didn't complete. Please try again. | Kev kuaj xyuas kev nyab xeeb tsis tiav. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `loading` | hmn | Loading… | Tab tom thauj… | 2026-11-15 | machine-drafted, needs native review |
+| `emailInvalid` | hmn | Enter a valid email address. | Sau ib qho email siv tau. | 2026-11-15 | machine-drafted, needs native review |
+| `emailRateLimited` | hmn | Too many emails were sent. Please wait a few minutes and try again. | Xa email ntau dhau lawm. Thov tos ob peb feeb thiab sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `backToSignIn` | hmn | Back to sign in | Rov qab mus nkag | 2026-11-15 | machine-drafted, needs native review |
+| `haveAccount` | hmn | Already have an account? | Twb muaj account lawm? | 2026-11-15 | machine-drafted, needs native review |
+| `loginRateLimited` | hmn | Too many login attempts. Please wait 15 minutes before trying again. | Sim nkag ntau zaus dhau lawm. Thov tos 15 feeb ua ntej koj sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `invalidCredentials` | hmn | That email and password don't match. Please try again. | Email thiab lo lus zais tsis sib xws. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `emailNotConfirmed` | hmn | Please confirm your email first. Check your inbox for the link. | Thov lees paub koj email ua ntej. Nrhiav txoj kab txuas hauv koj lub thawv email. | 2026-11-15 | machine-drafted, needs native review |
+| `signInFailed` | hmn | We couldn't sign you in. Please try again. | Peb nkag tsis tau rau koj. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeNeeded` | hmn | Enter the 6-digit code from your authenticator app to continue. | Sau tus lej 6 tus ntawm koj lub app lees paub kom txuas ntxiv. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthProvider` | hmn | Sign-in failed: the provider rejected the request. | Nkag tsis tau: tus muab kev pab tsis kam txais qhov kev thov. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthExchange` | hmn | Sign-in failed: the session could not be started. | Nkag tsis tau: pib tsis tau qhov kev siv. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoCode` | hmn | Sign-in failed: no authorization code was received. | Nkag tsis tau: tsis tau txais tus lej tso cai. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthNoSession` | hmn | Sign-in failed: the session was not created. | Nkag tsis tau: tsis tau tsim qhov kev siv. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmationFailed` | hmn | That confirmation link didn't work. It may have expired — sign in or request a new link. | Txoj kab txuas lees paub ntawd siv tsis tau. Tej zaum nws tas sijhawm lawm — nkag lossis thov ib txoj tshiab. | 2026-11-15 | machine-drafted, needs native review |
+| `oauthFailed` | hmn | Sign-in failed. Please try again. | Nkag tsis tau. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `signingIn` | hmn | Signing in… | Tab tom nkag… | 2026-11-15 | machine-drafted, needs native review |
+| `orSignIn` | hmn | or sign in | lossis nkag | 2026-11-15 | machine-drafted, needs native review |
+| `signupRateLimited` | hmn | Too many signup attempts. Please wait 15 minutes before trying again. | Sim sau npe ntau zaus dhau lawm. Thov tos 15 feeb ua ntej koj sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordsMismatch` | hmn | Passwords do not match. | Cov lo lus zais tsis sib xws. | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooWeak` | hmn | Password does not meet security requirements. | Lo lus zais tsis raws li cov cai kev nyab xeeb. | 2026-11-15 | machine-drafted, needs native review |
+| `acceptTermsRequired` | hmn | You must accept the terms of service. | Koj yuav tsum pom zoo rau cov cai kev pabcuam. | 2026-11-15 | machine-drafted, needs native review |
+| `accountExists` | hmn | An account with this email already exists. Please sign in instead. | Twb muaj ib tug account siv email no lawm. Thov nkag hloov. | 2026-11-15 | machine-drafted, needs native review |
+| `signupFailed` | hmn | We couldn't create your account. Please try again. | Tsim tsis tau koj tus account. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `signupUnavailable` | hmn | New accounts can't be created right now. Please try again later. | Tam sim no tsim tsis tau account tshiab. Thov sim dua tom qab. | 2026-11-15 | machine-drafted, needs native review |
+| `resendFailed` | hmn | We couldn't resend the confirmation email. Please try again. | Xa tsis tau email lees paub dua. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailTitle` | hmn | Check your email | Saib koj email | 2026-11-15 | machine-drafted, needs native review |
+| `checkEmailSent` | hmn | We've sent a confirmation link to {email}. Click the link to verify your account. | Peb tau xa ib txoj kab txuas lees paub mus rau {email}. Nias txoj kab txuas kom lees paub koj tus account. | 2026-11-15 | machine-drafted, needs native review |
+| `checkSpam` | hmn | Didn't receive it? Check your spam or junk folder. | Tsis tau txais? Saib hauv koj lub folder spam lossis junk. | 2026-11-15 | machine-drafted, needs native review |
+| `confirmEmailCorrect` | hmn | Make sure {email} is correct. | Xyuas kom {email} yog lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `sending` | hmn | Sending… | Tab tom xa… | 2026-11-15 | machine-drafted, needs native review |
+| `resendEmail` | hmn | Resend email | Xa email dua | 2026-11-15 | machine-drafted, needs native review |
+| `useDifferentEmail` | hmn | Use a different email | Siv lwm email | 2026-11-15 | machine-drafted, needs native review |
+| `joinTitle` | hmn | Join FEED | Koom nrog FEED | 2026-11-15 | machine-drafted, needs native review |
+| `joinSubtitle` | hmn | Create an account to access community resources and support | Tsim ib tug account kom siv tau cov kev pab thiab kev txhawb nqa hauv zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `firstName` | hmn | First name | Lub npe | 2026-11-15 | machine-drafted, needs native review |
+| `firstNameHint` | hmn | Public — shown to the community | Pej xeem — zej zog pom | 2026-11-15 | machine-drafted, needs native review |
+| `lastName` | hmn | Last name | Lub xeem | 2026-11-15 | machine-drafted, needs native review |
+| `lastNameHint` | hmn | Private — shared only with a helper you message | Ntiag tug — tsuas yog tus pab koj sib tham nrog pom | 2026-11-15 | machine-drafted, needs native review |
+| `passwordHint` | hmn | At least 12 characters | Tsawg kawg 12 tus ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `confirmPassword` | hmn | Confirm password | Lees paub lo lus zais | 2026-11-15 | machine-drafted, needs native review |
+| `strengthWeak` | hmn | Weak | Tsis muaj zog | 2026-11-15 | machine-drafted, needs native review |
+| `strengthFair` | hmn | Fair | Nruab nrab | 2026-11-15 | machine-drafted, needs native review |
+| `strengthGood` | hmn | Good | Zoo | 2026-11-15 | machine-drafted, needs native review |
+| `strengthStrong` | hmn | Strong | Muaj zog | 2026-11-15 | machine-drafted, needs native review |
+| `pwMinLength` | hmn | Use at least 12 characters | Siv tsawg kawg 12 tus ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `pwLowercase` | hmn | Add lowercase letters | Ntxiv cov ntawv me | 2026-11-15 | machine-drafted, needs native review |
+| `pwUppercase` | hmn | Add uppercase letters | Ntxiv cov ntawv loj | 2026-11-15 | machine-drafted, needs native review |
+| `pwNumbers` | hmn | Add numbers | Ntxiv cov lej | 2026-11-15 | machine-drafted, needs native review |
+| `pwSpecial` | hmn | Add special characters (!@#$%^&*) | Ntxiv cov cim tshwj xeeb (!@#$%^&*) | 2026-11-15 | machine-drafted, needs native review |
+| `pwCommon` | hmn | Avoid common password patterns | Zam cov qauv lo lus zais uas neeg siv ntau | 2026-11-15 | machine-drafted, needs native review |
+| `creatingAccount` | hmn | Creating account… | Tab tom tsim account… | 2026-11-15 | machine-drafted, needs native review |
+| `createAccount` | hmn | Create account | Tsim account | 2026-11-15 | machine-drafted, needs native review |
+| `orCreateAccount` | hmn | or create an account | lossis tsim ib tug account | 2026-11-15 | machine-drafted, needs native review |
+| `forgotTitle` | hmn | Reset your password | Rov teeb koj lo lus zais | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSubtitle` | hmn | Enter your email and we'll send you a reset link | Sau koj email thiab peb yuav xa ib txoj kab txuas rov teeb | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSent` | hmn | Check your email for a password reset link. | Saib koj email rau txoj kab txuas rov teeb lo lus zais. | 2026-11-15 | machine-drafted, needs native review |
+| `forgotSpam` | hmn | If you don't see it, check your spam folder. | Yog tias koj tsis pom, saib hauv koj lub folder spam. | 2026-11-15 | machine-drafted, needs native review |
+| `emailAddress` | hmn | Email address | Chaw nyob email | 2026-11-15 | machine-drafted, needs native review |
+| `sendResetLink` | hmn | Send reset link | Xa txoj kab txuas rov teeb | 2026-11-15 | machine-drafted, needs native review |
+| `forgotFailed` | hmn | We couldn't send the reset link. Please try again. | Xa tsis tau txoj kab txuas rov teeb. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `resetTitle` | hmn | Set new password | Teeb lo lus zais tshiab | 2026-11-15 | machine-drafted, needs native review |
+| `resetSubtitle` | hmn | Choose a strong password of at least 12 characters | Xaiv ib lo lus zais muaj zog uas muaj tsawg kawg 12 tus ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `resetDone` | hmn | Password updated successfully. | Hloov lo lus zais tiav lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `resetRedirecting` | hmn | Redirecting you to sign in… | Tab tom coj koj mus nkag… | 2026-11-15 | machine-drafted, needs native review |
+| `resetHelp` | hmn | If your new password doesn't work, please request another reset link. | Yog tias koj lo lus zais tshiab siv tsis tau, thov ib txoj kab txuas rov teeb dua. | 2026-11-15 | machine-drafted, needs native review |
+| `newPassword` | hmn | New password | Lo lus zais tshiab | 2026-11-15 | machine-drafted, needs native review |
+| `passwordTooShort` | hmn | Password must be at least 12 characters. | Lo lus zais yuav tsum muaj tsawg kawg 12 tus ntawv. | 2026-11-15 | machine-drafted, needs native review |
+| `updating` | hmn | Updating… | Tab tom hloov… | 2026-11-15 | machine-drafted, needs native review |
+| `updatePassword` | hmn | Update password | Hloov lo lus zais | 2026-11-15 | machine-drafted, needs native review |
+| `samePassword` | hmn | Choose a password different from your current one. | Xaiv ib lo lus zais txawv ntawm qhov koj siv tam sim no. | 2026-11-15 | machine-drafted, needs native review |
+| `resetFailed` | hmn | We couldn't update your password. Please request a new reset link and try again. | Hloov tsis tau koj lo lus zais. Thov ib txoj kab txuas tshiab thiab sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaTitle` | hmn | Two-Factor Authentication | Kev lees paub ob kauj ruam | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupPrompt` | hmn | Enter a backup code to sign in | Sau ib tus lej khaws cia kom nkag tau | 2026-11-15 | machine-drafted, needs native review |
+| `mfaAppPrompt` | hmn | Enter the code from your authenticator app | Sau tus lej ntawm koj lub app lees paub | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInitFailed` | hmn | Failed to initialize MFA verification | Pib tsis tau kev lees paub ob kauj ruam | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidFormat` | hmn | Please enter a valid 6-digit code | Thov sau ib tus lej 6 tus uas siv tau | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidCode` | hmn | Invalid verification code | Tus lej lees paub siv tsis tau | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyFailed` | hmn | Verification failed | Lees paub tsis tau | 2026-11-15 | machine-drafted, needs native review |
+| `mfaEnterBackup` | hmn | Please enter a backup code | Thov sau ib tus lej khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `mfaInvalidBackup` | hmn | Invalid backup code | Tus lej khaws cia siv tsis tau | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeLabel` | hmn | 6-digit code | Tus lej 6 tus | 2026-11-15 | machine-drafted, needs native review |
+| `mfaCodeHint` | hmn | The code is checked when you enter the 6th digit. It changes every 30 seconds. | Tus lej raug kuaj thaum koj sau tus lej thib 6. Nws hloov txhua 30 feeb thib ob. | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifying` | hmn | Verifying... | Tab tom lees paub… | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerify` | hmn | Verify | Lees paub | 2026-11-15 | machine-drafted, needs native review |
+| `mfaOr` | hmn | Or | Lossis | 2026-11-15 | machine-drafted, needs native review |
+| `mfaUseBackup` | hmn | Use Backup Code | Siv tus lej khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupLabel` | hmn | Backup code | Tus lej khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackupHint` | hmn | Each backup code can only be used once | Txhua tus lej khaws cia tsuas siv tau ib zaug xwb | 2026-11-15 | machine-drafted, needs native review |
+| `mfaVerifyBackup` | hmn | Verify Backup Code | Lees paub tus lej khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `mfaBackToApp` | hmn | Back to Authenticator Code | Rov qab mus rau tus lej ntawm app | 2026-11-15 | machine-drafted, needs native review |
+| `mfaDifferentUser` | hmn | Sign in as different user | Nkag nrog lwm tus account | 2026-11-15 | machine-drafted, needs native review |
+| `LOCKED_MINUTES.other` | ht | Account temporarily locked. Please try again in {n} minutes. | Kont lan bloke pou kounye a. Tanpri eseye ankò nan {n} minit. | 2026-11-15 | machine-drafted, needs native review |
+| `LOCKED_MINUTES.other` | so | Account temporarily locked. Please try again in {n} minutes. | Akoonka si ku meel gaar ah ayaa loo xiray. Fadlan isku day mar kale {n} daqiiqo kadib. | 2026-11-15 | machine-drafted, needs native review |
+| `LOCKED_MINUTES.one` | am | Account temporarily locked. Please try again in {n} minute. | መለያው ለጊዜው ተቆልፏል። እባክዎ በ{n} ደቂቃ ውስጥ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `LOCKED_MINUTES.other` | am | Account temporarily locked. Please try again in {n} minutes. | መለያው ለጊዜው ተቆልፏል። እባክዎ በ{n} ደቂቃዎች ውስጥ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `LOCKED_MINUTES.other` | hmn | Account temporarily locked. Please try again in {n} minutes. | Tus account raug xauv ib ntus. Thov sim dua hauv {n} feeb. | 2026-11-15 | machine-drafted, needs native review |
+| `ATTEMPTS_REMAINING.other` | ht | Warning: {n} login attempts remaining before temporary lockout. | Atansyon: ou rete {n} tantativ anvan kont lan bloke pou yon ti tan. | 2026-11-15 | machine-drafted, needs native review |
+| `ATTEMPTS_REMAINING.other` | so | Warning: {n} login attempts remaining before temporary lockout. | Digniin: waxaa kuu hadhay {n} isku day galitaan ka hor xiritaanka ku meel gaarka ah. | 2026-11-15 | machine-drafted, needs native review |
+| `ATTEMPTS_REMAINING.one` | am | Warning: {n} login attempt remaining before temporary lockout. | ማስጠንቀቂያ፦ ጊዜያዊ መቆለፍ በፊት {n} የመግቢያ ሙከራ ቀርቷል። | 2026-11-15 | machine-drafted, needs native review |
+| `ATTEMPTS_REMAINING.other` | am | Warning: {n} login attempts remaining before temporary lockout. | ማስጠንቀቂያ፦ ጊዜያዊ መቆለፍ በፊት {n} የመግቢያ ሙከራዎች ቀርተዋል። | 2026-11-15 | machine-drafted, needs native review |
+| `ATTEMPTS_REMAINING.other` | hmn | Warning: {n} login attempts remaining before temporary lockout. | Ceeb toom: tseem tshuav {n} zaug sim nkag ua ntej raug xauv ib ntus. | 2026-11-15 | machine-drafted, needs native review |
+
+### `lib/i18n-errors.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `panelError` | ht | This panel encountered an error. | Panno sa a rankontre yon erè. | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | ht | Reference: {digest} | Referans: {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `panelError` | so | This panel encountered an error. | Guddigan wuxuu la kulmay khalad. | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | so | Reference: {digest} | Tixraac: {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `panelError` | am | This panel encountered an error. | ይህ ፓነል ስህተት አጋጥሞታል። | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | am | Reference: {digest} | ማጣቀሻ፦ {digest} | 2026-11-15 | machine-drafted, needs native review |
+| `panelError` | hmn | This panel encountered an error. | Lub vaj huam sib luag no muaj qhov yuam kev. | 2026-11-15 | machine-drafted, needs native review |
+| `errorRef` | hmn | Reference: {digest} | Tus lej siv: {digest} | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-feed-badges.ts`
 
 | Key | Locale | English | Text | Added | Status |
@@ -3325,6 +3753,207 @@ step in that test, and the test fails until the list below is regenerated.
 | `upcomingReminders` | hmn | Upcoming Reminders | Cov lus ceeb toom tom ntej | 2026-11-15 | machine-drafted, needs native review |
 | `noReminders` | hmn | No upcoming reminders. Reminders will appear here when you have appointments or deadlines. | Tsis muaj lus ceeb toom tom ntej. Cov lus ceeb toom yuav tshwm ntawm no thaum koj muaj kev teem caij lossis hnub kawg. | 2026-11-15 | machine-drafted, needs native review |
 
+### `lib/i18n-programs.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `title` | ht | Programs | Pwogram | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | ht | Find benefits and services available near you | Jwenn benefis ak sèvis ki disponib toupre w | 2026-11-15 | machine-drafted, needs native review |
+| `tabBrowse` | ht | Browse | Gade | 2026-11-15 | machine-drafted, needs native review |
+| `tabSaved` | ht | Saved | Sovgade | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | ht | Search programs | Chèche pwogram | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | ht | Program name or keyword | Non pwogram nan oswa yon mo kle | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | ht | State | Eta | 2026-11-15 | machine-drafted, needs native review |
+| `selectState` | ht | Select your state | Chwazi eta w | 2026-11-15 | machine-drafted, needs native review |
+| `stateBody` | ht | Programs are state-specific. Choose your state above to see available benefits. | Pwogram yo depann de chak eta. Chwazi eta w anlè a pou w wè benefis ki disponib yo. | 2026-11-15 | machine-drafted, needs native review |
+| `categoriesLabel` | ht | Categories | Kategori | 2026-11-15 | machine-drafted, needs native review |
+| `allCategories` | ht | All | Tout | 2026-11-15 | machine-drafted, needs native review |
+| `searching` | ht | Searching… | N ap chèche… | 2026-11-15 | machine-drafted, needs native review |
+| `loadingPrograms` | ht | Loading programs… | N ap chaje pwogram yo… | 2026-11-15 | machine-drafted, needs native review |
+| `searchTimeout` | ht | Search timed out. Please try again. | Rechèch la pran twòp tan. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `searchFailed` | ht | Search isn't working right now. Please try again. | Rechèch la pa mache kounye a. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `programsTimeout` | ht | Programs timed out. Please try again. | Pwogram yo pran twòp tan pou chaje. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `programsLoadFailed` | ht | Failed to load programs. Please try again. | Nou pa t ka chaje pwogram yo. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `retry` | ht | Retry | Eseye ankò | 2026-11-15 | machine-drafted, needs native review |
+| `askAssistant` | ht | Ask the assistant what happened | Mande asistan an sa k pase | 2026-11-15 | machine-drafted, needs native review |
+| `noResults` | ht | No results for “{query}” | Pa gen rezilta pou “{query}” | 2026-11-15 | machine-drafted, needs native review |
+| `noPrograms` | ht | No programs found | Pa gen pwogram ki jwenn | 2026-11-15 | machine-drafted, needs native review |
+| `tryDifferentSearch` | ht | Try a different search term. | Eseye yon lòt mo pou chèche. | 2026-11-15 | machine-drafted, needs native review |
+| `tryAdjusting` | ht | Try adjusting your search or selecting a different category. | Eseye chanje rechèch ou a oswa chwazi yon lòt kategori. | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | ht | Eligibility | Kondisyon pou kalifye | 2026-11-15 | machine-drafted, needs native review |
+| `servicesOffered` | ht | Services offered | Sèvis yo ofri | 2026-11-15 | machine-drafted, needs native review |
+| `hours` | ht | Hours | Lè ouvèti | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | ht | Saved | Sovgade | 2026-11-15 | machine-drafted, needs native review |
+| `saveToPlan` | ht | Save to My Plan | Sovgade nan Plan mwen | 2026-11-15 | machine-drafted, needs native review |
+| `savedToPlan` | ht | Saved to My Plan. | Sovgade nan Plan mwen. | 2026-11-15 | machine-drafted, needs native review |
+| `startApplication` | ht | Start Application | Kòmanse demann | 2026-11-15 | machine-drafted, needs native review |
+| `contactDirectly` | ht | Contact Directly | Kontakte dirèkteman | 2026-11-15 | machine-drafted, needs native review |
+| `applyOnline` | ht | Apply Online | Aplike sou entènèt | 2026-11-15 | machine-drafted, needs native review |
+| `downloadForm` | ht | Download Form | Telechaje fòm nan | 2026-11-15 | machine-drafted, needs native review |
+| `shareToFeed` | ht | Share to Feed | Pataje nan Feed la | 2026-11-15 | machine-drafted, needs native review |
+| `close` | ht | Close | Fèmen | 2026-11-15 | machine-drafted, needs native review |
+| `shareLabel` | ht | Your post | Piblikasyon w | 2026-11-15 | machine-drafted, needs native review |
+| `sharePlaceholder` | ht | What do you want to say about this program? | Kisa ou vle di sou pwogram sa a? | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefault` | ht | Check out {name} | Gade {name} | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefaultWithDescription` | ht | Check out {name} — {description} | Gade {name} — {description} | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | ht | Cancel | Anile | 2026-11-15 | machine-drafted, needs native review |
+| `share` | ht | Share | Pataje | 2026-11-15 | machine-drafted, needs native review |
+| `unsave` | ht | Unsave | Retire | 2026-11-15 | machine-drafted, needs native review |
+| `removedFromPlan` | ht | Removed from My Plan. | Retire nan Plan mwen. | 2026-11-15 | machine-drafted, needs native review |
+| `loadingSaved` | ht | Loading saved programs… | N ap chaje pwogram ou sovgade yo… | 2026-11-15 | machine-drafted, needs native review |
+| `savedTimeout` | ht | Saved programs timed out. Please try again. | Pwogram ou sovgade yo pran twòp tan. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `signInToSave` | ht | Sign in to save programs. | Konekte pou w sovgade pwogram. | 2026-11-15 | machine-drafted, needs native review |
+| `savedFailed` | ht | Something went wrong with your saved programs. Please try again. | Yon bagay mal pase ak pwogram ou sovgade yo. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyTitle` | ht | No saved programs yet | Ou poko sovgade okenn pwogram | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyBody` | ht | Browse programs and tap “{action}” to keep track of the ones that look right for you. | Gade pwogram yo epi peze “{action}” pou w kenbe sa ki bon pou ou yo. | 2026-11-15 | machine-drafted, needs native review |
+| `title` | so | Programs | Barnaamijyada | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | so | Find benefits and services available near you | Hel gargaarro iyo adeegyo kuu dhow | 2026-11-15 | machine-drafted, needs native review |
+| `tabBrowse` | so | Browse | Daalaco | 2026-11-15 | machine-drafted, needs native review |
+| `tabSaved` | so | Saved | La keydiyay | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | so | Search programs | Raadi barnaamijyo | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | so | Program name or keyword | Magaca barnaamijka ama erey muhiim ah | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | so | State | Gobolka | 2026-11-15 | machine-drafted, needs native review |
+| `selectState` | so | Select your state | Dooro gobolkaaga | 2026-11-15 | machine-drafted, needs native review |
+| `stateBody` | so | Programs are state-specific. Choose your state above to see available benefits. | Barnaamijyadu gobol kasta way ku kala duwan yihiin. Kor ka dooro gobolkaaga si aad u aragto gargaarrada jira. | 2026-11-15 | machine-drafted, needs native review |
+| `categoriesLabel` | so | Categories | Qaybaha | 2026-11-15 | machine-drafted, needs native review |
+| `allCategories` | so | All | Dhammaan | 2026-11-15 | machine-drafted, needs native review |
+| `searching` | so | Searching… | Waa la raadinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `loadingPrograms` | so | Loading programs… | Barnaamijyada waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `searchTimeout` | so | Search timed out. Please try again. | Raadintu waqti badan bay qaadatay. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `searchFailed` | so | Search isn't working right now. Please try again. | Raadintu hadda ma shaqaynayso. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `programsTimeout` | so | Programs timed out. Please try again. | Barnaamijyadu waqti badan bay qaateen. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `programsLoadFailed` | so | Failed to load programs. Please try again. | Barnaamijyada lama soo rari karin. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `retry` | so | Retry | Isku day mar kale | 2026-11-15 | machine-drafted, needs native review |
+| `askAssistant` | so | Ask the assistant what happened | Weydii caawiyaha waxa dhacay | 2026-11-15 | machine-drafted, needs native review |
+| `noResults` | so | No results for “{query}” | Natiijo looma helin “{query}” | 2026-11-15 | machine-drafted, needs native review |
+| `noPrograms` | so | No programs found | Barnaamij lama helin | 2026-11-15 | machine-drafted, needs native review |
+| `tryDifferentSearch` | so | Try a different search term. | Isku day erey kale oo raadin ah. | 2026-11-15 | machine-drafted, needs native review |
+| `tryAdjusting` | so | Try adjusting your search or selecting a different category. | Isku day inaad wax ka beddesho raadinta ama dooro qayb kale. | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | so | Eligibility | Shuruudaha | 2026-11-15 | machine-drafted, needs native review |
+| `servicesOffered` | so | Services offered | Adeegyada la bixiyo | 2026-11-15 | machine-drafted, needs native review |
+| `hours` | so | Hours | Saacadaha | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | so | Saved | La keydiyay | 2026-11-15 | machine-drafted, needs native review |
+| `saveToPlan` | so | Save to My Plan | Ku keydi Qorshahayga | 2026-11-15 | machine-drafted, needs native review |
+| `savedToPlan` | so | Saved to My Plan. | Waa lagu keydiyay Qorshahayga. | 2026-11-15 | machine-drafted, needs native review |
+| `startApplication` | so | Start Application | Bilow codsiga | 2026-11-15 | machine-drafted, needs native review |
+| `contactDirectly` | so | Contact Directly | Si toos ah ula xiriir | 2026-11-15 | machine-drafted, needs native review |
+| `applyOnline` | so | Apply Online | Ka codso internetka | 2026-11-15 | machine-drafted, needs native review |
+| `downloadForm` | so | Download Form | Soo deji foomka | 2026-11-15 | machine-drafted, needs native review |
+| `shareToFeed` | so | Share to Feed | La wadaag Feed-ka | 2026-11-15 | machine-drafted, needs native review |
+| `close` | so | Close | Xir | 2026-11-15 | machine-drafted, needs native review |
+| `shareLabel` | so | Your post | Qoraalkaaga | 2026-11-15 | machine-drafted, needs native review |
+| `sharePlaceholder` | so | What do you want to say about this program? | Maxaad ka odhan lahayd barnaamijkan? | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefault` | so | Check out {name} | Eeg {name} | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefaultWithDescription` | so | Check out {name} — {description} | Eeg {name} — {description} | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | so | Cancel | Jooji | 2026-11-15 | machine-drafted, needs native review |
+| `share` | so | Share | La wadaag | 2026-11-15 | machine-drafted, needs native review |
+| `unsave` | so | Unsave | Ka saar | 2026-11-15 | machine-drafted, needs native review |
+| `removedFromPlan` | so | Removed from My Plan. | Waa laga saaray Qorshahayga. | 2026-11-15 | machine-drafted, needs native review |
+| `loadingSaved` | so | Loading saved programs… | Barnaamijyada la keydiyay waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `savedTimeout` | so | Saved programs timed out. Please try again. | Barnaamijyada la keydiyay waqti badan bay qaateen. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `signInToSave` | so | Sign in to save programs. | Gal si aad u keydiso barnaamijyo. | 2026-11-15 | machine-drafted, needs native review |
+| `savedFailed` | so | Something went wrong with your saved programs. Please try again. | Wax ayaa ka khaldamay barnaamijyadaada la keydiyay. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyTitle` | so | No saved programs yet | Weli barnaamij lama keydin | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyBody` | so | Browse programs and tap “{action}” to keep track of the ones that look right for you. | Daalaco barnaamijyada oo taabo “{action}” si aad ula socoto kuwa kugu habboon. | 2026-11-15 | machine-drafted, needs native review |
+| `title` | am | Programs | ፕሮግራሞች | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | am | Find benefits and services available near you | በአቅራቢያዎ ያሉ ጥቅማ ጥቅሞችንና አገልግሎቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `tabBrowse` | am | Browse | ያስሱ | 2026-11-15 | machine-drafted, needs native review |
+| `tabSaved` | am | Saved | የተቀመጡ | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | am | Search programs | ፕሮግራሞችን ይፈልጉ | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | am | Program name or keyword | የፕሮግራም ስም ወይም ቁልፍ ቃል | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | am | State | ግዛት | 2026-11-15 | machine-drafted, needs native review |
+| `selectState` | am | Select your state | ግዛትዎን ይምረጡ | 2026-11-15 | machine-drafted, needs native review |
+| `stateBody` | am | Programs are state-specific. Choose your state above to see available benefits. | ፕሮግራሞች እንደ ግዛቱ ይለያያሉ። ያሉትን ጥቅማ ጥቅሞች ለማየት ከላይ ግዛትዎን ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `categoriesLabel` | am | Categories | ምድቦች | 2026-11-15 | machine-drafted, needs native review |
+| `allCategories` | am | All | ሁሉም | 2026-11-15 | machine-drafted, needs native review |
+| `searching` | am | Searching… | በመፈለግ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `loadingPrograms` | am | Loading programs… | ፕሮግራሞች በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `searchTimeout` | am | Search timed out. Please try again. | ፍለጋው በጣም ረጅም ጊዜ ወሰደ። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `searchFailed` | am | Search isn't working right now. Please try again. | ፍለጋው አሁን እየሰራ አይደለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `programsTimeout` | am | Programs timed out. Please try again. | ፕሮግራሞቹ ለመጫን በጣም ረጅም ጊዜ ወሰዱ። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `programsLoadFailed` | am | Failed to load programs. Please try again. | ፕሮግራሞችን መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `retry` | am | Retry | እንደገና ይሞክሩ | 2026-11-15 | machine-drafted, needs native review |
+| `askAssistant` | am | Ask the assistant what happened | ምን እንደተፈጠረ ረዳቱን ይጠይቁ | 2026-11-15 | machine-drafted, needs native review |
+| `noResults` | am | No results for “{query}” | ለ“{query}” ምንም ውጤት የለም | 2026-11-15 | machine-drafted, needs native review |
+| `noPrograms` | am | No programs found | ምንም ፕሮግራም አልተገኘም | 2026-11-15 | machine-drafted, needs native review |
+| `tryDifferentSearch` | am | Try a different search term. | ሌላ የፍለጋ ቃል ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `tryAdjusting` | am | Try adjusting your search or selecting a different category. | ፍለጋዎን ይቀይሩ ወይም ሌላ ምድብ ይምረጡ። | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | am | Eligibility | የብቁነት መስፈርቶች | 2026-11-15 | machine-drafted, needs native review |
+| `servicesOffered` | am | Services offered | የሚሰጡ አገልግሎቶች | 2026-11-15 | machine-drafted, needs native review |
+| `hours` | am | Hours | የስራ ሰዓት | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | am | Saved | ተቀምጧል | 2026-11-15 | machine-drafted, needs native review |
+| `saveToPlan` | am | Save to My Plan | በዕቅዴ ውስጥ አስቀምጥ | 2026-11-15 | machine-drafted, needs native review |
+| `savedToPlan` | am | Saved to My Plan. | በዕቅዴ ውስጥ ተቀምጧል። | 2026-11-15 | machine-drafted, needs native review |
+| `startApplication` | am | Start Application | ማመልከቻ ጀምር | 2026-11-15 | machine-drafted, needs native review |
+| `contactDirectly` | am | Contact Directly | በቀጥታ ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `applyOnline` | am | Apply Online | በመስመር ላይ ያመልክቱ | 2026-11-15 | machine-drafted, needs native review |
+| `downloadForm` | am | Download Form | ቅጹን አውርድ | 2026-11-15 | machine-drafted, needs native review |
+| `shareToFeed` | am | Share to Feed | በፊድ ላይ አጋራ | 2026-11-15 | machine-drafted, needs native review |
+| `close` | am | Close | ዝጋ | 2026-11-15 | machine-drafted, needs native review |
+| `shareLabel` | am | Your post | የእርስዎ ልጥፍ | 2026-11-15 | machine-drafted, needs native review |
+| `sharePlaceholder` | am | What do you want to say about this program? | ስለዚህ ፕሮግራም ምን ማለት ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefault` | am | Check out {name} | {name}ን ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefaultWithDescription` | am | Check out {name} — {description} | {name}ን ይመልከቱ — {description} | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | am | Cancel | ይቅር | 2026-11-15 | machine-drafted, needs native review |
+| `share` | am | Share | አጋራ | 2026-11-15 | machine-drafted, needs native review |
+| `unsave` | am | Unsave | አስወግድ | 2026-11-15 | machine-drafted, needs native review |
+| `removedFromPlan` | am | Removed from My Plan. | ከዕቅዴ ተወግዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `loadingSaved` | am | Loading saved programs… | የተቀመጡ ፕሮግራሞች በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `savedTimeout` | am | Saved programs timed out. Please try again. | የተቀመጡ ፕሮግራሞች በጣም ረጅም ጊዜ ወሰዱ። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `signInToSave` | am | Sign in to save programs. | ፕሮግራሞችን ለማስቀመጥ ይግቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `savedFailed` | am | Something went wrong with your saved programs. Please try again. | በተቀመጡ ፕሮግራሞችዎ ላይ ችግር ተፈጥሯል። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyTitle` | am | No saved programs yet | እስካሁን የተቀመጠ ፕሮግራም የለም | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyBody` | am | Browse programs and tap “{action}” to keep track of the ones that look right for you. | ፕሮግራሞችን ያስሱና የሚስማሙዎትን ለመከታተል “{action}”ን ይንኩ። | 2026-11-15 | machine-drafted, needs native review |
+| `title` | hmn | Programs | Cov kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
+| `subtitle` | hmn | Find benefits and services available near you | Nrhiav cov kev pab thiab kev pabcuam nyob ze koj | 2026-11-15 | machine-drafted, needs native review |
+| `tabBrowse` | hmn | Browse | Saib | 2026-11-15 | machine-drafted, needs native review |
+| `tabSaved` | hmn | Saved | Khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `searchLabel` | hmn | Search programs | Nrhiav cov kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
+| `searchPlaceholder` | hmn | Program name or keyword | Lub npe kev pab cuam lossis lo lus tseem ceeb | 2026-11-15 | machine-drafted, needs native review |
+| `stateLabel` | hmn | State | Xeev | 2026-11-15 | machine-drafted, needs native review |
+| `selectState` | hmn | Select your state | Xaiv koj lub xeev | 2026-11-15 | machine-drafted, needs native review |
+| `stateBody` | hmn | Programs are state-specific. Choose your state above to see available benefits. | Cov kev pab cuam txawv raws txhua lub xeev. Xaiv koj lub xeev saum toj no kom pom cov kev pab uas muaj. | 2026-11-15 | machine-drafted, needs native review |
+| `categoriesLabel` | hmn | Categories | Pawg | 2026-11-15 | machine-drafted, needs native review |
+| `allCategories` | hmn | All | Tag nrho | 2026-11-15 | machine-drafted, needs native review |
+| `searching` | hmn | Searching… | Tab tom nrhiav… | 2026-11-15 | machine-drafted, needs native review |
+| `loadingPrograms` | hmn | Loading programs… | Tab tom thauj cov kev pab cuam… | 2026-11-15 | machine-drafted, needs native review |
+| `searchTimeout` | hmn | Search timed out. Please try again. | Kev nrhiav siv sijhawm ntev dhau. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `searchFailed` | hmn | Search isn't working right now. Please try again. | Kev nrhiav tsis ua haujlwm tam sim no. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `programsTimeout` | hmn | Programs timed out. Please try again. | Cov kev pab cuam siv sijhawm ntev dhau los thauj. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `programsLoadFailed` | hmn | Failed to load programs. Please try again. | Thauj tsis tau cov kev pab cuam. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `retry` | hmn | Retry | Sim dua | 2026-11-15 | machine-drafted, needs native review |
+| `askAssistant` | hmn | Ask the assistant what happened | Nug tus pab cuam seb muaj dab tsi tshwm sim | 2026-11-15 | machine-drafted, needs native review |
+| `noResults` | hmn | No results for “{query}” | Tsis muaj qhov tshwm sim rau “{query}” | 2026-11-15 | machine-drafted, needs native review |
+| `noPrograms` | hmn | No programs found | Nrhiav tsis tau kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
+| `tryDifferentSearch` | hmn | Try a different search term. | Sim lwm lo lus nrhiav. | 2026-11-15 | machine-drafted, needs native review |
+| `tryAdjusting` | hmn | Try adjusting your search or selecting a different category. | Sim hloov koj qhov kev nrhiav lossis xaiv lwm pawg. | 2026-11-15 | machine-drafted, needs native review |
+| `eligibility` | hmn | Eligibility | Kev tsim nyog | 2026-11-15 | machine-drafted, needs native review |
+| `servicesOffered` | hmn | Services offered | Cov kev pabcuam muaj | 2026-11-15 | machine-drafted, needs native review |
+| `hours` | hmn | Hours | Sijhawm qhib | 2026-11-15 | machine-drafted, needs native review |
+| `saved` | hmn | Saved | Khaws lawm | 2026-11-15 | machine-drafted, needs native review |
+| `saveToPlan` | hmn | Save to My Plan | Khaws rau Kuv Txoj Kev Npaj | 2026-11-15 | machine-drafted, needs native review |
+| `savedToPlan` | hmn | Saved to My Plan. | Khaws rau Kuv Txoj Kev Npaj lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `startApplication` | hmn | Start Application | Pib daim ntawv thov | 2026-11-15 | machine-drafted, needs native review |
+| `contactDirectly` | hmn | Contact Directly | Tiv tauj ncaj qha | 2026-11-15 | machine-drafted, needs native review |
+| `applyOnline` | hmn | Apply Online | Thov hauv online | 2026-11-15 | machine-drafted, needs native review |
+| `downloadForm` | hmn | Download Form | Rub daim ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `shareToFeed` | hmn | Share to Feed | Qhia rau Feed | 2026-11-15 | machine-drafted, needs native review |
+| `close` | hmn | Close | Kaw | 2026-11-15 | machine-drafted, needs native review |
+| `shareLabel` | hmn | Your post | Koj tsab ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `sharePlaceholder` | hmn | What do you want to say about this program? | Koj xav hais li cas txog qhov kev pab cuam no? | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefault` | hmn | Check out {name} | Saib {name} | 2026-11-15 | machine-drafted, needs native review |
+| `shareDefaultWithDescription` | hmn | Check out {name} — {description} | Saib {name} — {description} | 2026-11-15 | machine-drafted, needs native review |
+| `cancel` | hmn | Cancel | Tso tseg | 2026-11-15 | machine-drafted, needs native review |
+| `share` | hmn | Share | Qhia | 2026-11-15 | machine-drafted, needs native review |
+| `unsave` | hmn | Unsave | Tshem tawm | 2026-11-15 | machine-drafted, needs native review |
+| `removedFromPlan` | hmn | Removed from My Plan. | Tshem tawm ntawm Kuv Txoj Kev Npaj lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `loadingSaved` | hmn | Loading saved programs… | Tab tom thauj cov kev pab cuam koj khaws cia… | 2026-11-15 | machine-drafted, needs native review |
+| `savedTimeout` | hmn | Saved programs timed out. Please try again. | Cov kev pab cuam koj khaws cia siv sijhawm ntev dhau. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `signInToSave` | hmn | Sign in to save programs. | Nkag mus kom khaws tau cov kev pab cuam. | 2026-11-15 | machine-drafted, needs native review |
+| `savedFailed` | hmn | Something went wrong with your saved programs. Please try again. | Muaj qee yam yuam kev nrog koj cov kev pab cuam khaws cia. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyTitle` | hmn | No saved programs yet | Tseem tsis tau muaj kev pab cuam khaws cia | 2026-11-15 | machine-drafted, needs native review |
+| `savedEmptyBody` | hmn | Browse programs and tap “{action}” to keep track of the ones that look right for you. | Saib cov kev pab cuam thiab nias “{action}” kom koj taug qab tau cov uas haum rau koj. | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-settings-language.ts`
 
 | Key | Locale | English | Text | Added | Status |
@@ -3369,6 +3998,235 @@ step in that test, and the test fails until the list below is regenerated.
 | `savedDevice` | hmn | Language saved on this device | Tau khaws hom lus rau ntawm lub cuab yeej no | 2026-11-14 | machine-drafted, needs native review |
 | `deviceOnly` | hmn | Saved to this device only. Create an account to sync your preference. | Tsuas khaws rau ntawm lub cuab yeej no xwb. Tsim ib tug account kom sib txuas koj qhov kev nyiam. | 2026-11-14 | machine-drafted, needs native review |
 | `failed` | hmn | Your language could not be saved. FEED is still in {language}. Please try again. | Khaws tsis tau koj hom lus. FEED tseem yog {language}. Thov sim dua. | 2026-11-14 | machine-drafted, needs native review |
+
+### `lib/i18n-us-states.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `AL` | ht | Alabama | Alabama | 2026-11-15 | machine-drafted, needs native review |
+| `AK` | ht | Alaska | Alaska | 2026-11-15 | machine-drafted, needs native review |
+| `AZ` | ht | Arizona | Arizona | 2026-11-15 | machine-drafted, needs native review |
+| `AR` | ht | Arkansas | Arkansas | 2026-11-15 | machine-drafted, needs native review |
+| `CA` | ht | California | Kalifòni | 2026-11-15 | machine-drafted, needs native review |
+| `CO` | ht | Colorado | Kolorado | 2026-11-15 | machine-drafted, needs native review |
+| `CT` | ht | Connecticut | Konektikèt | 2026-11-15 | machine-drafted, needs native review |
+| `DE` | ht | Delaware | Delawè | 2026-11-15 | machine-drafted, needs native review |
+| `DC` | ht | District of Columbia | Distri Kolonbi | 2026-11-15 | machine-drafted, needs native review |
+| `FL` | ht | Florida | Florid | 2026-11-15 | machine-drafted, needs native review |
+| `GA` | ht | Georgia | Jòji | 2026-11-15 | machine-drafted, needs native review |
+| `HI` | ht | Hawaii | Awayi | 2026-11-15 | machine-drafted, needs native review |
+| `ID` | ht | Idaho | Idaho | 2026-11-15 | machine-drafted, needs native review |
+| `IL` | ht | Illinois | Ilinwa | 2026-11-15 | machine-drafted, needs native review |
+| `IN` | ht | Indiana | Indyana | 2026-11-15 | machine-drafted, needs native review |
+| `IA` | ht | Iowa | Iowa | 2026-11-15 | machine-drafted, needs native review |
+| `KS` | ht | Kansas | Kannzas | 2026-11-15 | machine-drafted, needs native review |
+| `KY` | ht | Kentucky | Kentoki | 2026-11-15 | machine-drafted, needs native review |
+| `LA` | ht | Louisiana | Lwizyàn | 2026-11-15 | machine-drafted, needs native review |
+| `ME` | ht | Maine | Maine | 2026-11-15 | machine-drafted, needs native review |
+| `MD` | ht | Maryland | Maryland | 2026-11-15 | machine-drafted, needs native review |
+| `MA` | ht | Massachusetts | Massachusetts | 2026-11-15 | machine-drafted, needs native review |
+| `MI` | ht | Michigan | Michigan | 2026-11-15 | machine-drafted, needs native review |
+| `MN` | ht | Minnesota | Minnesota | 2026-11-15 | machine-drafted, needs native review |
+| `MS` | ht | Mississippi | Mississippi | 2026-11-15 | machine-drafted, needs native review |
+| `MO` | ht | Missouri | Missouri | 2026-11-15 | machine-drafted, needs native review |
+| `MT` | ht | Montana | Montana | 2026-11-15 | machine-drafted, needs native review |
+| `NE` | ht | Nebraska | Nebraska | 2026-11-15 | machine-drafted, needs native review |
+| `NV` | ht | Nevada | Nevada | 2026-11-15 | machine-drafted, needs native review |
+| `NH` | ht | New Hampshire | New Hampshire | 2026-11-15 | machine-drafted, needs native review |
+| `NJ` | ht | New Jersey | New Jersey | 2026-11-15 | machine-drafted, needs native review |
+| `NM` | ht | New Mexico | Nouvo Meksik | 2026-11-15 | machine-drafted, needs native review |
+| `NY` | ht | New York | Nouyòk | 2026-11-15 | machine-drafted, needs native review |
+| `NC` | ht | North Carolina | Karolin di Nò | 2026-11-15 | machine-drafted, needs native review |
+| `ND` | ht | North Dakota | Dakota di Nò | 2026-11-15 | machine-drafted, needs native review |
+| `OH` | ht | Ohio | Ohio | 2026-11-15 | machine-drafted, needs native review |
+| `OK` | ht | Oklahoma | Oklahoma | 2026-11-15 | machine-drafted, needs native review |
+| `OR` | ht | Oregon | Oregon | 2026-11-15 | machine-drafted, needs native review |
+| `PA` | ht | Pennsylvania | Pennsilvani | 2026-11-15 | machine-drafted, needs native review |
+| `RI` | ht | Rhode Island | Rhode Island | 2026-11-15 | machine-drafted, needs native review |
+| `SC` | ht | South Carolina | Karolin di Sid | 2026-11-15 | machine-drafted, needs native review |
+| `SD` | ht | South Dakota | Dakota di Sid | 2026-11-15 | machine-drafted, needs native review |
+| `TN` | ht | Tennessee | Tennessee | 2026-11-15 | machine-drafted, needs native review |
+| `TX` | ht | Texas | Texas | 2026-11-15 | machine-drafted, needs native review |
+| `UT` | ht | Utah | Utah | 2026-11-15 | machine-drafted, needs native review |
+| `VT` | ht | Vermont | Vermont | 2026-11-15 | machine-drafted, needs native review |
+| `VA` | ht | Virginia | Vijini | 2026-11-15 | machine-drafted, needs native review |
+| `WA` | ht | Washington | Washington | 2026-11-15 | machine-drafted, needs native review |
+| `WV` | ht | West Virginia | Vijini Lwès | 2026-11-15 | machine-drafted, needs native review |
+| `WI` | ht | Wisconsin | Wisconsin | 2026-11-15 | machine-drafted, needs native review |
+| `WY` | ht | Wyoming | Wyoming | 2026-11-15 | machine-drafted, needs native review |
+| `PR` | ht | Puerto Rico | Pòtoriko | 2026-11-15 | machine-drafted, needs native review |
+| `GU` | ht | Guam | Gwam | 2026-11-15 | machine-drafted, needs native review |
+| `VI` | ht | US Virgin Islands | Zile Vyèj Ameriken | 2026-11-15 | machine-drafted, needs native review |
+| `AS` | ht | American Samoa | Samoa Ameriken | 2026-11-15 | machine-drafted, needs native review |
+| `MP` | ht | Northern Mariana Islands | Zile Mariàn di Nò | 2026-11-15 | machine-drafted, needs native review |
+| `AL` | so | Alabama | Alabama | 2026-11-15 | machine-drafted, needs native review |
+| `AK` | so | Alaska | Alaska | 2026-11-15 | machine-drafted, needs native review |
+| `AZ` | so | Arizona | Arizona | 2026-11-15 | machine-drafted, needs native review |
+| `AR` | so | Arkansas | Arkansas | 2026-11-15 | machine-drafted, needs native review |
+| `CA` | so | California | Kaliforniya | 2026-11-15 | machine-drafted, needs native review |
+| `CO` | so | Colorado | Colorado | 2026-11-15 | machine-drafted, needs native review |
+| `CT` | so | Connecticut | Connecticut | 2026-11-15 | machine-drafted, needs native review |
+| `DE` | so | Delaware | Delaware | 2026-11-15 | machine-drafted, needs native review |
+| `DC` | so | District of Columbia | Degmada Columbia | 2026-11-15 | machine-drafted, needs native review |
+| `FL` | so | Florida | Florida | 2026-11-15 | machine-drafted, needs native review |
+| `GA` | so | Georgia | Georgia | 2026-11-15 | machine-drafted, needs native review |
+| `HI` | so | Hawaii | Hawaii | 2026-11-15 | machine-drafted, needs native review |
+| `ID` | so | Idaho | Idaho | 2026-11-15 | machine-drafted, needs native review |
+| `IL` | so | Illinois | Illinois | 2026-11-15 | machine-drafted, needs native review |
+| `IN` | so | Indiana | Indiana | 2026-11-15 | machine-drafted, needs native review |
+| `IA` | so | Iowa | Iowa | 2026-11-15 | machine-drafted, needs native review |
+| `KS` | so | Kansas | Kansas | 2026-11-15 | machine-drafted, needs native review |
+| `KY` | so | Kentucky | Kentucky | 2026-11-15 | machine-drafted, needs native review |
+| `LA` | so | Louisiana | Louisiana | 2026-11-15 | machine-drafted, needs native review |
+| `ME` | so | Maine | Maine | 2026-11-15 | machine-drafted, needs native review |
+| `MD` | so | Maryland | Maryland | 2026-11-15 | machine-drafted, needs native review |
+| `MA` | so | Massachusetts | Massachusetts | 2026-11-15 | machine-drafted, needs native review |
+| `MI` | so | Michigan | Michigan | 2026-11-15 | machine-drafted, needs native review |
+| `MN` | so | Minnesota | Minnesota | 2026-11-15 | machine-drafted, needs native review |
+| `MS` | so | Mississippi | Mississippi | 2026-11-15 | machine-drafted, needs native review |
+| `MO` | so | Missouri | Missouri | 2026-11-15 | machine-drafted, needs native review |
+| `MT` | so | Montana | Montana | 2026-11-15 | machine-drafted, needs native review |
+| `NE` | so | Nebraska | Nebraska | 2026-11-15 | machine-drafted, needs native review |
+| `NV` | so | Nevada | Nevada | 2026-11-15 | machine-drafted, needs native review |
+| `NH` | so | New Hampshire | New Hampshire | 2026-11-15 | machine-drafted, needs native review |
+| `NJ` | so | New Jersey | New Jersey | 2026-11-15 | machine-drafted, needs native review |
+| `NM` | so | New Mexico | New Mexico | 2026-11-15 | machine-drafted, needs native review |
+| `NY` | so | New York | New York | 2026-11-15 | machine-drafted, needs native review |
+| `NC` | so | North Carolina | Waqooyiga Carolina | 2026-11-15 | machine-drafted, needs native review |
+| `ND` | so | North Dakota | Waqooyiga Dakota | 2026-11-15 | machine-drafted, needs native review |
+| `OH` | so | Ohio | Ohio | 2026-11-15 | machine-drafted, needs native review |
+| `OK` | so | Oklahoma | Oklahoma | 2026-11-15 | machine-drafted, needs native review |
+| `OR` | so | Oregon | Oregon | 2026-11-15 | machine-drafted, needs native review |
+| `PA` | so | Pennsylvania | Pennsylvania | 2026-11-15 | machine-drafted, needs native review |
+| `RI` | so | Rhode Island | Rhode Island | 2026-11-15 | machine-drafted, needs native review |
+| `SC` | so | South Carolina | Koonfurta Carolina | 2026-11-15 | machine-drafted, needs native review |
+| `SD` | so | South Dakota | Koonfurta Dakota | 2026-11-15 | machine-drafted, needs native review |
+| `TN` | so | Tennessee | Tennessee | 2026-11-15 | machine-drafted, needs native review |
+| `TX` | so | Texas | Texas | 2026-11-15 | machine-drafted, needs native review |
+| `UT` | so | Utah | Utah | 2026-11-15 | machine-drafted, needs native review |
+| `VT` | so | Vermont | Vermont | 2026-11-15 | machine-drafted, needs native review |
+| `VA` | so | Virginia | Virginia | 2026-11-15 | machine-drafted, needs native review |
+| `WA` | so | Washington | Washington | 2026-11-15 | machine-drafted, needs native review |
+| `WV` | so | West Virginia | Galbeedka Virginia | 2026-11-15 | machine-drafted, needs native review |
+| `WI` | so | Wisconsin | Wisconsin | 2026-11-15 | machine-drafted, needs native review |
+| `WY` | so | Wyoming | Wyoming | 2026-11-15 | machine-drafted, needs native review |
+| `PR` | so | Puerto Rico | Puerto Rico | 2026-11-15 | machine-drafted, needs native review |
+| `GU` | so | Guam | Guam | 2026-11-15 | machine-drafted, needs native review |
+| `VI` | so | US Virgin Islands | Jasiiradaha Virgin ee Mareykanka | 2026-11-15 | machine-drafted, needs native review |
+| `AS` | so | American Samoa | Samoa ee Mareykanka | 2026-11-15 | machine-drafted, needs native review |
+| `MP` | so | Northern Mariana Islands | Jasiiradaha Waqooyiga Mariana | 2026-11-15 | machine-drafted, needs native review |
+| `AL` | am | Alabama | አላባማ | 2026-11-15 | machine-drafted, needs native review |
+| `AK` | am | Alaska | አላስካ | 2026-11-15 | machine-drafted, needs native review |
+| `AZ` | am | Arizona | አሪዞና | 2026-11-15 | machine-drafted, needs native review |
+| `AR` | am | Arkansas | አርካንሳስ | 2026-11-15 | machine-drafted, needs native review |
+| `CA` | am | California | ካሊፎርኒያ | 2026-11-15 | machine-drafted, needs native review |
+| `CO` | am | Colorado | ኮሎራዶ | 2026-11-15 | machine-drafted, needs native review |
+| `CT` | am | Connecticut | ኮነቲከት | 2026-11-15 | machine-drafted, needs native review |
+| `DE` | am | Delaware | ደላዌር | 2026-11-15 | machine-drafted, needs native review |
+| `DC` | am | District of Columbia | ዲስትሪክት ኦፍ ኮሎምቢያ | 2026-11-15 | machine-drafted, needs native review |
+| `FL` | am | Florida | ፍሎሪዳ | 2026-11-15 | machine-drafted, needs native review |
+| `GA` | am | Georgia | ጆርጂያ | 2026-11-15 | machine-drafted, needs native review |
+| `HI` | am | Hawaii | ሃዋይ | 2026-11-15 | machine-drafted, needs native review |
+| `ID` | am | Idaho | አይዳሆ | 2026-11-15 | machine-drafted, needs native review |
+| `IL` | am | Illinois | ኢሊኖይ | 2026-11-15 | machine-drafted, needs native review |
+| `IN` | am | Indiana | ኢንዲያና | 2026-11-15 | machine-drafted, needs native review |
+| `IA` | am | Iowa | አዮዋ | 2026-11-15 | machine-drafted, needs native review |
+| `KS` | am | Kansas | ካንሳስ | 2026-11-15 | machine-drafted, needs native review |
+| `KY` | am | Kentucky | ኬንታኪ | 2026-11-15 | machine-drafted, needs native review |
+| `LA` | am | Louisiana | ሉዊዚያና | 2026-11-15 | machine-drafted, needs native review |
+| `ME` | am | Maine | ሜይን | 2026-11-15 | machine-drafted, needs native review |
+| `MD` | am | Maryland | ሜሪላንድ | 2026-11-15 | machine-drafted, needs native review |
+| `MA` | am | Massachusetts | ማሳቹሴትስ | 2026-11-15 | machine-drafted, needs native review |
+| `MI` | am | Michigan | ሚሺጋን | 2026-11-15 | machine-drafted, needs native review |
+| `MN` | am | Minnesota | ሚኒሶታ | 2026-11-15 | machine-drafted, needs native review |
+| `MS` | am | Mississippi | ሚሲሲፒ | 2026-11-15 | machine-drafted, needs native review |
+| `MO` | am | Missouri | ሚዙሪ | 2026-11-15 | machine-drafted, needs native review |
+| `MT` | am | Montana | ሞንታና | 2026-11-15 | machine-drafted, needs native review |
+| `NE` | am | Nebraska | ነብራስካ | 2026-11-15 | machine-drafted, needs native review |
+| `NV` | am | Nevada | ኔቫዳ | 2026-11-15 | machine-drafted, needs native review |
+| `NH` | am | New Hampshire | ኒው ሃምፕሻየር | 2026-11-15 | machine-drafted, needs native review |
+| `NJ` | am | New Jersey | ኒው ጀርሲ | 2026-11-15 | machine-drafted, needs native review |
+| `NM` | am | New Mexico | ኒው ሜክሲኮ | 2026-11-15 | machine-drafted, needs native review |
+| `NY` | am | New York | ኒው ዮርክ | 2026-11-15 | machine-drafted, needs native review |
+| `NC` | am | North Carolina | ሰሜን ካሮላይና | 2026-11-15 | machine-drafted, needs native review |
+| `ND` | am | North Dakota | ሰሜን ዳኮታ | 2026-11-15 | machine-drafted, needs native review |
+| `OH` | am | Ohio | ኦሃዮ | 2026-11-15 | machine-drafted, needs native review |
+| `OK` | am | Oklahoma | ኦክላሆማ | 2026-11-15 | machine-drafted, needs native review |
+| `OR` | am | Oregon | ኦሪገን | 2026-11-15 | machine-drafted, needs native review |
+| `PA` | am | Pennsylvania | ፔንሲልቬንያ | 2026-11-15 | machine-drafted, needs native review |
+| `RI` | am | Rhode Island | ሮድ አይላንድ | 2026-11-15 | machine-drafted, needs native review |
+| `SC` | am | South Carolina | ደቡብ ካሮላይና | 2026-11-15 | machine-drafted, needs native review |
+| `SD` | am | South Dakota | ደቡብ ዳኮታ | 2026-11-15 | machine-drafted, needs native review |
+| `TN` | am | Tennessee | ቴነሲ | 2026-11-15 | machine-drafted, needs native review |
+| `TX` | am | Texas | ቴክሳስ | 2026-11-15 | machine-drafted, needs native review |
+| `UT` | am | Utah | ዩታ | 2026-11-15 | machine-drafted, needs native review |
+| `VT` | am | Vermont | ቨርሞንት | 2026-11-15 | machine-drafted, needs native review |
+| `VA` | am | Virginia | ቨርጂኒያ | 2026-11-15 | machine-drafted, needs native review |
+| `WA` | am | Washington | ዋሽንግተን | 2026-11-15 | machine-drafted, needs native review |
+| `WV` | am | West Virginia | ምዕራብ ቨርጂኒያ | 2026-11-15 | machine-drafted, needs native review |
+| `WI` | am | Wisconsin | ዊስኮንሲን | 2026-11-15 | machine-drafted, needs native review |
+| `WY` | am | Wyoming | ዋዮሚንግ | 2026-11-15 | machine-drafted, needs native review |
+| `PR` | am | Puerto Rico | ፖርቶ ሪኮ | 2026-11-15 | machine-drafted, needs native review |
+| `GU` | am | Guam | ጉዋም | 2026-11-15 | machine-drafted, needs native review |
+| `VI` | am | US Virgin Islands | የአሜሪካ ቨርጂን ደሴቶች | 2026-11-15 | machine-drafted, needs native review |
+| `AS` | am | American Samoa | የአሜሪካ ሳሞአ | 2026-11-15 | machine-drafted, needs native review |
+| `MP` | am | Northern Mariana Islands | የሰሜን ማሪያና ደሴቶች | 2026-11-15 | machine-drafted, needs native review |
+| `AL` | hmn | Alabama | Alabama | 2026-11-15 | machine-drafted, needs native review |
+| `AK` | hmn | Alaska | Alaska | 2026-11-15 | machine-drafted, needs native review |
+| `AZ` | hmn | Arizona | Arizona | 2026-11-15 | machine-drafted, needs native review |
+| `AR` | hmn | Arkansas | Arkansas | 2026-11-15 | machine-drafted, needs native review |
+| `CA` | hmn | California | California | 2026-11-15 | machine-drafted, needs native review |
+| `CO` | hmn | Colorado | Colorado | 2026-11-15 | machine-drafted, needs native review |
+| `CT` | hmn | Connecticut | Connecticut | 2026-11-15 | machine-drafted, needs native review |
+| `DE` | hmn | Delaware | Delaware | 2026-11-15 | machine-drafted, needs native review |
+| `DC` | hmn | District of Columbia | Cheeb Tsam Columbia | 2026-11-15 | machine-drafted, needs native review |
+| `FL` | hmn | Florida | Florida | 2026-11-15 | machine-drafted, needs native review |
+| `GA` | hmn | Georgia | Georgia | 2026-11-15 | machine-drafted, needs native review |
+| `HI` | hmn | Hawaii | Hawaii | 2026-11-15 | machine-drafted, needs native review |
+| `ID` | hmn | Idaho | Idaho | 2026-11-15 | machine-drafted, needs native review |
+| `IL` | hmn | Illinois | Illinois | 2026-11-15 | machine-drafted, needs native review |
+| `IN` | hmn | Indiana | Indiana | 2026-11-15 | machine-drafted, needs native review |
+| `IA` | hmn | Iowa | Iowa | 2026-11-15 | machine-drafted, needs native review |
+| `KS` | hmn | Kansas | Kansas | 2026-11-15 | machine-drafted, needs native review |
+| `KY` | hmn | Kentucky | Kentucky | 2026-11-15 | machine-drafted, needs native review |
+| `LA` | hmn | Louisiana | Louisiana | 2026-11-15 | machine-drafted, needs native review |
+| `ME` | hmn | Maine | Maine | 2026-11-15 | machine-drafted, needs native review |
+| `MD` | hmn | Maryland | Maryland | 2026-11-15 | machine-drafted, needs native review |
+| `MA` | hmn | Massachusetts | Massachusetts | 2026-11-15 | machine-drafted, needs native review |
+| `MI` | hmn | Michigan | Michigan | 2026-11-15 | machine-drafted, needs native review |
+| `MN` | hmn | Minnesota | Minnesota | 2026-11-15 | machine-drafted, needs native review |
+| `MS` | hmn | Mississippi | Mississippi | 2026-11-15 | machine-drafted, needs native review |
+| `MO` | hmn | Missouri | Missouri | 2026-11-15 | machine-drafted, needs native review |
+| `MT` | hmn | Montana | Montana | 2026-11-15 | machine-drafted, needs native review |
+| `NE` | hmn | Nebraska | Nebraska | 2026-11-15 | machine-drafted, needs native review |
+| `NV` | hmn | Nevada | Nevada | 2026-11-15 | machine-drafted, needs native review |
+| `NH` | hmn | New Hampshire | New Hampshire | 2026-11-15 | machine-drafted, needs native review |
+| `NJ` | hmn | New Jersey | New Jersey | 2026-11-15 | machine-drafted, needs native review |
+| `NM` | hmn | New Mexico | New Mexico | 2026-11-15 | machine-drafted, needs native review |
+| `NY` | hmn | New York | New York | 2026-11-15 | machine-drafted, needs native review |
+| `NC` | hmn | North Carolina | North Carolina | 2026-11-15 | machine-drafted, needs native review |
+| `ND` | hmn | North Dakota | North Dakota | 2026-11-15 | machine-drafted, needs native review |
+| `OH` | hmn | Ohio | Ohio | 2026-11-15 | machine-drafted, needs native review |
+| `OK` | hmn | Oklahoma | Oklahoma | 2026-11-15 | machine-drafted, needs native review |
+| `OR` | hmn | Oregon | Oregon | 2026-11-15 | machine-drafted, needs native review |
+| `PA` | hmn | Pennsylvania | Pennsylvania | 2026-11-15 | machine-drafted, needs native review |
+| `RI` | hmn | Rhode Island | Rhode Island | 2026-11-15 | machine-drafted, needs native review |
+| `SC` | hmn | South Carolina | South Carolina | 2026-11-15 | machine-drafted, needs native review |
+| `SD` | hmn | South Dakota | South Dakota | 2026-11-15 | machine-drafted, needs native review |
+| `TN` | hmn | Tennessee | Tennessee | 2026-11-15 | machine-drafted, needs native review |
+| `TX` | hmn | Texas | Texas | 2026-11-15 | machine-drafted, needs native review |
+| `UT` | hmn | Utah | Utah | 2026-11-15 | machine-drafted, needs native review |
+| `VT` | hmn | Vermont | Vermont | 2026-11-15 | machine-drafted, needs native review |
+| `VA` | hmn | Virginia | Virginia | 2026-11-15 | machine-drafted, needs native review |
+| `WA` | hmn | Washington | Washington | 2026-11-15 | machine-drafted, needs native review |
+| `WV` | hmn | West Virginia | West Virginia | 2026-11-15 | machine-drafted, needs native review |
+| `WI` | hmn | Wisconsin | Wisconsin | 2026-11-15 | machine-drafted, needs native review |
+| `WY` | hmn | Wyoming | Wyoming | 2026-11-15 | machine-drafted, needs native review |
+| `PR` | hmn | Puerto Rico | Puerto Rico | 2026-11-15 | machine-drafted, needs native review |
+| `GU` | hmn | Guam | Guam | 2026-11-15 | machine-drafted, needs native review |
+| `VI` | hmn | US Virgin Islands | Cov Kob Virgin Asmeskas | 2026-11-15 | machine-drafted, needs native review |
+| `AS` | hmn | American Samoa | Asmeskas Samoa | 2026-11-15 | machine-drafted, needs native review |
+| `MP` | hmn | Northern Mariana Islands | Cov Kob Northern Mariana | 2026-11-15 | machine-drafted, needs native review |
 
 <!-- END GENERATED -->
 
