@@ -3,7 +3,7 @@
 Owner: Jelal Connor / SYNRG SCALING, LLC
 
 Canonical copy: `specs/impact-metrics-contract.md`. Author of the SQL: feed-db-migrations-expert, in one migration
-(next free stamp, reserved through the orchestrator). The client (`apps/web/src/hooks/use-community-impact.ts`,
+(`supabase/migrations/20261027500000_community_impact_v1.sql`; proof `supabase/tests/community_impact.smoke.sql`). The client (`apps/web/src/hooks/use-community-impact.ts`,
 `apps/web/src/components/layout/impact-overview-card.tsx`) is built against section 5 of this file.
 Live figures below were read through the read-only Management API (`current_user = supabase_read_only_user`) on
 2026-11-15 03:33 UTC against prod `ndtpovonpadugthmcntl`, at origin/develop `5973158`.
@@ -195,7 +195,8 @@ v := v || jsonb_build_object('needs_met', jsonb_build_object(
 
 Cost: the candidate aggregate measured 46 ms execution + 31 ms planning live (EXPLAIN ANALYZE, read-only, evidence
 section 4); the client calls it once per shell mount. `engagement_events` has an index on `actor_id`; an index on
-`(kind, actor_id)` is the migration author's call after reading the plan.
+`(kind, actor_id)` is the migration author's call after reading the plan. Not added in v1: prod holds 3 ledger rows, the
+read's cost is the `snap_retailers` and `resources` counts, and the index would add a write to every ledger insert.
 
 ## 5. Client mapping
 
@@ -215,7 +216,7 @@ export type ImpactSummary = Partial<Record<ImpactFigureId, ImpactFigure>>
   renders the suppressed line. Unknown ids are ignored; a missing id is not rendered.
 - Dictionary: `lib/i18n-impact.ts`, label key = `label_<id>` (e.g. `label_needs_met`).
 - After the migration, regenerate `packages/database/types.ts`; the hook then calls `supabase.rpc('community_impact_summary')`
-  with the generated name (until then the call is the one documented cast in `use-community-impact.ts`).
+  with the generated name (the step-1 cast is gone; `types.ts` carries `community_impact_summary` and `community_impact_rollup`).
 
 ## 6. Proof expected from the migration (SQL smokes, each an outcome)
 

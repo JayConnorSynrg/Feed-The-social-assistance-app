@@ -955,14 +955,15 @@
       "reviewFixRound": "On 0f2e497: MFA prompt keyboard/screen-reader complete (label, hint, one alert, aria-invalid, one-time-code, readOnly, focus return, form + single flight, 4.5:1 buttons); backup codes hidden for admin destinations; mobile nav stone-600 + aria-current; scroll-padding-bottom; AAL returned error fails closed; factor from getUser().factors; /api/community-summary + /federation/directory MFA routes; dot-segment // rejected."
     },
     "feed-p3-impact-v1": {
-      "status": "CLIENT_BUILT_AWAITING_SQL",
+      "status": "SQL_BUILT_MIGRATION_NOT_APPLIED",
       "branch": "feature/feed-p3-impact-v1",
       "base": "origin/develop 5973158",
-      "migration": null,
+      "migration": "supabase/migrations/20261027500000_community_impact_v1.sql (not applied to prod)",
       "contract": "specs/impact-metrics-contract.md",
       "docs": "docs/observability.md (Community figures); docs/i18n-native-review.md",
-      "note": "Step 1 of 2. Contract for feed-db-migrations-expert (RPC community_impact_summary, community_impact_rollup carried at account deletion, smokes a-g). Client card, hook, dictionary, logging built against it; PR opens once the migration exists and types are regenerated (the one rpc cast in use-community-impact.ts goes with the regeneration).",
-      "checklistRow": "1.6.36"
+      "note": "Step 2 of 2. Migration 20261027500000 (expand only): community_impact_rollup (counts only, RLS on, no policy, no client grant), community_impact_carry_departed() statement trigger on engagement_events (carries only rows whose actor left auth.users; a failed carry is logged and never blocks the deletion), community_impact_summary() (SECDEF, STABLE, pinned search_path; EXECUTE anon + authenticated, not PUBLIC). Preflight refuses 55000; ledger row in the same transaction; no realtime change. Prod BEGIN ... ROLLBACK rehearsal: schema fingerprint unchanged; catalog figures equal direct counts. types.ts = prod regen + the rehearsed migration delta; the rpc cast is gone. Merge only after the owner confirms the prod apply.",
+      "checklistRow": "1.6.37",
+      "smoke": "supabase/tests/community_impact.smoke.sql (68 PASS on native PG17, develop chain + migration)"
     }
   }
 }

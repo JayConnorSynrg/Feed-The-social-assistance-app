@@ -23,22 +23,13 @@ export type ImpactState =
   | { status: 'ready'; summary: ImpactSummary }
   | { status: 'error' }
 
-// community_impact_summary() enters packages/database/types.ts when its migration is applied and the types
-// are regenerated (specs/impact-metrics-contract.md, section 5). Until then this is the one cast; it goes
-// with the regeneration.
-type SummaryRpc = (fn: 'community_impact_summary') => PromiseLike<{
-  data: unknown
-  error: { code?: string; message?: string } | null
-}>
-
 /** One read, never rejecting: the answer, or the error state. */
 export async function fetchCommunityImpact(surface: ImpactSurface): Promise<ImpactState> {
   const attrs: Record<string, string | number> = { surface, outcome: 'failed', suppressed_count: 0 }
   try {
     const summary = await withMetric('impact.summary.fetch', attrs, async () => {
       const supabase = createClient()
-      const rpc = supabase.rpc.bind(supabase) as unknown as SummaryRpc
-      const { data, error } = await rpc('community_impact_summary')
+      const { data, error } = await supabase.rpc('community_impact_summary')
       if (error) throw error
       const parsed = parseImpactSummary(data)
       if (Object.keys(parsed).length === 0) throw new Error('impact_summary_empty')
