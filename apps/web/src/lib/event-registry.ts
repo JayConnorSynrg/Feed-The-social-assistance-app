@@ -105,6 +105,13 @@ export const EVENT_REGISTRY: Readonly<Record<string, readonly string[]>> = {
   'admin.overview.list_users_failed': [],
   'admin.overview.loaded': ['duration_ms', 'org_id', 'suppressed'],
   'admin.people.list_failed': ['code'],
+  // Petition signatures CSV (POST /api/admin/petitions/[id]/export): exactly one server row per
+  // attempt. outcome ok | denied | error; code = the refusal or failure; no personal data — the
+  // request_id joins to the admin_actions row, which records the petition.
+  'admin.petition.export': ['code', 'duration_ms', 'outcome', 'request_id', 'row_count'],
+  // The client's privilegedFetch latency row for the same call (same request_id).
+  'admin.petition.export.complete': ['request_id'],
+  'admin.petition.export.error': ['request_id'],
   'admin.comment.hide.complete': ['action', 'request_id', 'target_id'],
   'admin.comment.hide.error': ['action', 'request_id', 'target_id'],
   'admin.post.authorize.complete': ['action', 'request_id', 'target_id'],

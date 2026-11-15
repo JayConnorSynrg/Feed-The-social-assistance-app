@@ -341,7 +341,7 @@ export function AdminShell() {
           )}
           {tabs.includes('community') && (
             <TabsContent value="community" className="mt-4">
-              <CommunityTab selectedOrgId={selectedOrgId} />
+              <CommunityTab selectedOrgId={selectedOrgId} locale={locale} />
             </TabsContent>
           )}
           {tabs.includes('organizations') && (

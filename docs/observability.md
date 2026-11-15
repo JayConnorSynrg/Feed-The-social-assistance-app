@@ -399,6 +399,27 @@ order by created_at desc limit 50;
 
 ---
 
+## Petition signatures export (admin)
+
+Moderation › Community › **Petition signatures**: a platform admin picks an approved petition and
+downloads `petition-signatures-<petition id>-<YYYY-MM-DD>.csv` (POST `/api/admin/petitions/[id]/export`,
+through `privilegedFetch`, so one `x-request-id` is shared by every row below).
+
+| Row | Where | Labels / columns | When |
+|---|---|---|---|
+| `admin.petition.export` | `app_logs` (server) | `outcome` (`ok` · `denied` · `error`), `row_count`, `duration_ms`, `request_id`, `code` (`auth` · `insufficient_tier` · `invalid_id` · `not_found` · `read_failed` · `incomplete` · `audit_failed` · `gate_failed`, `null` on ok) | exactly once per attempt |
+| `petition.export` | `admin_actions` (via `record_admin_action`) | `actor_id`, `actor_tier`, `target_type='petition'`, `target_id`, `outcome` (`ok` · `error`), `reason` (the code), `details.row_count`, `request_id` | exactly once per attempt by a platform admin; a caller who is not one is refused before anything is read or written |
+| `admin.petition.export.complete` / `.error` | `app_logs` (browser) | `request_id` | the client's `privilegedFetch` latency row |
+
+The file is sent only after its `ok` audit row is written. No row carries a name, IP address or
+device: the `request_id` joins the event to the audit row, which records the petition. The CSV holds
+Full Name, Signed At, Affirmation and Petition Version Hash only (`lib/petition-csv.ts`); IP address
+and user agent are read by `export_petition_signatures` on the server and dropped there. Reads are
+paged 1,000 at a time (prod PostgREST `max_rows` = 1000) and checked against
+`get_petition_signature_count`; fewer rows than the count fails as `incomplete` with no file.
+The first export of a petition sets `petitions.exported_at`, which locks withdrawals (migration
+`20260613000000`).
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

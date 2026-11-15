@@ -13,7 +13,7 @@ Backend: `supabase/migrations/20261010000000_p3_1_admin_tiers.sql`.
 |---|---|---|---|
 | Community Moderator | `community_moderator` | "Moderator" | Post moderation (remove / hold / authorize), report handling, comment hide / unhide, safety-alert verify + remove. Sees hidden and deleted posts and hidden comments. Never edits anyone's text. |
 | Resource Admin | `resource_admin` | "Resource Admin" | Everything a CM can, **plus** the resource review queue: list pending, approve, reject, update, set location, list resources. |
-| Platform Admin | `platform_admin` | "Admin" | Everything. Redacts private details from post / comment edit history (reason required). Discovery, form templates, SNAP, dashboards, user notes, events cross-org, AI summary, users (ban/delete), federation, organizations, and granting/revoking tiers. |
+| Platform Admin | `platform_admin` | "Admin" | Everything. Redacts private details from post / comment edit history (reason required). Discovery, form templates, SNAP, dashboards, user notes, events cross-org, AI summary, petition signatures CSV export (Community tab; four columns, no IP or device), users (ban/delete), federation, organizations, and granting/revoking tiers. |
 
 Org admins (`organization_members.role='admin'`) are a **separate** axis: they get the Events tab
 for their own active org only, regardless of tier.

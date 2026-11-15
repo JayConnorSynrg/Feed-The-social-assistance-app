@@ -97,6 +97,75 @@ step in that test, and the test fails until the list below is regenerated.
 | `TIME_WORDS.future.day.one` | so | In {n} days | {n} maalin kadib | 2026-10-11 | machine-drafted, needs native review |
 | `TIME_WORDS.future.day.other` | so | In {n} days | {n} maalmood kadib | 2026-10-11 | machine-drafted, needs native review |
 
+### `lib/i18n-admin-petitions.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `heading` | ht | Petition signatures | Siyati petisyon yo | 2026-11-14 | machine-drafted, needs native review |
+| `intro` | ht | Download the signatures of a petition as a CSV file for its organizer. | Telechaje siyati yon petisyon nan yon fichye CSV pou moun ki òganize li a. | 2026-11-14 | machine-drafted, needs native review |
+| `columnsNote` | ht | The file lists each signer’s name, when they signed, the statement they agreed to and the petition version they signed. IP addresses and device details are left out. | Fichye a montre non chak moun ki siyen, ki lè yo siyen, deklarasyon yo te dakò a ak vèsyon petisyon yo te siyen an. Adrès IP ak detay aparèy yo pa ladan l. | 2026-11-14 | machine-drafted, needs native review |
+| `lockNote` | ht | The first download locks the list: signers can no longer withdraw their signature from that petition. | Premye telechajman an bloke lis la: moun ki siyen yo pa ka retire siyati yo sou petisyon sa a ankò. | 2026-11-14 | machine-drafted, needs native review |
+| `petitionLabel` | ht | Petition | Petisyon | 2026-11-14 | machine-drafted, needs native review |
+| `alreadyLocked` | ht | Downloaded before — withdrawals are locked. | Yo te telechaje l deja — retrè yo bloke. | 2026-11-14 | machine-drafted, needs native review |
+| `download` | ht | Download CSV | Telechaje CSV | 2026-11-14 | machine-drafted, needs native review |
+| `downloading` | ht | Preparing CSV… | N ap prepare CSV a… | 2026-11-14 | machine-drafted, needs native review |
+| `downloaded` | ht | Downloaded. Signatures in the file: {count} | Telechaje. Siyati nan fichye a: {count} | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | ht | Loading petitions… | N ap chaje petisyon yo… | 2026-11-14 | machine-drafted, needs native review |
+| `none` | ht | No approved petitions yet. | Poko gen petisyon ki apwouve. | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | ht | Petitions could not be loaded. Try again later. | Nou pa t ka chaje petisyon yo. Eseye ankò pita. | 2026-11-14 | machine-drafted, needs native review |
+| `errForbidden` | ht | Only platform admins can download petition signatures. | Se sèlman administratè platfòm nan ki ka telechaje siyati petisyon yo. | 2026-11-14 | machine-drafted, needs native review |
+| `errNotFound` | ht | This petition no longer exists or is not approved. | Petisyon sa a pa egziste ankò oswa li pa apwouve. | 2026-11-14 | machine-drafted, needs native review |
+| `errIncomplete` | ht | Not every signature could be read, so no file was made. Try again. | Nou pa t ka li tout siyati yo, kidonk pa gen fichye ki fèt. Eseye ankò. | 2026-11-14 | machine-drafted, needs native review |
+| `errGeneric` | ht | The download failed and no file was made. Try again. | Telechajman an echwe e pa gen fichye ki fèt. Eseye ankò. | 2026-11-14 | machine-drafted, needs native review |
+| `heading` | so | Petition signatures | Saxiixyada codsiyada | 2026-11-14 | machine-drafted, needs native review |
+| `intro` | so | Download the signatures of a petition as a CSV file for its organizer. | Soo deji saxiixyada codsi ahaan fayl CSV ah oo loogu talagalay qofka abaabulay. | 2026-11-14 | machine-drafted, needs native review |
+| `columnsNote` | so | The file lists each signer’s name, when they signed, the statement they agreed to and the petition version they signed. IP addresses and device details are left out. | Faylku wuxuu taxayaa magaca qof kasta oo saxiixay, goorta uu saxiixay, bayaanka uu ku raacay iyo nooca codsiga uu saxiixay. Cinwaannada IP iyo faahfaahinta qalabka laguma darin. | 2026-11-14 | machine-drafted, needs native review |
+| `lockNote` | so | The first download locks the list: signers can no longer withdraw their signature from that petition. | Soo dejinta ugu horreysa waxay xiraysaa liiska: saxiixayaashu mar dambe kama noqon karaan saxiixooda codsigaas. | 2026-11-14 | machine-drafted, needs native review |
+| `petitionLabel` | so | Petition | Codsi | 2026-11-14 | machine-drafted, needs native review |
+| `alreadyLocked` | so | Downloaded before — withdrawals are locked. | Hore ayaa loo soo dejiyay — ka noqoshada waa la xiray. | 2026-11-14 | machine-drafted, needs native review |
+| `download` | so | Download CSV | Soo deji CSV | 2026-11-14 | machine-drafted, needs native review |
+| `downloading` | so | Preparing CSV… | CSV waa la diyaarinayaa… | 2026-11-14 | machine-drafted, needs native review |
+| `downloaded` | so | Downloaded. Signatures in the file: {count} | Waa la soo dejiyay. Saxiixyada faylka ku jira: {count} | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | so | Loading petitions… | Codsiyada waa la soo rarayaa… | 2026-11-14 | machine-drafted, needs native review |
+| `none` | so | No approved petitions yet. | Weli ma jiraan codsiyo la ansixiyay. | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | so | Petitions could not be loaded. Try again later. | Codsiyada lama soo rari karin. Mar dambe isku day. | 2026-11-14 | machine-drafted, needs native review |
+| `errForbidden` | so | Only platform admins can download petition signatures. | Maamulayaasha madasha oo keliya ayaa soo dejin kara saxiixyada codsiyada. | 2026-11-14 | machine-drafted, needs native review |
+| `errNotFound` | so | This petition no longer exists or is not approved. | Codsigan hadda ma jiro ama lama ansixin. | 2026-11-14 | machine-drafted, needs native review |
+| `errIncomplete` | so | Not every signature could be read, so no file was made. Try again. | Dhammaan saxiixyada lama akhrin karin, sidaas darteed fayl lama samayn. Mar kale isku day. | 2026-11-14 | machine-drafted, needs native review |
+| `errGeneric` | so | The download failed and no file was made. Try again. | Soo dejintu way guuldareysatay, fayl lama samayn. Mar kale isku day. | 2026-11-14 | machine-drafted, needs native review |
+| `heading` | am | Petition signatures | የአቤቱታ ፊርማዎች | 2026-11-14 | machine-drafted, needs native review |
+| `intro` | am | Download the signatures of a petition as a CSV file for its organizer. | የአንድን አቤቱታ ፊርማዎች ለአዘጋጁ በCSV ፋይል ያውርዱ። | 2026-11-14 | machine-drafted, needs native review |
+| `columnsNote` | am | The file lists each signer’s name, when they signed, the statement they agreed to and the petition version they signed. IP addresses and device details are left out. | ፋይሉ የእያንዳንዱን ፈራሚ ስም፣ የፈረሙበትን ጊዜ፣ የተስማሙበትን መግለጫ እና የፈረሙትን የአቤቱታ ስሪት ይዘረዝራል። የIP አድራሻዎችና የመሣሪያ ዝርዝሮች አልተካተቱም። | 2026-11-14 | machine-drafted, needs native review |
+| `lockNote` | am | The first download locks the list: signers can no longer withdraw their signature from that petition. | የመጀመሪያው ማውረድ ዝርዝሩን ይቆልፋል፤ ፈራሚዎች ከዚያ አቤቱታ ፊርማቸውን ማንሳት አይችሉም። | 2026-11-14 | machine-drafted, needs native review |
+| `petitionLabel` | am | Petition | አቤቱታ | 2026-11-14 | machine-drafted, needs native review |
+| `alreadyLocked` | am | Downloaded before — withdrawals are locked. | ቀደም ብሎ ወርዷል — ፊርማ ማንሳት ተቆልፏል። | 2026-11-14 | machine-drafted, needs native review |
+| `download` | am | Download CSV | CSV አውርድ | 2026-11-14 | machine-drafted, needs native review |
+| `downloading` | am | Preparing CSV… | CSV በመዘጋጀት ላይ… | 2026-11-14 | machine-drafted, needs native review |
+| `downloaded` | am | Downloaded. Signatures in the file: {count} | ወርዷል። በፋይሉ ውስጥ ያሉ ፊርማዎች፦ {count} | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | am | Loading petitions… | አቤቱታዎች በመጫን ላይ… | 2026-11-14 | machine-drafted, needs native review |
+| `none` | am | No approved petitions yet. | እስካሁን የጸደቀ አቤቱታ የለም። | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | am | Petitions could not be loaded. Try again later. | አቤቱታዎቹን መጫን አልተቻለም። ቆይተው እንደገና ይሞክሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `errForbidden` | am | Only platform admins can download petition signatures. | የአቤቱታ ፊርማዎችን ማውረድ የሚችሉት የመድረኩ አስተዳዳሪዎች ብቻ ናቸው። | 2026-11-14 | machine-drafted, needs native review |
+| `errNotFound` | am | This petition no longer exists or is not approved. | ይህ አቤቱታ ከእንግዲህ የለም ወይም አልጸደቀም። | 2026-11-14 | machine-drafted, needs native review |
+| `errIncomplete` | am | Not every signature could be read, so no file was made. Try again. | ሁሉንም ፊርማዎች ማንበብ ስላልተቻለ ምንም ፋይል አልተሠራም። እንደገና ይሞክሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `errGeneric` | am | The download failed and no file was made. Try again. | ማውረዱ አልተሳካም፤ ምንም ፋይል አልተሠራም። እንደገና ይሞክሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `heading` | hmn | Petition signatures | Cov kos npe rau daim ntawv thov | 2026-11-14 | machine-drafted, needs native review |
+| `intro` | hmn | Download the signatures of a petition as a CSV file for its organizer. | Rub cov kos npe ntawm ib daim ntawv thov los ua ib daim ntawv CSV rau tus neeg npaj. | 2026-11-14 | machine-drafted, needs native review |
+| `columnsNote` | hmn | The file lists each signer’s name, when they signed, the statement they agreed to and the petition version they signed. IP addresses and device details are left out. | Daim ntawv no teev txhua tus neeg kos npe lub npe, lub sijhawm lawv kos npe, cov lus lawv pom zoo thiab daim ntawv thov version uas lawv kos npe. Tsis muaj IP address thiab cov ntsiab lus ntawm lub cuab yeej. | 2026-11-14 | machine-drafted, needs native review |
+| `lockNote` | hmn | The first download locks the list: signers can no longer withdraw their signature from that petition. | Thawj zaug rub yuav xauv daim ntawv teev npe: cov neeg kos npe yuav rho tsis tau lawv kos npe ntawm daim ntawv thov ntawd lawm. | 2026-11-14 | machine-drafted, needs native review |
+| `petitionLabel` | hmn | Petition | Daim ntawv thov | 2026-11-14 | machine-drafted, needs native review |
+| `alreadyLocked` | hmn | Downloaded before — withdrawals are locked. | Tau rub dua lawm — kev rho kos npe raug xauv lawm. | 2026-11-14 | machine-drafted, needs native review |
+| `download` | hmn | Download CSV | Rub CSV | 2026-11-14 | machine-drafted, needs native review |
+| `downloading` | hmn | Preparing CSV… | Tab tom npaj CSV… | 2026-11-14 | machine-drafted, needs native review |
+| `downloaded` | hmn | Downloaded. Signatures in the file: {count} | Rub tau lawm. Cov kos npe hauv daim ntawv: {count} | 2026-11-14 | machine-drafted, needs native review |
+| `loading` | hmn | Loading petitions… | Tab tom thauj cov ntawv thov… | 2026-11-14 | machine-drafted, needs native review |
+| `none` | hmn | No approved petitions yet. | Tseem tsis tau muaj daim ntawv thov uas tau pom zoo. | 2026-11-14 | machine-drafted, needs native review |
+| `loadFailed` | hmn | Petitions could not be loaded. Try again later. | Thauj tsis tau cov ntawv thov. Thov rov sim dua tom qab. | 2026-11-14 | machine-drafted, needs native review |
+| `errForbidden` | hmn | Only platform admins can download petition signatures. | Tsuas yog cov thawj tswj platform thiaj rub tau cov kos npe. | 2026-11-14 | machine-drafted, needs native review |
+| `errNotFound` | hmn | This petition no longer exists or is not approved. | Daim ntawv thov no tsis muaj lawm los yog tsis tau pom zoo. | 2026-11-14 | machine-drafted, needs native review |
+| `errIncomplete` | hmn | Not every signature could be read, so no file was made. Try again. | Nyeem tsis tau txhua tus kos npe, yog li tsis tau ua daim ntawv. Thov rov sim dua. | 2026-11-14 | machine-drafted, needs native review |
+| `errGeneric` | hmn | The download failed and no file was made. Try again. | Rub tsis tau thiab tsis tau ua daim ntawv. Thov rov sim dua. | 2026-11-14 | machine-drafted, needs native review |
+
 ### `lib/i18n-feed-badges.ts`
 
 | Key | Locale | English | Text | Added | Status |
