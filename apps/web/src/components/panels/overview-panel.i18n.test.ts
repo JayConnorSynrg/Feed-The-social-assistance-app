@@ -42,9 +42,10 @@ import { messages, type Locale } from '@/lib/i18n'
 import { overviewT } from '@/lib/i18n-overview'
 import { relativeAge } from '@/lib/relative-age'
 import { OverviewPanel } from './overview-panel'
+import { markupText } from '@/test/markup-text'
 
 const LOCALES = Object.keys(messages) as Locale[]
-const strip = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").trim()
+const strip = markupText
 const NOW = new Date('2026-10-08T16:00:00Z') // a Thursday in New York
 
 function html(language: string, userName?: string) {

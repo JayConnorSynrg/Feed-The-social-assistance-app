@@ -54,6 +54,7 @@ import { roleLabel } from '@/lib/i18n-feed-card'
 import { Tabs } from '@/components/ui/tabs'
 import { TAB_ORDER } from './admin-shell-tabs'
 import { AdminShell } from './admin-shell'
+import { markupText } from '@/test/markup-text'
 
 const LOCALES = Object.keys(messages) as Locale[]
 
@@ -64,7 +65,7 @@ function html(language: string | null, opts: { tier?: string | null; isOrgAdmin?
   const shell = h(AdminShell)
   return renderToStaticMarkup(opts.cookie ? h(InitialLocaleContext.Provider, { value: opts.cookie }, shell) : shell)
 }
-const strip = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").trim()
+const strip = markupText
 /** Every role="tab" button: its aria-label (if any) and its visible text. */
 function tabs(markup: string) {
   return [...markup.matchAll(/<button([^>]*role="tab"[^>]*)>([\s\S]*?)<\/button>/g)].map((m) => ({

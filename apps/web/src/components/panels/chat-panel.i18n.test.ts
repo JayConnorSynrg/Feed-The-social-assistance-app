@@ -49,9 +49,10 @@ import { formatClock } from '@/lib/i18n-intl'
 import { resourceFinderFlow } from '@/lib/ai/guided-flows'
 import { GuidedFlowComponent, StepComponent } from '@/components/chat/guided-flow'
 import { ChatPanel, ChatErrorBanner } from './chat-panel'
+import { markupText, decodeEntities } from '@/test/markup-text'
 
 const LOCALES = Object.keys(messages) as Locale[]
-const strip = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').trim()
+const strip = markupText
 const attr = (tag: string, name: string) => new RegExp(`${name}="([^"]*)"`).exec(tag)?.[1] ?? null
 
 function html(language: string, over: Partial<typeof state> = {}) {
@@ -62,7 +63,7 @@ function html(language: string, over: Partial<typeof state> = {}) {
 function buttons(markup: string) {
   return [...markup.matchAll(/<button([^>]*)>([\s\S]*?)<\/button>/g)].map((m) => ({ attrs: m[1], text: strip(m[2]) }))
 }
-const decode = (s: string) => s.replace(/&amp;/g, '&').replace(/&#x27;/g, "'").replace(/&quot;/g, '"')
+const decode = decodeEntities
 
 beforeEach(() => {
   vi.clearAllMocks()
