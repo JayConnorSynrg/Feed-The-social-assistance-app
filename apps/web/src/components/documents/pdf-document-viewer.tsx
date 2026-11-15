@@ -14,6 +14,11 @@
  *
  * Data flow: caller passes decrypted File → arrayBuffer() → memoized {data: bytes.slice()}
  * (slice prevents pdfjs ArrayBuffer-detachment from affecting the caller's File).
+ *
+ * P6 W9: the dialog's words are in the member's language (lang/dir on the portalled content);
+ * the document's own name (the title) is the member's text, lang="" dir="auto". A failure shows a
+ * translated line, never pdf.js's or the browser's message; a failed read writes one code-only
+ * error_surface.shown row (a render failure is pdf.viewer.error, already written below).
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
@@ -29,6 +34,12 @@ import {
 import { Button } from '@/components/ui/button'
 import { Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { logger } from '@/lib/logger'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir } from '@/lib/i18n'
+import { documentsT, type DocumentsKey } from '@/lib/i18n-documents'
+import { formatMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { failureCode } from '@/lib/failure-code'
 
 // Version-matched worker — reuse same path as pdf-annotator.tsx
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
@@ -49,9 +60,12 @@ export interface PdfDocumentViewerProps {
 // ---------------------------------------------------------------------------
 
 export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewerProps) {
+  const locale = useProfileLocale()
+  const t = (key: DocumentsKey) => documentsT(locale, key)
   const [numPages, setNumPages] = useState<number>(0)
   const [currentPage, setCurrentPage] = useState(1)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // The failure line's key (never the text pdf.js or the browser wrote).
+  const [loadError, setLoadError] = useState<DocumentsKey | null>(null)
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null)
   const [isLoadingBytes, setIsLoadingBytes] = useState(false)
   // Track when react-pdf Document starts rendering so we can emit load duration
@@ -83,11 +97,13 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
         setPdfBytes(new Uint8Array(buf))
       })
       .catch((err: unknown) => {
-        setLoadError(err instanceof Error ? err.message : 'Failed to read file')
+        logger.warn('error_surface.shown', { surface: 'document-viewer', kind: failureCode(err), locale })
+        setLoadError('readFailed')
       })
       .finally(() => {
         setIsLoadingBytes(false)
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file, open, isPdf])
 
   // Memoize document data — slice() prevents pdfjs from detaching the buffer
@@ -132,7 +148,7 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
   }, [pdfBytes])
 
   const handleDocumentLoadError = useCallback((err: Error) => {
-    setLoadError(err.message || 'Failed to render PDF')
+    setLoadError('renderFailed')
     logger.error('pdf.viewer.error', err, { byte_size: pdfBytes?.length ?? 0 })
   }, [pdfBytes])
 
@@ -140,29 +156,32 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
     onOpenChange(false)
   }, [onOpenChange])
 
-  const title = file?.name ?? 'Document'
+  const title = file?.name ?? t('documentFallback')
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="document-viewer"
         className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0"
-        aria-label={`Viewing ${title}`}
+        lang={locale}
+        dir={dir(locale)}
+        hideDefaultClose
+        aria-describedby={undefined}
       >
         {/* Header */}
         <DialogHeader className="px-4 py-3 border-b border-stone-200 flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-base font-semibold text-stone-900 truncate max-w-xs">
-              {title}
+              {file?.name ? <span lang="" dir="auto">{file.name}</span> : title}
             </DialogTitle>
             <Button
               variant="ghost"
               size="icon"
               onClick={handleClose}
-              className="h-8 w-8 text-stone-500 hover:text-stone-900 flex-shrink-0"
-              aria-label="Close"
+              className="h-8 w-8 text-stone-700 hover:text-stone-900 flex-shrink-0"
+              aria-label={t('close')}
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </Button>
           </div>
         </DialogHeader>
@@ -171,18 +190,19 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
         <div className="flex-1 overflow-auto bg-stone-100 min-h-0">
           {isLoadingBytes ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
+              <Loader2 className="w-8 h-8 animate-spin text-stone-600" aria-hidden="true" />
+              <span className="sr-only">{t('loadingDocument')}</span>
             </div>
           ) : loadError ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-              <p className="text-sm text-red-600 mb-4">{loadError}</p>
+              <p className="text-sm text-red-700 mb-4" role="alert">{t(loadError)}</p>
               {file && (
                 <a
                   href={URL.createObjectURL(file)}
                   download={file.name}
                   className="text-sm text-[#4a5d23] underline"
                 >
-                  Download instead
+                  {t('downloadInstead')}
                 </a>
               )}
             </div>
@@ -194,7 +214,8 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
                 onLoadError={handleDocumentLoadError}
                 loading={
                   <div className="flex items-center justify-center py-16">
-                    <Loader2 className="w-8 h-8 animate-spin text-stone-400" />
+                    <Loader2 className="w-8 h-8 animate-spin text-stone-600" aria-hidden="true" />
+                    <span className="sr-only">{t('loadingDocument')}</span>
                   </div>
                 }
               >
@@ -218,21 +239,21 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imageUrl}
-                alt={file?.name ?? 'document'}
+                alt={file?.name ?? t('documentFallback')}
                 className="max-w-full max-h-full object-contain rounded"
               />
             </div>
           ) : file && !isPdf && !isImage ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-              <p className="text-sm text-stone-500 mb-4">
-                Preview not available for this file type.
+              <p className="text-sm text-stone-700 mb-4">
+                {t('noPreview')}
               </p>
               <a
                 href={URL.createObjectURL(file)}
                 download={file.name}
                 className="px-4 py-2 rounded-lg bg-[#4a5d23] text-white text-sm font-medium hover:bg-[#3d4e1c] transition-colors"
               >
-                Download File
+                {t('downloadFile')}
               </a>
             </div>
           ) : null}
@@ -245,24 +266,24 @@ export function PdfDocumentViewer({ open, onOpenChange, file }: PdfDocumentViewe
               variant="ghost"
               size="icon"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              className="h-8 w-8"
-              aria-label="Previous page"
+              aria-disabled={currentPage <= 1}
+              className="h-8 w-8 aria-disabled:text-stone-500 aria-disabled:cursor-not-allowed"
+              aria-label={t('previousPage')}
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />
             </Button>
-            <span className="text-sm text-stone-600">
-              {currentPage} / {numPages}
+            <span className="text-sm text-stone-700">
+              {formatMessage(t('pageOf'), { page: formatCount(currentPage, locale), total: formatCount(numPages, locale) })}
             </span>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-              disabled={currentPage >= numPages}
-              className="h-8 w-8"
-              aria-label="Next page"
+              aria-disabled={currentPage >= numPages}
+              className="h-8 w-8 aria-disabled:text-stone-500 aria-disabled:cursor-not-allowed"
+              aria-label={t('nextPage')}
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 rtl:-scale-x-100" aria-hidden="true" />
             </Button>
           </div>
         )}

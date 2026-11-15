@@ -13,12 +13,17 @@
  *               setting up (e.g. Cancel). Providing this makes the modal
  *               dismissible; omitting it keeps the modal non-dismissible
  *               (legacy behaviour, used when vault access is strictly required).
+ *
+ * P6 W9: the placeholder lines are in the member's language (lib/i18n-documents.ts); they sit in
+ * the caller's translated region, which carries lang/dir. Which branch renders is unchanged.
  */
 
 import { useState } from 'react'
 import { useVault } from '@/contexts/vault-context'
 import { VaultUnlockModal } from './vault-unlock-modal'
 import { Loader2 } from 'lucide-react'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { documentsT } from '@/lib/i18n-documents'
 
 interface VaultGuardProps {
   children: React.ReactNode
@@ -34,6 +39,7 @@ interface VaultGuardProps {
 
 export function VaultGuard({ children, fallback, onDismiss }: VaultGuardProps) {
   const { isUnlocked, isSetup, loading } = useVault()
+  const locale = useProfileLocale()
   // Track whether the user has explicitly dismissed the modal this render cycle.
   // Resets if vault state changes (e.g. user sets up vault in another tab).
   const [dismissed, setDismissed] = useState(false)
@@ -50,7 +56,8 @@ export function VaultGuard({ children, fallback, onDismiss }: VaultGuardProps) {
       <>
         {fallback || (
           <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Loader2 className="h-6 w-6 animate-spin text-stone-600" aria-hidden="true" />
+            <span className="sr-only">{documentsT(locale, 'checkingVault')}</span>
           </div>
         )}
       </>
@@ -82,10 +89,10 @@ export function VaultGuard({ children, fallback, onDismiss }: VaultGuardProps) {
         {fallback || (
           <div className="flex items-center justify-center p-8 text-center">
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-stone-700">
                 {isSetup
-                  ? 'Unlock your vault to access encrypted data.'
-                  : 'Set up your vault to encrypt and store sensitive data.'}
+                  ? documentsT(locale, 'guardUnlockToAccess')
+                  : documentsT(locale, 'guardSetUpToStore')}
               </p>
             </div>
           </div>
@@ -108,10 +115,10 @@ export function VaultGuard({ children, fallback, onDismiss }: VaultGuardProps) {
       {fallback || (
         <div className="flex items-center justify-center p-8 text-center">
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-stone-700">
               {isSetup
-                ? 'Your vault is locked. Unlock it to view encrypted data.'
-                : 'Set up your vault to access encrypted features.'}
+                ? documentsT(locale, 'guardLocked')
+                : documentsT(locale, 'guardSetUp')}
             </p>
           </div>
         </div>

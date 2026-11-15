@@ -18,6 +18,23 @@ import { useVault } from '@/contexts/vault-context'
 import { logger } from '@/lib/logger'
 import { PDFDocument } from '@cantoo/pdf-lib'
 import type { AutofillValues } from '@/lib/form-field-mapper'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { formsFilledFields, formsT, type FormsKey } from '@/lib/i18n-forms'
+import { nextTabIndex } from '@/components/feed/feed-chrome'
+import { cn } from '@/lib/utils'
+import { announce, AnnouncementText, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+
+// P6 W9: the toolbar, status and failure lines are in the member's language (lib/i18n-forms.ts),
+// with lang/dir on the annotator root. The PDF's own content and the AcroForm field names are not
+// touched by the language: fillAcroFormFields and FIELD_ALIAS_MAP match the same English field
+// names for every member. Failures show a translated line, never pdf.js's or pdf-lib's message
+// (pdf.load / pdf.render.error / pdf.save / pdf.autofill.error are already written). One
+// always-mounted status line announces "Filled n of m fields"; the text sizes are one APG radio
+// group; busy buttons stay focusable (aria-disabled).
+const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
 
 // Version-matched 5.4.296 worker — do NOT change without updating react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
@@ -232,10 +249,12 @@ function TextBox({
   annotation,
   onUpdate,
   onRemove,
+  locale,
 }: {
   annotation: TextAnnotation
   onUpdate: (id: string, updates: Partial<TextAnnotation>) => void
   onRemove: (id: string) => void
+  locale: Locale
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -366,13 +385,15 @@ function TextBox({
           padding: 0,
           zIndex: 10,
         }}
-        aria-label="Remove text box"
+        aria-label={formsT(locale, 'removeTextBox')}
       >
-        <X style={{ width: 10, height: 10, color: 'white' }} />
+        <X style={{ width: 10, height: 10, color: 'white' }} aria-hidden="true" />
       </button>
 
       <div
         ref={contentRef}
+        lang=""
+        dir="auto"
         contentEditable={isEditing}
         suppressContentEditableWarning
         onBlur={handleBlur}
@@ -410,6 +431,7 @@ function TextBox({
 }
 
 interface PageOverlayProps {
+  locale: Locale
   pageIndex: number
   annotations: TextAnnotation[]
   isPlacementMode: boolean
@@ -420,6 +442,7 @@ interface PageOverlayProps {
 }
 
 function PageOverlay({
+  locale,
   pageIndex,
   annotations,
   isPlacementMode,
@@ -468,6 +491,7 @@ function PageOverlay({
           annotation={ann}
           onUpdate={onAnnotationUpdate}
           onRemove={onAnnotationRemove}
+          locale={locale}
         />
       ))}
     </div>
@@ -490,11 +514,16 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
   } = usePdfAnnotation()
 
   const { registerPreLockFlush } = useVault()
+  const locale = useProfileLocale()
+  const t = (key: FormsKey) => formsT(locale, key)
 
   const [isPlacementMode, setIsPlacementMode] = useState(false)
   const [fontSize, setFontSize] = useState<number>(14)
   const [scale, setScale] = useState(1)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  // The failure line's key (never the text pdf.js, pdf-lib or the server wrote).
+  const [saveError, setSaveError] = useState<FormsKey | null>(null)
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const sizeRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [isFilling, setIsFilling] = useState(false)
   const [fillResult, setFillResult] = useState<{ filled: number; total: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -536,25 +565,26 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
 
   const handleDocumentLoadError = useCallback((err: Error) => {
     logger.error('pdf.render.error', err, { byte_size: pdfBytes?.length ?? 0 })
-    setSaveError(err.message || 'Failed to render PDF')
+    setSaveError('renderFailed')
   }, [pdfBytes?.length])
 
   const handlePageLoadError = useCallback((err: Error) => {
     logger.error('pdf.render.error', err, { byte_size: pdfBytes?.length ?? 0 })
-    setSaveError(err.message || 'Failed to render PDF page')
+    setSaveError('renderFailed')
   }, [pdfBytes?.length])
 
   const handleSave = useCallback(async () => {
+    if (isSaving) return
     setSaveError(null)
     logger.info('forms.pdf.save_initiated', { annotation_count: annotations.length })
 
     try {
       const result = await savePdf(scale)
       await onSave(result)
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed')
+    } catch {
+      setSaveError('saveFailed')
     }
-  }, [annotations.length, savePdf, scale, onSave])
+  }, [annotations.length, savePdf, scale, onSave, isSaving])
 
   // Pre-lock flush: persist current annotations (encrypted sidecar) just before
   // the vault auto-locks (15-min idle) or is manually locked mid-edit, while the
@@ -591,7 +621,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
    * the alias table (not in FIELD_ALIAS_MAP).
    */
   const handleFillFromProfile = useCallback(async () => {
-    if (!autofillValues || !pdfBytes) return
+    if (!autofillValues || !pdfBytes || isFilling) return
 
     setIsFilling(true)
     setSaveError(null)
@@ -607,48 +637,69 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
 
       const result = { filled, total }
       setFillResult(result)
+      announce(setStatus, formsFilledFields(filled, total, locale))
       // Auto-clear the banner after 4 s
       setTimeout(() => setFillResult(null), 4000)
       onFillComplete?.(result)
     } catch (err) {
       logger.error('pdf.autofill.error', err)
-      setSaveError(err instanceof Error ? err.message : 'Fill from profile failed')
+      setSaveError('fillFailed')
     } finally {
       setIsFilling(false)
     }
-  }, [autofillValues, pdfBytes, annotations, file.name, loadPdf, onFillComplete])
+  }, [autofillValues, pdfBytes, annotations, file.name, loadPdf, onFillComplete, isFilling, locale])
 
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
-        <p className="text-sm text-stone-600">Loading PDF...</p>
+      <div className="h-full flex flex-col items-center justify-center gap-3" lang={locale} dir={dir(locale)} role="status">
+        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" aria-hidden="true" />
+        <p className="text-sm text-stone-700">{t('loadingPdf')}</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
-        <p className="text-sm text-red-600 font-medium">Failed to load PDF</p>
-        <p className="text-xs text-stone-500">{error}</p>
-        <Button variant="outline" size="sm" onClick={onCancel}>Go Back</Button>
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center" lang={locale} dir={dir(locale)}>
+        <div role="alert">
+          <p className="text-sm text-red-700 font-medium">{t('loadPdfFailed')}</p>
+          <p className="text-xs text-stone-700">{t('loadPdfFailedBody')}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onCancel} className="border-stone-500">{t('goBack')}</Button>
       </div>
     )
   }
 
+  const sizeIndex = Math.max(0, FONT_SIZES.indexOf(fontSize as (typeof FONT_SIZES)[number]))
+  const onSizeKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const key = e.key === 'ArrowDown' ? (dir(locale) === 'rtl' ? 'ArrowLeft' : 'ArrowRight')
+      : e.key === 'ArrowUp' ? (dir(locale) === 'rtl' ? 'ArrowRight' : 'ArrowLeft')
+      : e.key
+    const next = nextTabIndex(key, index, FONT_SIZES.length, locale)
+    if (next === null) return
+    e.preventDefault()
+    setFontSize(FONT_SIZES[next])
+    sizeRefs.current[next]?.focus()
+  }
+
   return (
-    <div data-testid="pdf-annotator" className="h-full flex flex-col bg-stone-50">
-      <div className="flex items-center gap-2 px-4 py-3 bg-stone-100 border-b border-stone-200 flex-wrap">
+    <div data-testid="pdf-annotator" className="h-full flex flex-col bg-stone-50" lang={locale} dir={dir(locale)}>
+      <p role="status" className="sr-only" data-testid="pdf-annotator-status">
+        <AnnouncementText announcement={status} />
+      </p>
+      <div role="toolbar" aria-label={t('toolbarLabel')} className="flex items-center gap-2 px-4 py-3 bg-stone-100 border-b border-stone-300 flex-wrap">
         <Button
           size="sm"
           variant={isPlacementMode ? 'default' : 'outline'}
           onClick={() => setIsPlacementMode(prev => !prev)}
-          className={isPlacementMode ? 'bg-blue-600 hover:bg-blue-700' : ''}
+          aria-pressed={isPlacementMode}
+          aria-describedby={isPlacementMode ? 'pdf-placing-hint' : undefined}
+          className={isPlacementMode ? 'bg-blue-700 hover:bg-blue-800' : 'border-stone-500'}
         >
-          <Plus className="w-3.5 h-3.5 mr-1.5" />
-          {isPlacementMode ? 'Click Page to Place' : 'Add Text Box'}
+          <Plus className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
+          {isPlacementMode ? t('placing') : t('addTextBox')}
         </Button>
+        {isPlacementMode && <span id="pdf-placing-hint" className="sr-only">{t('placingHint')}</span>}
 
         {/* Fill from profile — only shown when the caller provides autofillValues */}
         {autofillValues && (
@@ -656,72 +707,85 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
             size="sm"
             variant="outline"
             onClick={handleFillFromProfile}
-            disabled={isFilling || isLoading}
+            aria-disabled={isFilling || isLoading}
+            aria-busy={isFilling || undefined}
+            aria-describedby="pdf-fill-hint"
             data-testid="pdf-fill-from-profile-btn"
-            className="text-lime-700 border-lime-300 hover:bg-lime-50"
-            title="Fill AcroForm fields from your saved profile"
+            className={cn('text-lime-800 border-lime-700 hover:bg-lime-50', (isFilling || isLoading) && UNAVAILABLE)}
           >
             {isFilling ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" aria-hidden="true" />
             ) : (
-              <Wand2 className="w-3.5 h-3.5 mr-1.5" />
+              <Wand2 className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
             )}
-            Fill from Profile
+            {t('fillFromProfile')}
+            <span id="pdf-fill-hint" className="sr-only">{t('fillFromProfileHint')}</span>
           </Button>
         )}
 
         <div className="flex items-center gap-1">
-          <span className="text-xs text-stone-500 mr-1">Size:</span>
-          {FONT_SIZES.map(size => (
-            <button
-              key={size}
-              onClick={() => setFontSize(size)}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                fontSize === size
-                  ? 'bg-[#4a5d23] text-white'
-                  : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
-              }`}
-            >
-              {size}
-            </button>
-          ))}
+          <span className="text-xs text-stone-700 me-1" id="pdf-text-size-label">{t('textSize')}</span>
+          {/* One choice of text size: an APG radio group (one Tab stop, arrow keys choose). */}
+          <div role="radiogroup" aria-labelledby="pdf-text-size-label" className="flex items-center gap-1">
+            {FONT_SIZES.map((size, index) => (
+              <button
+                key={size}
+                ref={(node) => { sizeRefs.current[index] = node }}
+                type="button"
+                role="radio"
+                aria-checked={fontSize === size}
+                tabIndex={index === sizeIndex ? 0 : -1}
+                onClick={() => setFontSize(size)}
+                onKeyDown={(e) => onSizeKeyDown(e, index)}
+                className={cn(
+                  'min-h-6 min-w-6 px-2 py-1 rounded text-xs font-medium transition-colors',
+                  fontSize === size ? 'bg-[#4a5d23] text-white' : 'bg-white border border-stone-500 text-stone-800 hover:bg-stone-50',
+                )}
+              >
+                {formatCount(size, locale)}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1" />
 
         {fillResult && (
           <span
-            className="text-xs text-lime-700 font-medium"
+            className="text-xs text-lime-800 font-medium"
             data-testid="pdf-fill-result-banner"
+            aria-hidden="true"
           >
-            Filled {fillResult.filled} of {fillResult.total} field{fillResult.total !== 1 ? 's' : ''}
+            {formsFilledFields(fillResult.filled, fillResult.total, locale)}
           </span>
         )}
 
-        {saveError && (
-          <span className="text-xs text-red-600">{saveError}</span>
-        )}
+        <span role="alert" className="text-xs text-red-700" data-testid="pdf-annotator-alert">
+          {saveError ? t(saveError) : ''}
+        </span>
 
         <Button
           size="sm"
           variant="outline"
           onClick={onCancel}
+          className="border-stone-500"
         >
-          Cancel
+          {t('cancel')}
         </Button>
 
         <Button
           size="sm"
           onClick={handleSave}
-          disabled={isSaving}
-          className="bg-[#4a5d23] hover:bg-[#3d4d1d] text-white"
+          aria-disabled={isSaving}
+          aria-busy={isSaving || undefined}
+          className={cn('bg-[#4a5d23] hover:bg-[#3d4d1d] text-white', isSaving && UNAVAILABLE)}
         >
           {isSaving ? (
-            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" aria-hidden="true" />
           ) : (
-            <Save className="w-3.5 h-3.5 mr-1.5" />
+            <Save className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
           )}
-          Save PDF
+          {t('savePdf')}
         </Button>
       </div>
 
@@ -734,15 +798,18 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
             file={docData}
             onLoadError={handleDocumentLoadError}
             loading={
-              <div className="flex items-center gap-2 text-stone-500 text-sm">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Rendering pages...
+              <div className="flex items-center gap-2 text-stone-700 text-sm" role="status">
+                <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
+                {t('renderingPages')}
               </div>
             }
           >
             {Array.from({ length: numPages }, (_, i) => (
               <div
                 key={i}
+                role="group"
+                aria-label={formatMessage(t('pageLabel'), { n: formatCount(i + 1, locale) })}
+                dir="ltr"
                 style={{ position: 'relative', marginBottom: 16, display: 'inline-block' }}
               >
                 <Page
@@ -754,6 +821,7 @@ export function PdfAnnotator({ file, initialAnnotations, onSave, onCancel, onFlu
                   renderTextLayer
                 />
                 <PageOverlay
+                  locale={locale}
                   pageIndex={i}
                   annotations={annotations.filter(a => a.pageIndex === i)}
                   isPlacementMode={isPlacementMode}

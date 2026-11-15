@@ -1,5 +1,17 @@
 'use client'
 
+// apps/web/src/components/panels/forms-panel.tsx
+//
+// P6 W9: FEED's own words here — the heading, tabs, cards' chrome, statuses, buttons, empty and
+// failure lines, the delete-draft dialog and the guest prompts — are in the member's language
+// (lib/i18n-forms.ts), with lang/dir on the panel root and the portalled dialog. A form template's
+// own text (its name, description, required documents) and a government form's official name and
+// number mirror official English forms and stay as written, marked lang="en" (owner decision
+// pending). What a member typed into a submission is their own text (lang="" dir="auto").
+// Template ids, form types, storage paths and every payload are the same in every language.
+// Focus never falls to <body>: leaving the wizard, the annotator or a submission returns it to
+// the control that opened it, and deleting a draft moves it to the next draft or the tab.
+
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import {
   FileText,
@@ -23,6 +35,7 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -43,6 +56,20 @@ import { GOVERNMENT_FORMS, type GovernmentForm } from '@/lib/government-forms'
 import { logger } from '@/lib/logger'
 import { getFriendlyErrorMessage } from '@/lib/friendly-error'
 import { CreateAccountPrompt } from '@/components/guest/create-account-prompt'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { formatCount, formatDate as formatLocaleDate } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
+import { relativeAge } from '@/lib/relative-age'
+import { failureCode } from '@/lib/failure-code'
+import { feedChromeT } from '@/lib/i18n-feed-chrome'
+import { FRIENDLY_ERROR_SENTENCES, friendlyErrorT } from '@/lib/i18n-friendly-error'
+import { estimatedTimeText, formsCategoryLabel, formsMoreDocuments, formsT, govCategoryLabel, type FormsKey } from '@/lib/i18n-forms'
+import { nextTabIndex } from '@/components/feed/feed-chrome'
+import { cn } from '@/lib/utils'
+import { OFFICIAL_ENGLISH } from '@/lib/official-english'
+import { afterLayout, announce, AnnouncementText, focusAfterRowRemoval, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
 
 // ============================================
 // TYPES
@@ -150,7 +177,7 @@ function adaptSubmission(
   return {
     id: sub.id,
     templateId: sub.templateId,
-    templateName: tmpl?.name ?? 'Unknown Form',
+    templateName: tmpl?.name ?? '',
     submittedAt: sub.submittedAt ? new Date(sub.submittedAt) : new Date(sub.createdAt),
     status: mapSubmissionStatus(sub.status),
     category: tmpl ? (deriveCategoryFromFormType(tmpl.form_type) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
@@ -169,7 +196,7 @@ function adaptDraft(
   return {
     id: sub.id,
     templateId: sub.templateId,
-    templateName: tmpl?.name ?? 'Unknown Form',
+    templateName: tmpl?.name ?? '',
     progress,
     lastSaved: new Date(sub.updatedAt),
     category: tmpl ? (deriveCategoryFromFormType(tmpl.form_type) ?? deriveCategoryFromName(tmpl.name)) : 'benefits',
@@ -187,58 +214,25 @@ const CATEGORY_COLORS: Record<FormTemplate['category'], string> = {
   food: 'bg-green-100 text-green-700',
 }
 
-const STATUS_CONFIG: Record<FormSubmission['status'], { color: string; icon: React.ElementType; label: string }> = {
-  'pending': { color: 'text-stone-500', icon: Clock, label: 'Pending' },
-  'under-review': { color: 'text-blue-600', icon: Loader2, label: 'Under Review' },
-  'approved': { color: 'text-green-600', icon: CheckCircle, label: 'Approved' },
-  'denied': { color: 'text-red-600', icon: AlertCircle, label: 'Denied' },
-  'needs-info': { color: 'text-orange-600', icon: AlertCircle, label: 'Needs Info' },
+const STATUS_CONFIG: Record<FormSubmission['status'], { color: string; icon: React.ElementType; label: FormsKey }> = {
+  'pending': { color: 'text-stone-700', icon: Clock, label: 'statusPending' },
+  'under-review': { color: 'text-blue-800', icon: Loader2, label: 'statusUnderReview' },
+  'approved': { color: 'text-green-800', icon: CheckCircle, label: 'statusApproved' },
+  'denied': { color: 'text-red-700', icon: AlertCircle, label: 'statusDenied' },
+  'needs-info': { color: 'text-orange-800', icon: AlertCircle, label: 'statusNeedsInfo' },
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
-}
-
-function formatRelativeDate(date: Date): string {
-  const now = new Date()
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-  if (diffInSeconds < 60) return 'just now'
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
-  return formatDate(date)
-}
+/** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
+const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
 
 // ============================================
 // ESTIMATED TIME DISPLAY
 // ============================================
-interface EstimatedTimeProps {
-  minutes: number
-}
-
-function EstimatedTime({ minutes }: EstimatedTimeProps) {
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-
-  let display = ''
-  if (hours > 0) {
-    display = `${hours}h ${mins > 0 ? `${mins}m` : ''}`
-  } else {
-    display = `${mins} min`
-  }
-
+function EstimatedTime({ minutes, locale }: { minutes: number; locale: Locale }) {
   return (
-    <div className="flex items-center gap-1.5 text-xs text-stone-500">
-      <Clock className="w-3.5 h-3.5" />
-      <span>Est. {display}</span>
+    <div className="flex items-center gap-1.5 text-xs text-stone-700">
+      <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+      <span>{estimatedTimeText(minutes, locale)}</span>
     </div>
   )
 }
@@ -249,25 +243,27 @@ function EstimatedTime({ minutes }: EstimatedTimeProps) {
 interface RequiredDocsProps {
   docs: string[]
   maxShow?: number
+  locale: Locale
 }
 
-function RequiredDocs({ docs, maxShow = 3 }: RequiredDocsProps) {
+function RequiredDocs({ docs, maxShow = 3, locale }: RequiredDocsProps) {
   const visibleDocs = docs.slice(0, maxShow)
   const remaining = docs.length - maxShow
 
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-stone-600 mb-1.5">Required Documents:</p>
+      <p className="text-xs font-medium text-stone-700 mb-1.5">{formsT(locale, 'requiredDocs')}</p>
       <ul className="space-y-1">
         {visibleDocs.map((doc, index) => (
-          <li key={index} className="flex items-center gap-1.5 text-xs text-stone-500">
-            <FileCheck className="w-3 h-3 flex-shrink-0" />
-            <span>{doc}</span>
+          <li key={index} className="flex items-center gap-1.5 text-xs text-stone-700">
+            <FileCheck className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+            {/* The template's own words (mirroring the official form): English, marked so. */}
+            <span {...OFFICIAL_ENGLISH}>{doc}</span>
           </li>
         ))}
         {remaining > 0 && (
-          <li className="text-xs text-stone-600">
-            +{remaining} more document{remaining > 1 ? 's' : ''}
+          <li className="text-xs text-stone-700">
+            {formsMoreDocuments(remaining, locale)}
           </li>
         )}
       </ul>
@@ -281,45 +277,49 @@ function RequiredDocs({ docs, maxShow = 3 }: RequiredDocsProps) {
 interface FormTemplateCardProps {
   template: FormTemplate
   onStart: (templateId: string) => void
+  locale: Locale
 }
 
-function FormTemplateCard({ template, onStart }: FormTemplateCardProps) {
+function FormTemplateCard({ template, onStart, locale }: FormTemplateCardProps) {
   const categoryColor = CATEGORY_COLORS[template.category]
+  const nameId = `form-template-${template.id}`
 
   return (
-    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-[#4a5d23]/30 transition-all">
+    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-300 hover:border-[#4a5d23]/50 transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium text-sm truncate">{template.name}</h3>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${categoryColor}`}>
-              {template.category}
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h3 id={nameId} className="font-medium text-sm truncate" {...OFFICIAL_ENGLISH}>{template.name}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
+              {formsCategoryLabel(template.category, locale)}
             </span>
           </div>
-          <EstimatedTime minutes={template.estimatedTime} />
+          <EstimatedTime minutes={template.estimatedTime} locale={locale} />
         </div>
-        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ml-3">
-          <FileText className="w-5 h-5 text-[#4a5d23]" />
+        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ms-3">
+          <FileText className="w-5 h-5 text-[#4a5d23]" aria-hidden="true" />
         </div>
       </div>
 
-      {/* Description */}
-      <p className="text-xs text-stone-600 leading-relaxed mb-3 line-clamp-2">
+      {/* Description — the template's own words */}
+      <p className="text-xs text-stone-700 leading-relaxed mb-3 line-clamp-2" {...OFFICIAL_ENGLISH}>
         {template.description}
       </p>
 
       {/* Required Documents */}
-      <RequiredDocs docs={template.requiredDocs} />
+      <RequiredDocs docs={template.requiredDocs} locale={locale} />
 
       {/* Action Button */}
       <Button
         onClick={() => onStart(template.id)}
         className="w-full mt-4"
         size="sm"
+        aria-describedby={nameId}
+        data-return-id={`start-${template.id}`}
       >
-        <Play className="w-3.5 h-3.5 mr-1.5" />
-        Start Application
+        <Play className="w-3.5 h-3.5 me-1.5 rtl:-scale-x-100" aria-hidden="true" />
+        {formsT(locale, 'startApplication')}
       </Button>
     </div>
   )
@@ -332,39 +332,49 @@ interface FormInProgressCardProps {
   form: FormInProgressData
   onContinue: (formId: string) => void
   onDelete: (formId: string) => void
+  locale: Locale
 }
 
-function FormInProgressCard({ form, onContinue, onDelete }: FormInProgressCardProps) {
+function FormInProgressCard({ form, onContinue, onDelete, locale }: FormInProgressCardProps) {
   const categoryColor = CATEGORY_COLORS[form.category]
+  const nameId = `form-draft-${form.id}`
+  const progressId = `form-draft-progress-${form.id}`
 
   return (
-    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-[#4a5d23]/30 transition-all">
+    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-300 hover:border-[#4a5d23]/50 transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium text-sm truncate">{form.templateName}</h3>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${categoryColor}`}>
-              {form.category}
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h3 id={nameId} className="font-medium text-sm truncate" {...OFFICIAL_ENGLISH}>{form.templateName || formsT(locale, 'submissionFallback')}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
+              {formsCategoryLabel(form.category, locale)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-stone-500">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Last saved {formatRelativeDate(form.lastSaved)}</span>
+          <div className="flex items-center gap-1.5 text-xs text-stone-700">
+            <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{formatMessage(formsT(locale, 'lastSaved'), { when: relativeAge(form.lastSaved.toISOString(), locale) })}</span>
           </div>
         </div>
-        <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0 ml-3">
-          <ClipboardList className="w-5 h-5 text-orange-600" />
+        <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0 ms-3">
+          <ClipboardList className="w-5 h-5 text-orange-800" aria-hidden="true" />
         </div>
       </div>
 
       {/* Progress Bar */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-medium text-stone-600">Progress</span>
-          <span className="text-xs font-semibold text-[#4a5d23]">{form.progress}%</span>
+          <span className="text-xs font-medium text-stone-700" id={progressId}>{formsT(locale, 'progress')}</span>
+          <span className="text-xs font-semibold text-[#4a5d23]">{formatCount(form.progress, locale)}%</span>
         </div>
-        <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
+        <div
+          className="w-full h-2 bg-stone-200 rounded-full overflow-hidden"
+          role="progressbar"
+          aria-labelledby={progressId}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={form.progress}
+        >
           <div
             className="h-full bg-[#4a5d23] rounded-full transition-all duration-300"
             style={{ width: `${form.progress}%` }}
@@ -378,17 +388,22 @@ function FormInProgressCard({ form, onContinue, onDelete }: FormInProgressCardPr
           onClick={() => onContinue(form.id)}
           className="flex-1"
           size="sm"
+          aria-describedby={nameId}
+          data-return-id={`continue-${form.id}`}
         >
-          <ChevronRight className="w-3.5 h-3.5 mr-1" />
-          Continue
+          <ChevronRight className="w-3.5 h-3.5 me-1 rtl:-scale-x-100" aria-hidden="true" />
+          {formsT(locale, 'continue')}
         </Button>
         <Button
           onClick={() => onDelete(form.id)}
           variant="outline"
           size="sm"
-          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+          aria-label={formsT(locale, 'deleteDraft')}
+          aria-describedby={nameId}
+          data-return-id={`delete-${form.id}`}
+          className="text-red-700 hover:text-red-800 hover:bg-red-50 border-red-300"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
         </Button>
       </div>
     </div>
@@ -401,39 +416,41 @@ function FormInProgressCard({ form, onContinue, onDelete }: FormInProgressCardPr
 interface SubmissionCardProps {
   submission: FormSubmission
   onView: (submissionId: string) => void
+  locale: Locale
 }
 
-function SubmissionCard({ submission, onView }: SubmissionCardProps) {
+function SubmissionCard({ submission, onView, locale }: SubmissionCardProps) {
   const categoryColor = CATEGORY_COLORS[submission.category]
   const statusConfig = STATUS_CONFIG[submission.status]
   const StatusIcon = statusConfig.icon
+  const nameId = `form-submission-${submission.id}`
 
   return (
-    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-[#4a5d23]/30 transition-all">
+    <div className="p-4 rounded-xl bg-[#faf9f6] border border-stone-300 hover:border-[#4a5d23]/50 transition-colors">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium text-sm truncate">{submission.templateName}</h3>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${categoryColor}`}>
-              {submission.category}
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h3 id={nameId} className="font-medium text-sm truncate" {...OFFICIAL_ENGLISH}>{submission.templateName || formsT(locale, 'submissionFallback')}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
+              {formsCategoryLabel(submission.category, locale)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-stone-500">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Submitted {formatDate(submission.submittedAt)}</span>
+          <div className="flex items-center gap-1.5 text-xs text-stone-700">
+            <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{formatMessage(formsT(locale, 'submittedOn'), { date: formatLocaleDate(submission.submittedAt.toISOString(), locale, browserTimeZone()) })}</span>
           </div>
         </div>
-        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ml-3">
-          <FileCheck className="w-5 h-5 text-[#4a5d23]" />
+        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ms-3">
+          <FileCheck className="w-5 h-5 text-[#4a5d23]" aria-hidden="true" />
         </div>
       </div>
 
       {/* Status Badge */}
       <div className="flex items-center justify-between mb-4">
         <div className={`flex items-center gap-1.5 ${statusConfig.color}`}>
-          <StatusIcon className={`w-4 h-4 ${submission.status === 'under-review' ? 'animate-spin' : ''}`} />
-          <span className="text-sm font-medium">{statusConfig.label}</span>
+          <StatusIcon className={`w-4 h-4 ${submission.status === 'under-review' ? 'motion-safe:animate-spin' : ''}`} aria-hidden="true" />
+          <span className="text-sm font-medium">{formsT(locale, statusConfig.label)}</span>
         </div>
       </div>
 
@@ -441,11 +458,13 @@ function SubmissionCard({ submission, onView }: SubmissionCardProps) {
       <Button
         onClick={() => onView(submission.id)}
         variant="outline"
-        className="w-full"
+        className="w-full border-stone-500"
         size="sm"
+        aria-describedby={nameId}
+        data-return-id={`view-${submission.id}`}
       >
-        <Eye className="w-3.5 h-3.5 mr-1.5" />
-        View Submission
+        <Eye className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
+        {formsT(locale, 'viewSubmission')}
       </Button>
     </div>
   )
@@ -458,7 +477,7 @@ interface TabButtonProps {
   label: string
   tabId: string
   panelId: string
-  count: number
+  count: string
   isActive: boolean
   onClick: () => void
   onKeyDown: (e: React.KeyboardEvent) => void
@@ -476,17 +495,17 @@ function TabButton({ label, tabId, panelId, count, isActive, onClick, onKeyDown,
       tabIndex={isActive ? 0 : -1}
       onClick={onClick}
       onKeyDown={onKeyDown}
-      className={`px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap flex items-center gap-2 ${
+      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
         isActive
           ? 'bg-[#4a5d23] text-white'
-          : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-700'
+          : 'bg-[#f0ede6] hover:bg-[#e8e4db] text-stone-800'
       }`}
     >
       {label}
       <span className={`px-1.5 py-0.5 rounded-full text-xs ${
         isActive
           ? 'bg-white/20 text-white'
-          : 'bg-stone-300/50 text-stone-600'
+          : 'bg-stone-300/50 text-stone-800'
       }`}>
         {count}
       </span>
@@ -499,7 +518,7 @@ function TabButton({ label, tabId, panelId, count, isActive, onClick, onKeyDown,
 // ============================================
 interface EmptyStateProps {
   title: string
-  description: string
+  description: React.ReactNode
   icon: React.ElementType
 }
 
@@ -507,10 +526,10 @@ function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-4">
-        <Icon className="w-8 h-8 text-stone-400" />
+        <Icon className="w-8 h-8 text-stone-600" aria-hidden="true" />
       </div>
-      <h3 className="font-medium text-stone-700 mb-1">{title}</h3>
-      <p className="text-sm text-stone-500 max-w-sm">{description}</p>
+      <h3 className="font-medium text-stone-800 mb-1">{title}</h3>
+      <p className="text-sm text-stone-700 max-w-sm">{description}</p>
     </div>
   )
 }
@@ -533,56 +552,66 @@ interface GovernmentFormCardProps {
   inBucket: boolean
   onOpen: (form: GovernmentForm) => void
   isLoading: boolean
+  locale: Locale
 }
 
-function GovernmentFormCard({ form, inBucket, onOpen, isLoading }: GovernmentFormCardProps) {
+function GovernmentFormCard({ form, inBucket, onOpen, isLoading, locale }: GovernmentFormCardProps) {
   const categoryColor = GOV_CATEGORY_COLORS[form.category] ?? 'bg-stone-100 text-stone-700'
-  const label = form.category.replace(/_/g, ' ')
+  const nameId = `gov-form-${form.storagePath.replace(/[^a-z0-9]/gi, '-')}`
+  const [beforeNumber, afterNumber] = splitMessage(formsT(locale, 'formNumber'), 'number')
 
   return (
     <div
       data-testid="gov-form-card"
       data-gov-form-path={form.storagePath}
-      className="p-4 rounded-xl bg-[#faf9f6] border border-stone-200 hover:border-[#4a5d23]/30 transition-all"
+      className="p-4 rounded-xl bg-[#faf9f6] border border-stone-300 hover:border-[#4a5d23]/50 transition-colors"
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium text-sm truncate">{form.programName}</h3>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium capitalize ${categoryColor}`}>
-              {label}
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            {/* The program's official name: English, marked so. */}
+            <h3 id={nameId} className="font-medium text-sm truncate" {...OFFICIAL_ENGLISH}>{form.programName}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${categoryColor}`}>
+              {govCategoryLabel(form.category, locale)}
             </span>
           </div>
-          <p className="text-xs text-stone-500">Form {form.formNumber}</p>
+          <p className="text-xs text-stone-700">
+            {beforeNumber}<bdi {...OFFICIAL_ENGLISH}>{form.formNumber}</bdi>{afterNumber}
+          </p>
         </div>
-        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ml-3">
-          <Globe className="w-5 h-5 text-[#4a5d23]" />
+        <div className="w-10 h-10 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0 ms-3">
+          <Globe className="w-5 h-5 text-[#4a5d23]" aria-hidden="true" />
         </div>
       </div>
 
       {inBucket ? (
         <Button
-          onClick={() => onOpen(form)}
-          disabled={isLoading}
-          className="w-full mt-3"
+          onClick={() => { if (!isLoading) onOpen(form) }}
+          aria-disabled={isLoading}
+          aria-busy={isLoading || undefined}
+          aria-describedby={nameId}
+          data-return-id={`gov-${form.storagePath}`}
+          className={cn('w-full mt-3', isLoading && UNAVAILABLE)}
           size="sm"
         >
           {isLoading ? (
-            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            <Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" aria-hidden="true" />
           ) : (
-            <Download className="w-3.5 h-3.5 mr-1.5" />
+            <Download className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
           )}
-          Fill &amp; Annotate
+          {formsT(locale, 'fillAnnotate')}
         </Button>
       ) : (
         <a
           href={form.applicationUrl ?? form.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-3 flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-md border border-stone-300 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
+          aria-describedby={nameId}
+          className="mt-3 flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-md border border-stone-500 text-sm font-medium text-stone-800 hover:bg-stone-50 transition-colors"
         >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Open on Agency Site
+          <ExternalLink className="w-3.5 h-3.5 rtl:-scale-x-100" aria-hidden="true" />
+          {formsT(locale, 'openAgencySite')}
+          <span className="sr-only"> {formsT(locale, 'opensNewTab')}</span>
         </a>
       )}
     </div>
@@ -592,31 +621,50 @@ function GovernmentFormCard({ form, inBucket, onOpen, isLoading }: GovernmentFor
 // ============================================
 // MAIN FORMS PANEL
 // ============================================
-const FORMS_TABS: { key: TabType; label: string; panelId: string }[] = [
-  { key: 'available', label: 'Available Forms', panelId: 'forms-panel-available' },
-  { key: 'in-progress', label: 'In Progress', panelId: 'forms-panel-in-progress' },
-  { key: 'submitted', label: 'Submitted', panelId: 'forms-panel-submitted' },
+const FORMS_TABS: { key: TabType; label: FormsKey; panelId: string }[] = [
+  { key: 'available', label: 'tabAvailable', panelId: 'forms-panel-available' },
+  { key: 'in-progress', label: 'tabInProgress', panelId: 'forms-panel-in-progress' },
+  { key: 'submitted', label: 'tabSubmitted', panelId: 'forms-panel-submitted' },
 ]
 
 export function FormsPanel({ userId }: FormsPanelProps) {
+  const locale = useProfileLocale()
+  const t = (key: FormsKey) => formsT(locale, key)
   const [activeTab, setActiveTab] = useState<TabType>('available')
   const [wizardState, setWizardState] = useState<WizardState>({ mode: 'list' })
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const deleteInFlight = useRef(false)
+  const [deleteError, setDeleteError] = useState<FormsKey | null>(null)
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const listRef = useRef<HTMLDivElement>(null)
+  // The control a sub-view was opened from (data-return-id): focus returns there on the way back.
+  const returnTo = useRef<string | null>(null)
   const { panelParams, setPanelParams, setActivePanel } = usePanelContext()
   const { uploadFile } = useEncryptedUpload()
+  // A sub-view's heading takes focus once, when it mounts.
+  const focusOnMount = useCallback((node: HTMLElement | null) => { node?.focus() }, [])
 
   const handleTabKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
-    let next = index
-    if (e.key === 'ArrowRight') next = (index + 1) % FORMS_TABS.length
-    else if (e.key === 'ArrowLeft') next = (index - 1 + FORMS_TABS.length) % FORMS_TABS.length
-    else if (e.key === 'Home') next = 0
-    else if (e.key === 'End') next = FORMS_TABS.length - 1
-    else return
+    const next = nextTabIndex(e.key, index, FORMS_TABS.length, locale)
+    if (next === null) return
     e.preventDefault()
     tabRefs.current[next]?.focus()
     setActiveTab(FORMS_TABS[next].key)
+  }, [locale])
+
+  /** Back on the list: focus the control the sub-view was opened from, else the heading. */
+  const backToList = useCallback((target?: string | null) => {
+    const id = target === undefined ? returnTo.current : target
+    returnTo.current = null
+    setWizardState({ mode: 'list' })
+    afterLayout(() => {
+      const host = listRef.current
+      const el = (id ? host?.querySelector<HTMLElement>(`[data-return-id="${CSS.escape(id)}"]`) : null) ?? host?.querySelector<HTMLElement>('h1')
+      el?.focus()
+    })
   }, [])
 
   // Live data hooks
@@ -650,6 +698,12 @@ export function FormsPanel({ userId }: FormsPanelProps) {
   const isLoading = templatesLoading || submissionsLoading
   const error = templatesError || submissionsError
 
+  // The hooks write no row for a failed read: one code-only row each time a failure appears.
+  useEffect(() => {
+    if (error) logger.warn('error_surface.shown', { surface: 'forms', kind: 'load_failed', locale })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error])
+
   // Deep-link from programs panel: open the correct template directly
   useEffect(() => {
     const ft = panelParams.formsTarget as FormsTarget | undefined
@@ -679,43 +733,79 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   // Handlers
   const handleStartForm = (templateId: string) => {
+    returnTo.current = `start-${templateId}`
     setWizardState({ mode: 'wizard', templateId })
   }
 
   const handleContinueForm = (formId: string) => {
     const draft = inProgress.find((f) => f.id === formId)
     if (draft) {
+      returnTo.current = `continue-${formId}`
       setWizardState({ mode: 'wizard', templateId: draft.templateId, submissionId: formId })
     }
   }
 
+  // The draft the dialog was opened for, kept after the dialog's state clears (focus returns to it).
+  const confirmDeleteIdRef = useRef<string | null>(null)
   const handleDeleteDraft = (formId: string) => {
+    setDeleteError(null)
+    confirmDeleteIdRef.current = formId
     setConfirmDeleteId(formId)
   }
 
+  // Set when the draft left: the dialog's close then leaves focus to this handler.
+  const draftDeletedRef = useRef(false)
   const handleConfirmDelete = async () => {
-    if (!confirmDeleteId) return
-    const supabase = createClient()
-    await supabase.from('form_submissions').delete().eq('id', confirmDeleteId)
-    setConfirmDeleteId(null)
-    await refreshSubmissions()
+    if (!confirmDeleteId || deleteInFlight.current) return
+    deleteInFlight.current = true
+    setDeleting(true)
+    const ids = inProgress.map((f) => f.id)
+    const deletedId = confirmDeleteId
+    try {
+      const supabase = createClient()
+      const { error: deleteFailure } = await supabase.from('form_submissions').delete().eq('id', deletedId)
+      if (deleteFailure) {
+        // No row is written for this path elsewhere: one code-only row.
+        logger.warn('error_surface.shown', { surface: 'forms', kind: failureCode(deleteFailure), locale })
+        setDeleteError('draftDeleteFailed')
+        return
+      }
+      draftDeletedRef.current = true
+      setConfirmDeleteId(null)
+      await refreshSubmissions()
+      announce(setStatus, t('draftDeleted'))
+      const nextId = focusAfterRowRemoval(ids, deletedId)
+      afterLayout(() => {
+        const host = listRef.current
+        const next = nextId ? host?.querySelector<HTMLElement>(`[data-return-id="continue-${CSS.escape(nextId)}"]`) : null
+        ;(next ?? tabRefs.current[1])?.focus()
+      })
+    } finally {
+      deleteInFlight.current = false
+      setDeleting(false)
+    }
   }
 
   const handleViewSubmission = (submissionId: string) => {
+    returnTo.current = `view-${submissionId}`
     setWizardState({ mode: 'view', submissionId })
   }
 
   const handleWizardComplete = async () => {
+    returnTo.current = null
     setWizardState({ mode: 'list' })
     setActiveTab('submitted')
+    // The new submission is on the Submitted tab: focus goes to that tab.
+    afterLayout(() => tabRefs.current[2]?.focus())
     await refreshSubmissions()
   }
 
   const handleWizardCancel = () => {
-    setWizardState({ mode: 'list' })
+    backToList()
   }
 
   const handleOpenPdfPicker = () => {
+    returnTo.current = 'fill-pdf'
     fileInputRef.current?.click()
   }
 
@@ -726,12 +816,13 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const [pdfSaveError, setPdfSaveError] = useState<string | null>(null)
+  const [pdfSaveError, setPdfSaveError] = useState<FormsKey | null>(null)
 
   // ── Government Forms state ──────────────────────────────────────────
   // Track which storage paths exist in the bucket (keyed by storagePath)
   const [bucketPaths, setBucketPaths] = useState<Set<string>>(new Set())
   const [govFormsLoading, setGovFormsLoading] = useState(false)
+  // The failing form's official number (the line is translated; the number stays as printed).
   const [govFormsError, setGovFormsError] = useState<string | null>(null)
   // Which gov form is currently being downloaded (storagePath → loading)
   const [govFormDownloading, setGovFormDownloading] = useState<string | null>(null)
@@ -777,6 +868,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   // Download a gov form from the bucket and open it in the PdfAnnotator
   const handleOpenGovForm = useCallback(async (form: GovernmentForm) => {
+    returnTo.current = `gov-${form.storagePath}`
     setGovFormDownloading(form.storagePath)
     setGovFormsError(null)
     const supabase = createClient()
@@ -787,7 +879,9 @@ export function FormsPanel({ userId }: FormsPanelProps) {
         .download(form.storagePath)
 
       if (error || !data) {
-        setGovFormsError(`Could not load ${form.formNumber}: ${error?.message ?? 'unknown error'}`)
+        // This branch wrote no row: one code-only row (the catch below writes gov_forms.download.error).
+        logger.warn('error_surface.shown', { surface: 'government-forms', kind: error ? failureCode(error) : 'no_data', locale })
+        setGovFormsError(form.formNumber)
         return
       }
 
@@ -796,13 +890,12 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       const file = new File([fileBlob], fileName, { type: 'application/pdf' })
       setWizardState({ mode: 'gov-pdf', file, fileName, govForm: form })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Download failed'
-      setGovFormsError(`Could not load ${form.formNumber}: ${msg}`)
+      setGovFormsError(form.formNumber)
       logger.error('gov_forms.download.error', err, { storagePath: form.storagePath })
     } finally {
       setGovFormDownloading(null)
     }
-  }, [])
+  }, [locale])
 
   const handlePdfSave = async (data: { sourceBytes: Uint8Array; annotations: import('@/hooks/use-pdf-annotation').TextAnnotation[] }) => {
     setPdfSaveError(null)
@@ -825,15 +918,15 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       setPanelParams((prev) => ({ ...prev, subtab: 'documents' }))
       setActivePanel('documents')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save PDF'
-      setPdfSaveError(message)
+      setPdfSaveError('pdfSaveFailed')
       logger.error('pdf.save.error', err, { fileName })
       // Do NOT navigate — stay on annotator so user can retry
     }
   }
 
   const handlePdfCancel = () => {
-    setWizardState({ mode: 'list' })
+    setPdfSaveError(null)
+    backToList()
   }
 
   // Pre-lock flush persist for the PDF annotator: store the current source +
@@ -862,117 +955,133 @@ export function FormsPanel({ userId }: FormsPanelProps) {
     // Anonymous guests may open gov PDFs but cannot fill/save them (vault requires account).
     if (isAnonymous) {
       return (
-        <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
-          <CreateAccountPrompt message="Create a free account to fill and save government forms to your encrypted vault" />
+        <div className="h-full flex flex-col items-center justify-center p-6 gap-4" lang={locale} dir={dir(locale)}>
+          <CreateAccountPrompt message={t('guestGovForms')} linkLabel={feedChromeT(locale, 'createAccount')} />
           <button
-            onClick={() => setWizardState({ mode: 'list' })}
-            className="text-sm text-stone-500 underline hover:text-stone-700"
+            type="button"
+            onClick={() => backToList()}
+            className="text-sm text-stone-700 underline hover:text-stone-900"
           >
-            Back to forms
+            {t('backToForms')}
           </button>
         </div>
       )
     }
     return (
-      <VaultGuard onDismiss={() => setWizardState({ mode: 'list' })}>
-        {pdfSaveError && (
-          <div className="px-4 py-2 bg-red-50 border-b border-red-200">
-            <p className="text-xs text-red-600">{pdfSaveError}</p>
+      <div className="h-full" lang={locale} dir={dir(locale)}>
+        <VaultGuard onDismiss={handlePdfCancel}>
+          <div role="alert" data-testid="pdf-save-alert">
+            {pdfSaveError && (
+              <div className="px-4 py-2 bg-red-50 border-b border-red-300">
+                <p className="text-xs text-red-800">{t(pdfSaveError)}</p>
+              </div>
+            )}
           </div>
-        )}
-        <PdfAnnotator
-          file={wizardState.file}
-          autofillValues={autofillValues}
-          onSave={handlePdfSave}
-          onFlushDraft={persistPdfDraft}
-          onCancel={() => setWizardState({ mode: 'list' })}
-        />
-      </VaultGuard>
+          <PdfAnnotator
+            file={wizardState.file}
+            autofillValues={autofillValues}
+            onSave={handlePdfSave}
+            onFlushDraft={persistPdfDraft}
+            onCancel={handlePdfCancel}
+          />
+        </VaultGuard>
+      </div>
     )
   }
 
   if (wizardState.mode === 'pdf') {
     if (isAnonymous) {
       return (
-        <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
-          <CreateAccountPrompt message="Create a free account to fill and save government forms to your encrypted vault" />
-          <button onClick={handlePdfCancel} className="text-sm text-stone-500 underline hover:text-stone-700">Back to forms</button>
+        <div className="h-full flex flex-col items-center justify-center p-6 gap-4" lang={locale} dir={dir(locale)}>
+          <CreateAccountPrompt message={t('guestGovForms')} linkLabel={feedChromeT(locale, 'createAccount')} />
+          <button type="button" onClick={handlePdfCancel} className="text-sm text-stone-700 underline hover:text-stone-900">{t('backToForms')}</button>
         </div>
       )
     }
     return (
-      <VaultGuard onDismiss={handlePdfCancel}>
-        {pdfSaveError && (
-          <div className="px-4 py-2 bg-red-50 border-b border-red-200">
-            <p className="text-xs text-red-600">{pdfSaveError}</p>
+      <div className="h-full" lang={locale} dir={dir(locale)}>
+        <VaultGuard onDismiss={handlePdfCancel}>
+          <div role="alert" data-testid="pdf-save-alert">
+            {pdfSaveError && (
+              <div className="px-4 py-2 bg-red-50 border-b border-red-300">
+                <p className="text-xs text-red-800">{t(pdfSaveError)}</p>
+              </div>
+            )}
           </div>
-        )}
-        <PdfAnnotator
-          file={wizardState.file}
-          onSave={handlePdfSave}
-          onFlushDraft={persistPdfDraft}
-          onCancel={handlePdfCancel}
-        />
-      </VaultGuard>
+          <PdfAnnotator
+            file={wizardState.file}
+            onSave={handlePdfSave}
+            onFlushDraft={persistPdfDraft}
+            onCancel={handlePdfCancel}
+          />
+        </VaultGuard>
+      </div>
     )
   }
 
   if (wizardState.mode === 'wizard') {
     if (isAnonymous) {
       return (
-        <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
-          <CreateAccountPrompt message="Create a free account to fill out and submit assistance applications" />
-          <button onClick={handleWizardCancel} className="text-sm text-stone-500 underline hover:text-stone-700">Back to forms</button>
+        <div className="h-full flex flex-col items-center justify-center p-6 gap-4" lang={locale} dir={dir(locale)}>
+          <CreateAccountPrompt message={t('guestWizard')} linkLabel={feedChromeT(locale, 'createAccount')} />
+          <button type="button" onClick={handleWizardCancel} className="text-sm text-stone-700 underline hover:text-stone-900">{t('backToForms')}</button>
         </div>
       )
     }
     return (
-      <VaultGuard onDismiss={handleWizardCancel}>
-        <FormWizard
-          templateId={wizardState.templateId}
-          existingSubmissionId={wizardState.submissionId}
-          onComplete={handleWizardComplete}
-          onCancel={handleWizardCancel}
-        />
-      </VaultGuard>
+      <div className="h-full" lang={locale} dir={dir(locale)}>
+        <VaultGuard onDismiss={handleWizardCancel}>
+          <FormWizard
+            templateId={wizardState.templateId}
+            existingSubmissionId={wizardState.submissionId}
+            onComplete={handleWizardComplete}
+            onCancel={handleWizardCancel}
+          />
+        </VaultGuard>
+      </div>
     )
   }
 
   if (wizardState.mode === 'view') {
     const sub = rawSubmissions.find((s) => s.id === wizardState.submissionId)
     const tmpl = sub ? templateMap.get(sub.templateId) : null
+    const fieldLabel = (key: string) => tmpl?.schema.fields.find((f) => f.name === key)?.label ?? key.replace(/_/g, ' ')
     return (
-      <div className="h-full flex flex-col overflow-y-auto">
+      <div className="h-full flex flex-col overflow-y-auto" lang={locale} dir={dir(locale)} data-testid="submission-view">
         <div className="max-w-2xl mx-auto w-full px-4 py-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-stone-900">{tmpl?.name ?? 'Submission'}</h1>
-            <Button variant="outline" size="sm" onClick={() => setWizardState({ mode: 'list' })}>
-              Back
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="text-xl font-bold text-stone-900" tabIndex={-1} ref={focusOnMount}>
+              {tmpl?.name ? <span {...OFFICIAL_ENGLISH}>{tmpl.name}</span> : t('submissionFallback')}
+            </h1>
+            <Button variant="outline" size="sm" onClick={() => backToList()} className="border-stone-500">
+              <ChevronRight className="w-3.5 h-3.5 rotate-180 rtl:rotate-0" aria-hidden="true" />
+              {t('back')}
             </Button>
           </div>
           {sub ? (
-            <div className="p-5 bg-[#faf9f6] border border-stone-200 rounded-xl space-y-4">
+            <div className="p-5 bg-[#faf9f6] border border-stone-300 rounded-xl space-y-4">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-500">Status:</span>
-                <span className="text-sm font-medium capitalize">{sub.status}</span>
+                <span className="text-xs text-stone-700">{t('statusLabel')}</span>
+                <span className="text-sm font-medium">{t(STATUS_CONFIG[mapSubmissionStatus(sub.status)].label)}</span>
               </div>
               {sub.submittedAt && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-stone-500">Submitted:</span>
-                  <span className="text-sm">{new Date(sub.submittedAt).toLocaleDateString()}</span>
+                  <span className="text-xs text-stone-700">{t('submittedLabel')}</span>
+                  <span className="text-sm">{formatLocaleDate(new Date(sub.submittedAt).toISOString(), locale, browserTimeZone())}</span>
                 </div>
               )}
-              <div className="space-y-3 pt-2">
+              <dl className="space-y-3 pt-2">
                 {Object.entries(sub.formData || {}).map(([key, value]) => (
                   <div key={key}>
-                    <dt className="text-xs text-stone-500 capitalize">{key.replace(/_/g, ' ')}</dt>
-                    <dd className="text-sm text-stone-900">{String(value)}</dd>
+                    {/* The form's own field label (official English) and the member's answer. */}
+                    <dt className="text-xs text-stone-700" {...OFFICIAL_ENGLISH}>{fieldLabel(key)}</dt>
+                    <dd className="text-sm text-stone-900" lang="" dir="auto">{String(value)}</dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             </div>
           ) : (
-            <p className="text-sm text-stone-500">Submission not found.</p>
+            <p className="text-sm text-stone-700">{t('submissionNotFound')}</p>
           )}
         </div>
       </div>
@@ -981,31 +1090,43 @@ export function FormsPanel({ userId }: FormsPanelProps) {
 
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" />
-        <p className="text-sm text-stone-700">Checking available forms… (a few seconds)</p>
+      <div className="h-full flex flex-col items-center justify-center gap-3" lang={locale} dir={dir(locale)} role="status">
+        <Loader2 className="w-8 h-8 animate-spin text-[#4a5d23]" aria-hidden="true" />
+        <p className="text-sm text-stone-700">{t('checking')}</p>
       </div>
     )
   }
 
   if (error) {
+    const friendly = getFriendlyErrorMessage(error, '')
+    const body = Object.prototype.hasOwnProperty.call(FRIENDLY_ERROR_SENTENCES, friendly)
+      ? friendlyErrorT(locale, FRIENDLY_ERROR_SENTENCES[friendly])
+      : t('loadFailedBody')
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center">
-        <AlertCircle className="w-8 h-8 text-orange-500" />
-        <p className="text-sm text-stone-700 font-medium">Failed to load forms</p>
-        <p className="text-xs text-stone-700">{getFriendlyErrorMessage(error, "We couldn't load the forms. Please try again.")}</p>
+      <div className="h-full flex flex-col items-center justify-center gap-3 px-4 text-center" lang={locale} dir={dir(locale)}>
+        <AlertCircle className="w-8 h-8 text-orange-700" aria-hidden="true" />
+        <div role="alert">
+          <p className="text-sm text-stone-800 font-medium">{t('loadFailed')}</p>
+          <p className="text-xs text-stone-700">{body}</p>
+        </div>
         <button
+          type="button"
           onClick={refreshSubmissions}
           className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors mt-1"
         >
-          Try Again
+          {t('tryAgain')}
         </button>
       </div>
     )
   }
 
+  const [noInProgressBefore, noInProgressAfter] = splitMessage(t('noInProgressBody'), 'tab')
+
   return (
-    <div data-testid="forms-panel" className="h-full flex flex-col overflow-y-auto">
+    <div data-testid="forms-panel" className="h-full flex flex-col overflow-y-auto" lang={locale} dir={dir(locale)} ref={listRef}>
+      <p role="status" className="sr-only" data-testid="forms-status">
+        <AnnouncementText announcement={status} />
+      </p>
       <div className="max-w-4xl mx-auto w-full px-4 py-6">
         <input
           ref={fileInputRef}
@@ -1014,34 +1135,36 @@ export function FormsPanel({ userId }: FormsPanelProps) {
           className="hidden"
           onChange={handlePdfFileSelected}
           aria-hidden="true"
+          tabIndex={-1}
         />
 
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-stone-900 mb-1">
-              Forms & Applications
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-stone-900 mb-1" tabIndex={-1}>
+              {t('title')}
             </h1>
-            <p className="text-sm text-stone-600">
-              Apply for benefits, assistance programs, and community resources.
+            <p className="text-sm text-stone-700">
+              {t('subtitle')}
             </p>
           </div>
           <Button
             size="sm"
             variant="outline"
             onClick={handleOpenPdfPicker}
-            className="flex-shrink-0 mt-1"
+            data-return-id="fill-pdf"
+            className="flex-shrink-0 mt-1 border-stone-500"
           >
-            <FilePlus className="w-3.5 h-3.5 mr-1.5" />
-            Fill PDF Form
+            <FilePlus className="w-3.5 h-3.5 me-1.5" aria-hidden="true" />
+            {t('fillPdf')}
           </Button>
         </div>
 
         {/* Tab Navigation */}
         <div
           role="tablist"
-          aria-label="Forms sections"
-          className="flex gap-2 overflow-x-auto mb-6 pb-1"
+          aria-label={t('sectionsLabel')}
+          className="flex flex-wrap gap-2 mb-6 pb-1"
         >
           {FORMS_TABS.map((tab, index) => {
             const count = tab.key === 'available' ? templates.length : tab.key === 'in-progress' ? inProgress.length : submissions.length
@@ -1050,8 +1173,8 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                 key={tab.key}
                 tabId={`forms-tab-${tab.key}`}
                 panelId={tab.panelId}
-                label={tab.label}
-                count={count}
+                label={t(tab.label)}
+                count={formatCount(count, locale)}
                 isActive={activeTab === tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 onKeyDown={(e) => handleTabKeyDown(e, index)}
@@ -1074,17 +1197,18 @@ export function FormsPanel({ userId }: FormsPanelProps) {
               {templates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-4">
-                    <FileText className="w-8 h-8 text-stone-400" />
+                    <FileText className="w-8 h-8 text-stone-600" aria-hidden="true" />
                   </div>
-                  <h3 className="font-medium text-stone-700 mb-1">No Forms Available</h3>
-                  <p className="text-sm text-stone-500 max-w-sm mb-4">
-                    No application forms are set up yet. The AI Assistant can help you find benefit programs and walk you through what you need.
+                  <h3 className="font-medium text-stone-800 mb-1">{t('noForms')}</h3>
+                  <p className="text-sm text-stone-700 max-w-sm mb-4">
+                    {t('noFormsBody')}
                   </p>
                   <button
+                    type="button"
                     onClick={() => setActivePanel('chat')}
                     className="flex items-center gap-1.5 px-4 py-2 bg-[#4a5d23] text-white rounded-lg text-sm hover:bg-[#3d4d1c] transition-colors"
                   >
-                    Ask the Assistant
+                    {t('askAssistant')}
                   </button>
                 </div>
               ) : (
@@ -1094,6 +1218,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                       key={template.id}
                       template={template}
                       onStart={handleStartForm}
+                      locale={locale}
                     />
                   ))}
                 </div>
@@ -1106,18 +1231,23 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                 className="mt-8"
               >
                 <div className="flex items-center gap-2 mb-4">
-                  <Globe className="w-4 h-4 text-[#4a5d23]" />
-                  <h2 className="text-base font-semibold text-stone-900">Government Forms</h2>
-                  {govFormsLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-400" />}
+                  <Globe className="w-4 h-4 text-[#4a5d23]" aria-hidden="true" />
+                  <h2 className="text-base font-semibold text-stone-900">{t('govTitle')}</h2>
+                  {govFormsLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-600" aria-hidden="true" />}
                 </div>
-                <p className="text-xs text-stone-500 mb-4">
-                  Official federal benefit forms — fill and annotate in-app, then save to your Documents.
+                <p className="text-xs text-stone-700 mb-4">
+                  {t('govBody')}
                 </p>
-                {govFormsError && (
-                  <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg">
-                    <p className="text-xs text-orange-700">{govFormsError}</p>
-                  </div>
-                )}
+                <div role="alert" data-testid="gov-forms-alert">
+                  {govFormsError && (() => {
+                    const [before, after] = splitMessage(t('govLoadFailed'), 'form')
+                    return (
+                      <div className="mb-3 px-3 py-2 bg-orange-50 border border-orange-300 rounded-lg">
+                        <p className="text-xs text-orange-900">{before}<bdi {...OFFICIAL_ENGLISH}>{govFormsError}</bdi>{after}</p>
+                      </div>
+                    )
+                  })()}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {GOVERNMENT_FORMS.map((govForm) => (
                     <GovernmentFormCard
@@ -1126,6 +1256,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                       inBucket={bucketPaths.has(govForm.storagePath)}
                       onOpen={handleOpenGovForm}
                       isLoading={govFormDownloading === govForm.storagePath}
+                      locale={locale}
                     />
                   ))}
                 </div>
@@ -1139,8 +1270,8 @@ export function FormsPanel({ userId }: FormsPanelProps) {
               {inProgress.length === 0 ? (
                 <EmptyState
                   icon={ClipboardList}
-                  title="No Forms In Progress"
-                  description="Start a new application from the Available Forms tab."
+                  title={t('noInProgress')}
+                  description={<>{noInProgressBefore}{t('tabAvailable')}{noInProgressAfter}</>}
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1150,6 +1281,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                       form={form}
                       onContinue={handleContinueForm}
                       onDelete={handleDeleteDraft}
+                      locale={locale}
                     />
                   ))}
                 </div>
@@ -1163,8 +1295,8 @@ export function FormsPanel({ userId }: FormsPanelProps) {
               {submissions.length === 0 ? (
                 <EmptyState
                   icon={FileCheck}
-                  title="No Submissions Yet"
-                  description="Complete and submit an application to see it here."
+                  title={t('noSubmissions')}
+                  description={t('noSubmissionsBody')}
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1173,6 +1305,7 @@ export function FormsPanel({ userId }: FormsPanelProps) {
                       key={submission.id}
                       submission={submission}
                       onView={handleViewSubmission}
+                      locale={locale}
                     />
                   ))}
                 </div>
@@ -1183,18 +1316,43 @@ export function FormsPanel({ userId }: FormsPanelProps) {
       </div>
 
       {/* Delete draft confirm dialog */}
-      <Dialog open={confirmDeleteId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null) }}>
-        <DialogContent className="sm:max-w-sm">
+      <Dialog open={confirmDeleteId !== null} onOpenChange={(open) => { if (!open && !deleteInFlight.current) setConfirmDeleteId(null) }}>
+        <DialogContent
+          className="sm:max-w-sm"
+          lang={locale}
+          dir={dir(locale)}
+          closeLabel={formsT(locale, 'close')}
+          data-testid="delete-draft-dialog"
+          onCloseAutoFocus={(e) => {
+            e.preventDefault()
+            if (draftDeletedRef.current) { draftDeletedRef.current = false; return }
+            // Cancelled: back to the draft's delete button.
+            const id = confirmDeleteIdRef.current
+            ;(id ? listRef.current?.querySelector<HTMLElement>(`[data-return-id="delete-${CSS.escape(id)}"]`) : null)?.focus()
+          }}
+        >
           <DialogHeader>
-            <DialogTitle>Delete this draft?</DialogTitle>
+            <DialogTitle>{t('deleteDraftTitle')}</DialogTitle>
+            <DialogDescription className="text-stone-700">{t('deleteDraftBody')}</DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-stone-600">This cannot be undone. Your progress will be permanently removed.</p>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setConfirmDeleteId(null)}>
-              Cancel
+          <p role="alert" className="text-sm text-red-700" data-testid="delete-draft-alert">
+            {deleteError ? t(deleteError) : ''}
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { if (!deleteInFlight.current) setConfirmDeleteId(null) }} className="border-stone-500">
+              {t('cancel')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={handleConfirmDelete}>
-              Delete Draft
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => void handleConfirmDelete()}
+              aria-disabled={deleting}
+              aria-busy={deleting || undefined}
+              className={cn(deleting && UNAVAILABLE)}
+              data-testid="delete-draft-confirm"
+            >
+              {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+              {t('deleteDraftConfirm')}
             </Button>
           </DialogFooter>
         </DialogContent>
