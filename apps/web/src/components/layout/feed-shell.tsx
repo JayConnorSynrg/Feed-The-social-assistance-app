@@ -35,6 +35,7 @@ import {
 import { logEvent, logger } from '@/lib/logger'
 import { parseHash, type FocusKind, type FocusTarget } from '@/lib/deep-link'
 import { useAdminTier } from '@/hooks/use-admin-tier'
+import { resolveFeedSubtab } from '@/components/feed/feed-subtab'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -530,6 +531,16 @@ interface FeedShellProps {
   onSignOut?: () => void
 }
 
+/**
+ * Which element scrolls the active view. The Community Feed sub-tab (posts list) scrolls with the
+ * whole card: the region grows with its content (min-h-full) and the card scroller pads its end
+ * (pb-6), so the last post always clears the card's rounded bottom edge. Every other panel and
+ * sub-tab keeps the fixed-height region (h-full) and owns its own inner scroll (chat, map, messages…).
+ */
+export function regionScrollsWithCard(panel: PanelType, subtab: unknown): boolean {
+  return panel === 'feed' && resolveFeedSubtab(subtab) === 'feed'
+}
+
 // Valid panel names for URL hash routing (aliases included for deep-link init)
 const VALID_PANELS: PanelType[] = ['overview', 'chat', 'map', 'programs', 'feed', 'applications', 'documents', 'forms', 'settings', 'messages', 'wizard', 'petitions', 'events']
 
@@ -719,6 +730,8 @@ export function FeedShell({
     setPanelParams,
   }), [activePanel, setActivePanel, userRole, setUserRole, userFocus, setUserFocus, panelParams, setPanelParams])
 
+  const growsWithCard = regionScrollsWithCard(activePanel, panelParams?.subtab)
+
   return (
     <ShellContext.Provider value={shellValue}>
       {/* Full-screen nature background */}
@@ -761,13 +774,13 @@ export function FeedShell({
             </div>
 
             {/* Interactive Content Panel */}
-            <div className="flex-1 px-6 pt-6 pb-0 overflow-y-auto">
+            <div className={`flex-1 px-6 pt-6 overflow-y-auto ${growsWithCard ? 'pb-6' : 'pb-0'}`}>
               {/* Named region for the active panel. It is also the host PanelErrorBoundary
                   moves focus to after a successful retry when the panel has no h1. */}
               <div
                 role="region"
                 aria-label={panelRegionLabel(activePanel)}
-                className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm h-full flex flex-col"
+                className={`bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm ${growsWithCard ? 'min-h-full' : 'h-full'} flex flex-col`}
               >
                 {children}
               </div>
@@ -792,8 +805,8 @@ export function FeedShell({
           </div>
         </div>
 
-        {/* Spacer for mobile bottom nav */}
-        <div className="h-20 md:hidden" />
+        {/* Spacer for mobile bottom nav: 5rem plus the home-indicator inset the nav now pads. */}
+        <div aria-hidden="true" className="pt-20 safe-area-pb md:hidden" />
       </div>
 
       {/* Mobile Bottom Navigation */}

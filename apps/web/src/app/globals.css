@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Pads an element's bottom by the device home-indicator inset (iOS, viewportFit: 'cover').
+   Resolves to 0px where there is no inset. Used by the fixed mobile bottom nav and its spacer. */
+@utility safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* FEED Platform Design System */
 
 :root {

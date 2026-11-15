@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 import { buildCsp, generateNonce } from '@/lib/csp'
 import { safeRequestId } from '@/lib/request-id'
+import { requiresMfa } from '@/lib/mfa-routes'
 
 // Lightweight server-side logger — wraps console.* with structured JSON lines
 // for the proxy runtime's console output.
@@ -109,11 +110,8 @@ export async function proxy(request: NextRequest) {
 
       // If user has MFA enrolled but hasn't completed verification in this session
       if (nextLevel === 'aal2' && currentLevel === 'aal1') {
-        // Redirect to login with MFA step for protected routes
-        const protectedRoutes = ['/', '/onboarding', '/settings']
-        const isProtectedRoute = protectedRoutes.some(route => pathname === route || pathname.startsWith(route))
-
-        if (isProtectedRoute && pathname !== '/login') {
+        // Only admin surfaces require AAL2 (lib/mfa-routes.ts). Members keep using `/` at AAL1.
+        if (requiresMfa(pathname)) {
           const redirectUrl = new URL('/login', request.url)
           redirectUrl.searchParams.set('redirectTo', pathname)
           redirectUrl.searchParams.set('step', 'mfa')

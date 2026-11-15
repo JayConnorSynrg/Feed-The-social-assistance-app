@@ -18,8 +18,8 @@ describe('FeedShell panel region', () => {
 
   it('the children host carries role="region" + aria-label from the active panel — exactly once', () => {
     // control: the host markup the pin anchors on exists
-    expect(source).toContain('className="bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm h-full flex flex-col"')
-    const host = source.match(/<div\s+role="region"\s+aria-label=\{panelRegionLabel\(activePanel\)\}\s+className="bg-\[#faf9f6\][^"]*"\s*>\s*\{children\}/)
+    expect(source).toContain("className={`bg-[#faf9f6] rounded-2xl border border-stone-200/50 p-6 shadow-sm ${growsWithCard ? 'min-h-full' : 'h-full'} flex flex-col`}")
+    const host = source.match(/<div\s+role="region"\s+aria-label=\{panelRegionLabel\(activePanel\)\}\s+className=\{`bg-\[#faf9f6\][^`]*`\}\s*>\s*\{children\}/)
     expect(host).not.toBeNull()
     expect(source.match(/role="region"/g)).toHaveLength(1)
     expect(source).not.toMatch(/<main\b|role="main"/)
