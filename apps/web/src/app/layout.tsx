@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Providers } from "./providers";
 import { createClient } from "@/lib/supabase/server";
 import type { InitialUser } from "@/providers/auth-provider";
 import { A11Y_PREPAINT_SCRIPT } from "@/lib/accessibility-prefs";
+import { dir, type Locale } from "@/lib/i18n";
+import { LOCALE_COOKIE, parseLocaleCookie } from "@/lib/locale-cookie";
 import "./globals.css";
 
 // metadataBase resolves relative og:image / twitter:image URLs to absolute.
@@ -112,8 +114,22 @@ export default async function RootLayout({
     }
   }
 
+  // The member's language for this render: the feed_locale cookie (lib/locale-cookie.ts), written
+  // when a language save succeeds and corrected to the profile once it loads. It sets <html lang
+  // dir> and the locale translated surfaces render in before the profile arrives, so the first
+  // paint is already in that language. No cookie (or the static Capacitor build): English.
+  let initialLocale: Locale | null = null;
+  if (process.env.CAPACITOR_BUILD !== 'true') {
+    try {
+      initialLocale = parseLocaleCookie((await cookies()).get(LOCALE_COOKIE)?.value);
+    } catch {
+      initialLocale = null;
+    }
+  }
+  const documentLocale: Locale = initialLocale ?? "en";
+
   return (
-    <html lang="en" className="light">
+    <html lang={documentLocale} dir={dir(documentLocale)} className="light">
       <body
         className="antialiased"
       >
@@ -123,9 +139,12 @@ export default async function RootLayout({
           nonce={nonce}
           dangerouslySetInnerHTML={{ __html: A11Y_PREPAINT_SCRIPT }}
         />
-        <Providers initialUser={initialUser}>
-          {/* Focus target for app/error.tsx "Try again" (see lib/focus-after-reset.ts). */}
-          <div id="app-content" className="outline-none">{children}</div>
+        <Providers initialUser={initialUser} initialLocale={initialLocale}>
+          {/* Focus target for app/error.tsx "Try again" (see lib/focus-after-reset.ts).
+              lang="en" dir="ltr": the app's surfaces are English unless their own root says
+              otherwise (each translated surface sets lang={locale} dir={dir(locale)}), so the
+              member's language on <html> never relabels an untranslated screen. */}
+          <div id="app-content" lang="en" dir="ltr" className="outline-none">{children}</div>
         </Providers>
       </body>
     </html>

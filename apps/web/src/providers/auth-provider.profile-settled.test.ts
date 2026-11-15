@@ -9,7 +9,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
+const logged = vi.hoisted(() => [] as Array<[string, Record<string, unknown>]>)
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logEvent: (name: string, attrs: Record<string, unknown>) => logged.push([name, attrs]),
+  withMetric: async (_op: string, _attrs: unknown, fn: () => Promise<unknown>) => fn(),
+}))
 
 type Answer = { data: unknown; error: { message: string; code?: string } | null }
 const h = vi.hoisted(() => ({
@@ -18,6 +23,9 @@ const h = vi.hoisted(() => ({
   profile: null as null | (() => Promise<unknown>),
   /** The session refreshSession() returns (reconciliation). */
   refreshed: null as unknown,
+  /** How the profiles UPDATE … RETURNING id answers (a language save). */
+  write: null as null | (() => Promise<unknown>),
+  rpcCalls: [] as string[],
 }))
 vi.mock('@/lib/supabase/client', () => {
   const client = {
@@ -29,7 +37,10 @@ vi.mock('@/lib/supabase/client', () => {
       refreshSession: async () => ({ data: { session: h.refreshed }, error: null }),
       signOut: async () => ({ error: null }),
     },
-    rpc: (name: string) => ({
+    from: () => ({
+      update: () => ({ eq: () => ({ select: () => ({ abortSignal: () => h.write!() }) }) }),
+    }),
+    rpc: (name: string) => (h.rpcCalls.push(name), {
       abortSignal: () =>
         name === 'get_my_profile' ? h.profile!() : Promise.resolve<Answer>({ data: [{ latitude: null, longitude: null }], error: null }),
     }),
@@ -46,6 +57,9 @@ const ctx = (m: { tree: () => unknown }) => (m.tree() as { props: { value: Ctx }
 beforeEach(() => {
   h.onChange = null
   h.refreshed = null
+  h.write = null
+  h.rpcCalls = []
+  logged.length = 0
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -244,5 +258,68 @@ describe('server-seeded user', () => {
     await h.onChange!('INITIAL_SESSION', { user: { id: 'guest-1', is_anonymous: true } })
     await m.flush()
     expect(ctx(m)).toMatchObject({ user: { id: 'u1' }, profileSettled: true })
+  })
+})
+
+describe('the language in memory (the locale every surface reads)', () => {
+  type C = { profile: { id: string; preferred_language?: string | null } | null; saveLanguage: (c: string) => Promise<string> }
+  const c = (m: { tree: () => unknown }) => ctx(m) as unknown as C
+  const signedIn = async () => {
+    const m = mount(() => AuthProvider({ children: null }))
+    h.profile = () => Promise.resolve<Answer>({ data: [{ id: 'u1', preferred_language: 'en' }], error: null })
+    await h.onChange!('INITIAL_SESSION', { user: { id: 'u1' } })
+    await m.flush()
+    return m
+  }
+  const profileReads = () => h.rpcCalls.filter((n) => n === 'get_my_profile').length
+
+  it('save 한국어: the profile is Korean while the write runs and after it, with no profile re-read', async () => {
+    const m = await signedIn()
+    const readsBefore = profileReads()
+    let answer: (a: unknown) => void = () => {}
+    h.write = () => new Promise((r) => (answer = r))
+    const done = c(m).saveLanguage('ko')
+    await m.flush()
+    expect(c(m).profile?.preferred_language).toBe('ko')
+    answer({ data: [{ id: 'u1' }], error: null })
+    expect(await done).toBe('ok')
+    await m.flush()
+    expect(c(m).profile?.preferred_language).toBe('ko')
+    expect(profileReads()).toBe(readsBefore)
+  })
+
+  it('a save that updates no row: the profile is English again', async () => {
+    const m = await signedIn()
+    h.write = () => Promise.resolve({ data: [], error: null })
+    expect(await c(m).saveLanguage('ko')).toBe('no_row')
+    await m.flush()
+    expect(c(m).profile?.preferred_language).toBe('en')
+  })
+
+  it('the tab comes back (SIGNED_IN) and the re-read fails: the profile, and its Korean, stay', async () => {
+    const m = mount(() => AuthProvider({ children: null }))
+    h.profile = () => Promise.resolve<Answer>({ data: [{ id: 'u1', preferred_language: 'ko' }], error: null })
+    await h.onChange!('INITIAL_SESSION', { user: { id: 'u1' } })
+    await m.flush()
+    h.profile = () => Promise.resolve<Answer>({ data: null, error: { message: 'canceling statement due to statement timeout', code: '57014' } })
+    await h.onChange!('SIGNED_IN', { user: { id: 'u1' } })
+    await m.flush()
+    expect(c(m).profile).toMatchObject({ id: 'u1', preferred_language: 'ko' })
+    h.profile = () => Promise.reject(new Error('network'))
+    await h.onChange!('USER_UPDATED', { user: { id: 'u1' } })
+    await m.flush()
+    expect(c(m).profile).toMatchObject({ id: 'u1', preferred_language: 'ko' })
+  })
+
+  it('one auth.profile.read row per read, with its trigger and outcome', async () => {
+    const m = await signedIn()
+    h.profile = () => Promise.resolve<Answer>({ data: null, error: { message: 'boom' } })
+    await h.onChange!('SIGNED_IN', { user: { id: 'u1' } })
+    await m.flush()
+    const reads = logged.filter(([n]) => n === 'auth.profile.read').map(([, a]) => [a.trigger, a.outcome, a.had_language])
+    expect(reads).toEqual([
+      ['INITIAL_SESSION', 'ok', true],
+      ['SIGNED_IN', 'error', false],
+    ])
   })
 })

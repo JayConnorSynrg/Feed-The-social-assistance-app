@@ -69,6 +69,8 @@ function SelectContent({
         )}
         position={position}
         align={align}
+        lang="en"
+        dir="ltr"
         {...props}
       >
         <SelectScrollUpButton />

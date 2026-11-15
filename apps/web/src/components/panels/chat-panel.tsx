@@ -18,7 +18,8 @@ import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-res
 import { usePanelContext } from '@/components/layout/feed-shell'
 import type { SystemPromptKey } from '@/lib/ai/system-prompts'
 import { buildExplainRequest, type SafeErrorContext } from '@/lib/ai/error-explainer'
-import { t, resolveLocale, dir } from '@/lib/i18n'
+import { t, dir } from '@/lib/i18n'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { logger } from '@/lib/logger'
 
 // ============================================
@@ -476,15 +477,9 @@ interface ChatErrorBannerProps {
 }
 
 function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
+  // The viewer's locale, the one every surface reads.
+  const locale = useProfileLocale()
   if (!kind) return null
-
-  // Resolve locale inside the component — stays client-side safe
-  let locale = 'en' as ReturnType<typeof resolveLocale>
-  try {
-    locale = resolveLocale()
-  } catch {
-    // SSR or restricted context — fall back to en
-  }
 
   const messageKey = kind === 'network'
     ? 'chatErrorOffline'
@@ -504,6 +499,7 @@ function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
   return (
     <div
       role="alert"
+      lang={locale}
       dir={dir(locale)}
       data-testid="chat-error-banner"
       className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700"
@@ -515,7 +511,7 @@ function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerProps) {
         data-testid="chat-retry-btn"
         className="flex-shrink-0 px-3 py-1 rounded-md bg-red-700 text-white text-xs font-medium hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {isRetrying ? 'Retrying…' : t(locale, 'tryAgain')}
+        {isRetrying ? <span lang="en" dir="ltr">Retrying…</span> : t(locale, 'tryAgain')}
       </button>
     </div>
   )

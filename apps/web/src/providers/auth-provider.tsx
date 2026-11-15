@@ -6,6 +6,11 @@ import type { User, Session, AuthError } from '@supabase/supabase-js'
 import type { Profile, Database } from '@feed/database'
 import { logger } from '@/lib/logger'
 import { QUERY_TIMEOUT_MS } from '@/lib/vault'
+import { isLocale } from '@/lib/i18n'
+import { writeLocaleCookie } from '@/lib/locale-cookie'
+import { saveAccountLanguage, type AccountLanguageSaveIo, type LanguageSaveOutcome } from '@/lib/language-save'
+import { logProfileRead, nextProfileAfterRead, type ProfileReadOutcome, type ProfileReadTrigger } from '@/lib/profile-read'
+import type { ProfileOrigin } from '@/lib/locale-change'
 
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
 
@@ -22,9 +27,13 @@ interface AuthContextType {
    *  timed out (profile may still be null). False while it runs, before any user, and again
    *  whenever the user changes, until that user's read finishes. */
   profileSettled: boolean
+  /** What last set `profile`: a read, a language save (or its revert), or a clear. */
+  profileOrigin: ProfileOrigin
   signOut: () => Promise<void>
   refreshSession: () => Promise<void>
   updateProfile: (updates: ProfileUpdate) => Promise<void>
+  /** Saves the account language: applied at once, taken back on failure (lib/language-save.ts). */
+  saveLanguage: (code: string) => Promise<LanguageSaveOutcome>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -88,23 +97,59 @@ async function fetchCoords(
 // so the OWNER can no longer read these via the table — the accessor restores
 // own-row access. Mirrors the get_my_coordinates pattern. The accessor also
 // returns first_name/last_name (new columns) for the owner's own use.
+interface OwnProfileRead {
+  row: Record<string, unknown> | null
+  outcome: Exclude<ProfileReadOutcome, 'superseded'>
+  durationMs: number
+}
+
 async function fetchOwnProfile(
   supabase: ReturnType<typeof createClient>
-): Promise<Record<string, unknown> | null> {
+): Promise<OwnProfileRead> {
   // Time-boxed: a slow SECDEF accessor must never stall auth resolution. On
-  // timeout/error, fall back to a null profile (never gates loading).
+  // timeout/error the row is null (never gates loading); the caller keeps the
+  // profile it already holds for the same user (lib/profile-read.ts).
+  const start = Date.now()
+  const signal = AbortSignal.timeout(QUERY_TIMEOUT_MS)
+  const failed = (): OwnProfileRead => ({ row: null, outcome: signal.aborted ? 'timeout' : 'error', durationMs: Date.now() - start })
   try {
-    const { data, error } = await supabase
-      .rpc('get_my_profile')
-      .abortSignal(AbortSignal.timeout(QUERY_TIMEOUT_MS))
+    const { data, error } = await supabase.rpc('get_my_profile').abortSignal(signal)
     if (error) {
       console.error('Error fetching profile:', error.message, error.code)
-      return null
+      return failed()
     }
     const row = Array.isArray(data) ? data[0] : data
-    return (row as Record<string, unknown>) ?? null
+    if (!row) return { row: null, outcome: 'error', durationMs: Date.now() - start }
+    return { row: row as Record<string, unknown>, outcome: 'ok', durationMs: Date.now() - start }
   } catch {
-    return null
+    return failed()
+  }
+}
+
+type SetState<T> = (next: T | ((prev: T) => T)) => void
+
+/**
+ * The account language save's IO (lib/language-save.ts): one UPDATE … RETURNING id on the member's
+ * own row (an update that matches no row returns no row, and so fails), the language put on the
+ * in-memory profile, and the cookie once the save has succeeded. No profile re-read: the profile
+ * in memory is updated in place, so every surface switches without waiting for get_my_profile.
+ */
+export function accountLanguageIo(
+  supabase: Pick<ReturnType<typeof createClient>, 'from'>,
+  userId: string,
+  setProfile: SetState<Profile | null>,
+  setProfileOrigin: SetState<ProfileOrigin>
+): AccountLanguageSaveIo {
+  return {
+    write: (code, signal) =>
+      supabase.from('profiles').update({ preferred_language: code }).eq('id', userId).select('id').abortSignal(signal),
+    apply: (code) => {
+      setProfile((p) => (p && p.id === userId ? ({ ...p, preferred_language: code } as Profile) : p))
+      setProfileOrigin('save')
+    },
+    remember: (code) => {
+      if (isLocale(code)) writeLocaleCookie(code)
+    },
   }
 }
 
@@ -123,6 +168,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
   )
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileOrigin, setProfileOrigin] = useState<ProfileOrigin>(null)
   // The user id whose background profile read last finished (see profileSettled).
   const [profileSettledFor, setProfileSettledFor] = useState<string | null>(null)
   // The user id the latest background profile read is for (null after sign-out). An older read that
@@ -153,30 +199,41 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
 
     const fetchProfile = async () => {
       // Own-row profile via SECDEF accessor + coords via SECDEF accessor, in parallel.
-      const [data, coords] = await Promise.all([
+      const [read, coords] = await Promise.all([
         fetchOwnProfile(supabase),
         fetchCoords(supabase),
       ])
-      if (!data) return null
       // Merge coords sourced from SECDEF accessor into the profile object.
-      return Object.assign({}, data, coords) as unknown as Profile
+      const p = read.row ? (Object.assign({}, read.row, coords) as unknown as Profile) : null
+      return { profile: p, outcome: read.outcome, durationMs: read.durationMs }
     }
 
     // Non-blocking profile load — a slow accessor must never gate `loading`. When it finishes, by
     // any path, the read for `userId` is settled — unless a newer read (or a sign-out) superseded it.
-    const loadProfileInBackground = (userId: string) => {
+    const loadProfileInBackground = (userId: string, trigger: ProfileReadTrigger) => {
       // A different account (a direct switch, with no sign-out between): the previous account's
       // profile is dropped now, not when this read lands, so no profile reader shows it meanwhile.
-      // A re-read for the same user (USER_UPDATED, a reconciled session) keeps the profile.
-      if (readForRef.current !== userId) setProfile(null)
+      // A re-read for the same user (USER_UPDATED, a reconciled session) keeps the profile — and
+      // keeps it when the re-read fails (lib/profile-read.ts).
+      if (readForRef.current !== userId) {
+        setProfile(null)
+        setProfileOrigin('clear')
+      }
       readForRef.current = userId
       const current = () => readForRef.current === userId
       fetchProfile()
-        .then((p) => {
-          if (current()) setProfile(p)
+        .then((r) => {
+          if (!current()) {
+            logProfileRead(trigger, 'superseded', r.profile, r.durationMs)
+            return
+          }
+          setProfile((prev) => nextProfileAfterRead(prev, r.profile, userId))
+          setProfileOrigin('read')
+          logProfileRead(trigger, r.outcome, r.profile, r.durationMs)
         })
         .catch(() => {
-          if (current()) setProfile(null)
+          // A read that throws keeps the profile, as a failed one does.
+          logProfileRead(trigger, 'error', null, 0)
         })
         .finally(() => {
           if (current()) setProfileSettledFor(userId)
@@ -241,7 +298,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
             setSession(refreshed)
             clearValve()
             setLoading(false)
-            loadProfileInBackground(refreshed.user.id)
+            loadProfileInBackground(refreshed.user.id, 'reconcile')
           } else {
             // Still divergent — clear only the local guest session (scope:'local'
             // leaves other sessions intact) so the client re-adopts the server
@@ -267,7 +324,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
           // TOKEN_REFRESHED fires every ~hour and doesn't change the user —
           // re-fetching the profile on each refresh is unnecessary DB load.
           if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-            loadProfileInBackground(clientUser.id)
+            loadProfileInBackground(clientUser.id, event)
           }
         } else {
           // Signed out: a profile read still running for the previous user is dropped, and nothing
@@ -277,6 +334,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
           setUser(null)
           setSession(null)
           setProfile(null)
+          setProfileOrigin('clear')
           clearValve()
           setLoading(false)
         }
@@ -307,14 +365,16 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
       setError(error)
     } else if (newSession) {
       // Own-row profile + coords via SECDEF accessors, in parallel.
-      const [data, coords] = await Promise.all([
+      const [read, coords] = await Promise.all([
         fetchOwnProfile(supabase),
         fetchCoords(supabase),
       ])
-      const profileData = data ? Object.assign({}, data, coords) : null
+      const profileData = read.row ? (Object.assign({}, read.row, coords) as unknown as Profile) : null
+      logProfileRead('refresh', read.outcome, profileData, read.durationMs)
       setUser(newSession.user)
       setSession(newSession)
-      setProfile(profileData as unknown as Profile)
+      setProfile((prev) => nextProfileAfterRead(prev, profileData, newSession.user.id))
+      setProfileOrigin('read')
     }
   }, [])
 
@@ -334,12 +394,26 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
       throw error
     }
 
-    const [data, coords] = await Promise.all([
+    const [read, coords] = await Promise.all([
       fetchOwnProfile(supabase),
       fetchCoords(supabase),
     ])
-    setProfile(Object.assign({}, data ?? {}, coords) as unknown as Profile)
+    const profileData = read.row ? (Object.assign({}, read.row, coords) as unknown as Profile) : null
+    logProfileRead('update', read.outcome, profileData, read.durationMs)
+    setProfile((prev) => nextProfileAfterRead(prev, profileData, user.id))
+    setProfileOrigin('read')
   }, [user])
+
+  // Save the account language (lib/language-save.ts): the in-memory profile — and with it every
+  // surface's locale — takes the new language at once and gives it back if the write fails, times
+  // out or updates no row. The cookie is written only when the save has succeeded.
+  const saveLanguage = useCallback(async (code: string): Promise<LanguageSaveOutcome> => {
+    const uid = user?.id
+    if (!uid) return 'error'
+    const supabase = getSupabase()
+    const from = (profile as { preferred_language?: string | null } | null)?.preferred_language ?? null
+    return saveAccountLanguage(accountLanguageIo(supabase, uid, setProfile, setProfileOrigin), from, code)
+  }, [user, profile])
 
   const value: AuthContextType = {
     user,
@@ -353,9 +427,11 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     isAnonymous: (user as unknown as { is_anonymous?: boolean })?.is_anonymous ?? false,
     // Keyed by user id, so a new user (sign-in, account switch) reads false until its own read ends.
     profileSettled: user !== null && profileSettledFor === user.id,
+    profileOrigin,
     signOut,
     refreshSession,
     updateProfile,
+    saveLanguage,
   }
 
   return (

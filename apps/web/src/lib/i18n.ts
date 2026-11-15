@@ -446,6 +446,11 @@ export function resolveLocale(): Locale {
 // resolveUserLocale() — signed-in profile language → resolveLocale()
 // ---------------------------------------------------------------------------
 
+/** True for one of the 14 FEED locale codes ('other' is a stored choice, not a locale). */
+export function isLocale(value: unknown): value is Locale {
+  return typeof value === 'string' && LOCALE_SET.has(value)
+}
+
 /** Prefers a supported profiles.preferred_language; otherwise storage → browser → 'en'. */
 export function resolveUserLocale(profileLanguage?: string | null): Locale {
   if (profileLanguage && LOCALE_SET.has(profileLanguage)) return profileLanguage as Locale
@@ -453,10 +458,12 @@ export function resolveUserLocale(profileLanguage?: string | null): Locale {
 }
 
 /**
- * The viewer's locale from their loaded profile — the one place this rule is written. 'en' while
- * there is no profile yet, so the server render and the first client render agree; then
- * resolveUserLocale on its preferred language. hooks/use-profile-locale.ts is the hook around it.
+ * The viewer's locale from their loaded profile — the one place this rule is written. While
+ * there is no profile yet it is `beforeProfile`: the locale the server rendered the page in (the
+ * feed_locale cookie, lib/locale-cookie.ts; 'en' without one), so the server render and the first
+ * client render agree and a member's language shows from the first paint. Then resolveUserLocale
+ * on the profile's preferred language. hooks/use-profile-locale.ts is the hook around it.
  */
-export function resolveProfileLocale(profile: object | null | undefined): Locale {
-  return profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : 'en'
+export function resolveProfileLocale(profile: object | null | undefined, beforeProfile: Locale = 'en'): Locale {
+  return profile ? resolveUserLocale((profile as { preferred_language?: string | null }).preferred_language ?? null) : beforeProfile
 }

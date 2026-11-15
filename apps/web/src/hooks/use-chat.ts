@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getSystemPrompt, detectCrisisKeywords, type SystemPromptKey, type PersonalizationContext } from '@/lib/ai/system-prompts'
 import { useAuth } from '@/hooks/use-auth'
 import { logger, createOpId } from '@/lib/logger'
-import { GUEST_LANGUAGE_KEY } from '@/lib/languages'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
 
 export interface ChatMessage {
   id: string
@@ -105,15 +105,17 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [currentFlow, setCurrentFlow] = useState<SystemPromptKey>(initialFlow)
 
   const { profile } = useAuth()
+  // The language the assistant answers in is the viewer's locale — the same one every surface
+  // reads (useProfileLocale), so a saved language applies to the next message at once.
+  const locale = useProfileLocale()
 
-  // Effective preferred language: DB value > localStorage > browser > 'en'
-  // Profile is stored in a ref so attemptSend (a useCallback) can read the
-  // latest value without being in the dep array. localStorage is read at
-  // send-time (inside attemptSend) so it reflects changes that happen between
-  // renders without requiring a re-render to propagate them.
+  // Profile and locale are stored in refs so attemptSend (a useCallback) can read the latest
+  // values without being in the dep array.
   const profileRef = useRef(profile)
+  const localeRef = useRef(locale)
   useEffect(() => {
     profileRef.current = profile
+    localeRef.current = locale
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -231,23 +233,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           temperature: 0.7,
           maxTokens: 1024,
           location: locationForChat,
-          preferredLanguage: (() => {
-            // Read at call time (not render time) so localStorage changes
-            // between renders are picked up without requiring a re-render.
-            const dbCode = (profileRef.current as Record<string, unknown> | null)?.['preferred_language'] as string | null
-            if (dbCode) return dbCode
-            if (typeof window !== 'undefined') {
-              const stored = localStorage.getItem(GUEST_LANGUAGE_KEY)
-              if (stored) return stored
-            }
-            if (typeof navigator !== 'undefined') {
-              const raw = navigator.language || ''
-              const prefix = raw.split('-')[0].toLowerCase()
-              const supported = ['en','es','ht','vi','ar','zh','so','fr','pt','ru','ko','tl','am','hmn','other']
-              if (supported.includes(prefix)) return prefix
-            }
-            return 'en'
-          })(),
+          preferredLanguage: localeRef.current,
         }),
         signal: abortControllerRef.current.signal,
       })
