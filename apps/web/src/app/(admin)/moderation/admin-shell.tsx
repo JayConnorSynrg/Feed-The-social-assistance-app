@@ -1,14 +1,23 @@
 'use client'
 
+// apps/web/src/app/(admin)/moderation/admin-shell.tsx
+// The admin console shell (/moderation): header, organization selector and the tab bar, in the
+// admin's language (lib/i18n-admin-shell.ts; the tier marker is roleLabel, lib/i18n-feed-card.ts).
+// The locale is useProfileLocale(), so the cookie the server rendered with, the profile and the
+// device choice agree from the first paint. Only the header and the tab bar carry that language:
+// each tab's content is marked English (lang="en" dir="ltr") until its own wave translates it, and
+// a translated tab (Events, Organizations, the petition export…) sets its own lang on its root.
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { LayoutDashboard, Calendar, ShieldAlert, Users, Settings, Database, ListChecks, Building2, UserCog, Leaf } from 'lucide-react'
+import { LayoutDashboard, Calendar, ShieldAlert, Users, Database, ListChecks, Building2, UserCog, Leaf, type LucideIcon } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAdminOrgs } from './use-admin-orgs'
 import { useAdminTier } from '@/hooks/use-admin-tier'
 import { useIsOrgAdminState } from '@/hooks/use-is-org-admin'
-import { canCreateOrganizations, tierLabel } from '@/lib/admin-tier'
-import { resolveAdminTab, TAB_ORDER, visibleTabs } from './admin-shell-tabs'
-import { readTabParam, tabParamHref } from './admin-tab-url'
+import { canCreateOrganizations } from '@/lib/admin-tier'
+import { resolveAdminTab, TAB_ORDER, visibleTabs, type AdminTabId } from './admin-shell-tabs'
+import { invalidTabRow, readTabParam, tabParamHref, withoutTabHref } from './admin-tab-url'
+import type { AdminDeeplinkRow } from './admin-focus-session'
 import { useAdminFocusGate } from './use-admin-focus'
 import { shellOwnerTab } from './admin-focus-session'
 import { AdminFocusGateStatus } from './admin-focus-gate-status'
@@ -24,8 +33,12 @@ import { ManageResourcesTab } from './manage-resources-tab'
 import { OrgsSection } from './orgs-section'
 import { PeopleTab } from './people-tab'
 import { useAuth } from '@/hooks/use-auth'
-import { resolveProfileLocale, type Locale } from '@/lib/i18n'
-import { orgFormT, formatMessage } from '@/lib/i18n-org-forms'
+import { dir } from '@/lib/i18n'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { orgFormT } from '@/lib/i18n-org-forms'
+import { formatMessage } from '@/lib/format-message'
+import { roleLabel } from '@/lib/i18n-feed-card'
+import { adminShellT, adminTabLabel } from '@/lib/i18n-admin-shell'
 import { OrgFormPanel, type OrgFormPanelHandle } from '@/components/org-form/org-form-panel'
 import type { OrgFormKind } from '@/components/org-form/org-form-model'
 import { restoreFocusAfterPanel } from './org-panel-focus'
@@ -37,12 +50,16 @@ import {
   type OrgPanelTarget,
 } from './org-panel-url'
 
-function PlaceholderTab({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center h-48 text-stone-400">
-      <span className="text-sm">{label} — coming soon</span>
-    </div>
-  )
+const TAB_ICONS: Record<AdminTabId, LucideIcon> = {
+  overview: LayoutDashboard,
+  events: Calendar,
+  moderation: ShieldAlert,
+  community: Users,
+  organizations: Building2,
+  resources: Database,
+  businesses: Leaf,
+  manage: ListChecks,
+  people: UserCog,
 }
 
 const TRIGGER_CLASS = 'flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap rounded-lg data-[state=active]:bg-brand data-[state=active]:text-white'
@@ -66,16 +83,17 @@ export function AdminShell() {
   // Fall back to the first visible tab when the requested tab is not entitled for this tier.
   const effectiveTab = resolveAdminTab(activeTab, tabs)
 
-  // Header label: the tier marker, or "Organizer" for a non-tier org admin.
-  const headerLabel = tierLabel(tier) ?? 'Organizer'
+  // The admin's language: the cookie the server rendered with, then the profile, then a device
+  // choice (the one rule every surface reads).
+  const { user } = useAuth()
+  const locale = useProfileLocale()
 
-  // Locale for the organization screens: the profile language once it loads (server render and
-  // first client render both use 'en', so hydration matches).
-  const { profile, user } = useAuth()
-  const locale: Locale = useMemo(
-    () => resolveProfileLocale(profile),
-    [profile]
-  )
+  // Header label: the tier marker, or "Organizer" for a non-tier org admin.
+  const headerLabel = tier ? roleLabel(tier, locale) : adminShellT(locale, 'organizer')
+
+  // A `?tab=` naming no tab (e.g. a bookmark of the removed Settings tab) writes one row on mount.
+  const [tabGateRow, setTabGateRow] = useState<AdminDeeplinkRow | null>(null)
+  const tabGateRanRef = useRef(false)
   const canManageOrgs = canCreateOrganizations(tier)
 
   // ---- Organization setup panel: owned here so the list, the Overview quick action and deep links
@@ -155,9 +173,19 @@ export function AdminShell() {
   // honoured; resolveAdminTab still clamps it to the tabs this tier is entitled to.
   useEffect(() => {
     const search = window.location.search
+    // A `?tab=` naming no tab: the default tab is shown, one row is written, the param is dropped.
+    if (!tabGateRanRef.current) {
+      tabGateRanRef.current = true
+      const row = invalidTabRow(search, TAB_ORDER)
+      if (row) {
+        logEvent('admin.deeplink.resolve', { kind: row.kind, outcome: row.outcome, tab: row.tab })
+        window.history.replaceState(window.history.state, '', withoutTabHref(window.location))
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTabGateRow(row)
+      }
+    }
     const target = readOrgPanelTarget(search)
     const requested = readTabParam(search, TAB_ORDER)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (readsOrganizationsTab(search) || target) setActiveTab('organizations')
     else if (requested) setActiveTab(requested)
     if (target) showPanel(target)
@@ -221,9 +249,10 @@ export function AdminShell() {
   return (
     <div className="min-h-screen bg-stone-100">
       {/* Header */}
-      <div className="bg-white border-b border-stone-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10"
+      <div lang={locale} dir={dir(locale)}
+           className="bg-white border-b border-stone-200 px-4 py-3 flex items-center gap-3 sticky top-0 z-10"
            style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
-        <LayoutDashboard className="h-5 w-5 text-lime-600 shrink-0" />
+        <LayoutDashboard aria-hidden="true" className="h-5 w-5 text-lime-600 shrink-0" />
         <h1 className="font-semibold text-stone-900 text-sm sm:text-base shrink-0">
           {headerLabel}
         </h1>
@@ -235,12 +264,14 @@ export function AdminShell() {
           ) : orgs.length > 0 ? (
             <select
               value={selectedOrgId}
+              aria-label={adminShellT(locale, 'organization')}
               onChange={e => handleOrgChange(e.target.value)}
               className="w-full text-sm border border-stone-200 rounded-lg px-3 py-1.5 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-500"
             >
-              <option value="all">All Organizations</option>
+              <option value="all">{adminShellT(locale, 'allOrganizations')}</option>
               {orgs.map(org => (
-                <option key={org.id} value={org.id}>{org.name}</option>
+                // An organization's name is its own: no page language.
+                <option key={org.id} value={org.id} lang="" dir="auto">{org.name}</option>
               ))}
             </select>
           ) : null}
@@ -249,84 +280,38 @@ export function AdminShell() {
 
       {/* Tabs */}
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4">
-        <AdminFocusGateStatus row={focusGateRow} locale={locale} />
+        <AdminFocusGateStatus row={focusGateRow ?? tabGateRow} locale={locale} />
         {/* An organization link (?tab=organizations&org=<id>&focus=organization:<id>) is claimed, like a
             tab's focus, only while the Organizations tab is shown; it resolves from the setup panel. */}
         {tabs.includes('organizations') && <OrgPanelFocus panel={orgPanelState} />}
-        <Tabs value={effectiveTab} onValueChange={handleTabChange}>
+        {/* dir: arrow keys move along the tab bar in reading direction (Radix reads it). */}
+        <Tabs value={effectiveTab} onValueChange={handleTabChange} dir={dir(locale)}>
           {/* Tab bar — horizontally scrollable on mobile. Only entitled tabs render (§5). */}
           <div className="overflow-x-auto -mx-2 px-2 pb-1">
-            <TabsList className="flex-nowrap inline-flex w-auto min-w-full bg-white border border-stone-200 rounded-xl p-1 gap-1">
-              {tabs.includes('overview') && (
-                <TabsTrigger value="overview" className={TRIGGER_CLASS}>
-                  <LayoutDashboard className="h-3.5 w-3.5" />
-                  Overview
-                </TabsTrigger>
-              )}
-              {tabs.includes('events') && (
-                <TabsTrigger value="events" className={TRIGGER_CLASS}>
-                  <Calendar className="h-3.5 w-3.5" />
-                  Events
-                </TabsTrigger>
-              )}
-              {tabs.includes('moderation') && (
-                <TabsTrigger value="moderation" className={TRIGGER_CLASS}>
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  Moderation
-                </TabsTrigger>
-              )}
-              {tabs.includes('community') && (
-                <TabsTrigger value="community" className={TRIGGER_CLASS}>
-                  <Users className="h-3.5 w-3.5" />
-                  Community
-                </TabsTrigger>
-              )}
-              {tabs.includes('organizations') && (
-                <TabsTrigger value="organizations" className={TRIGGER_CLASS}>
-                  <Building2 className="h-3.5 w-3.5" />
-                  Organizations
-                </TabsTrigger>
-              )}
-              {tabs.includes('resources') && (
-                <TabsTrigger value="resources" className={TRIGGER_CLASS}>
-                  <Database className="h-3.5 w-3.5" />
-                  Resources
-                </TabsTrigger>
-              )}
-              {tabs.includes('businesses') && (
-                <TabsTrigger value="businesses" className={TRIGGER_CLASS}>
-                  <Leaf className="h-3.5 w-3.5" />
-                  Businesses
-                </TabsTrigger>
-              )}
-              {tabs.includes('manage') && (
-                <TabsTrigger value="manage" className={TRIGGER_CLASS}>
-                  <ListChecks className="h-3.5 w-3.5" />
-                  Manage
-                </TabsTrigger>
-              )}
-              {tabs.includes('people') && (
-                <TabsTrigger value="people" className={TRIGGER_CLASS}>
-                  <UserCog className="h-3.5 w-3.5" />
-                  People
-                </TabsTrigger>
-              )}
-              {tabs.includes('settings') && (
-                <TabsTrigger value="settings" className={TRIGGER_CLASS}>
-                  <Settings className="h-3.5 w-3.5" />
-                  Settings
-                </TabsTrigger>
-              )}
+            <TabsList
+              lang={locale}
+              aria-label={adminShellT(locale, 'sections')}
+              className="flex-nowrap inline-flex w-auto min-w-full bg-white border border-stone-200 rounded-xl p-1 gap-1"
+            >
+              {tabs.map((id) => {
+                const Icon = TAB_ICONS[id]
+                return (
+                  <TabsTrigger key={id} value={id} className={TRIGGER_CLASS}>
+                    <Icon aria-hidden="true" className="h-3.5 w-3.5" />
+                    {adminTabLabel(id, locale)}
+                  </TabsTrigger>
+                )
+              })}
             </TabsList>
           </div>
 
           {tabs.includes('events') && (
-            <TabsContent value="events" className="mt-4">
+            <TabsContent value="events" lang="en" dir="ltr" className="mt-4">
               <EventScheduler selectedOrgId={selectedOrgId} />
             </TabsContent>
           )}
           {tabs.includes('overview') && (
-            <TabsContent value="overview" className="mt-4">
+            <TabsContent value="overview" lang="en" dir="ltr" className="mt-4">
               <OverviewTab
                 selectedOrgId={selectedOrgId}
                 locale={locale}
@@ -335,17 +320,17 @@ export function AdminShell() {
             </TabsContent>
           )}
           {tabs.includes('moderation') && (
-            <TabsContent value="moderation" className="mt-4">
+            <TabsContent value="moderation" lang="en" dir="ltr" className="mt-4">
               <ModerationTab selectedOrgId={selectedOrgId} viewerId={user?.id ?? null} />
             </TabsContent>
           )}
           {tabs.includes('community') && (
-            <TabsContent value="community" className="mt-4">
+            <TabsContent value="community" lang="en" dir="ltr" className="mt-4">
               <CommunityTab selectedOrgId={selectedOrgId} locale={locale} />
             </TabsContent>
           )}
           {tabs.includes('organizations') && (
-            <TabsContent value="organizations" className="mt-4">
+            <TabsContent value="organizations" lang="en" dir="ltr" className="mt-4">
               <OrgsSection
                 locale={locale}
                 onCreate={() => openCreate('org')}
@@ -356,28 +341,23 @@ export function AdminShell() {
             </TabsContent>
           )}
           {tabs.includes('resources') && (
-            <TabsContent value="resources" className="mt-4">
+            <TabsContent value="resources" lang="en" dir="ltr" className="mt-4">
               <ResourcesTab />
             </TabsContent>
           )}
           {tabs.includes('businesses') && (
-            <TabsContent value="businesses" className="mt-4">
+            <TabsContent value="businesses" lang="en" dir="ltr" className="mt-4">
               <BusinessesTab />
             </TabsContent>
           )}
           {tabs.includes('manage') && (
-            <TabsContent value="manage" className="mt-4">
+            <TabsContent value="manage" lang="en" dir="ltr" className="mt-4">
               <ManageResourcesTab />
             </TabsContent>
           )}
           {tabs.includes('people') && (
-            <TabsContent value="people" className="mt-4">
+            <TabsContent value="people" lang="en" dir="ltr" className="mt-4">
               <PeopleTab viewerTier={tier} isFounder={isFounder} />
-            </TabsContent>
-          )}
-          {tabs.includes('settings') && (
-            <TabsContent value="settings" className="mt-4">
-              <PlaceholderTab label="Settings" />
             </TabsContent>
           )}
         </Tabs>

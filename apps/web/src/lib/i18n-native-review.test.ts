@@ -26,7 +26,7 @@ const LOCALES = Object.keys(messages).sort()
 const REVIEW_LOCALES = ['ht', 'so', 'am', 'hmn'] as const
 const DRAFT = 'machine-drafted, needs native review'
 const WORDING = 'wording choice, review welcome'
-const TODAY = '2026-11-14'
+const TODAY = '2026-11-15'
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const DOC = fileURLToPath(new URL('../../../../docs/i18n-native-review.md', import.meta.url))
 const BEGIN = '<!-- BEGIN GENERATED: lib/i18n-native-review.test.ts -->'

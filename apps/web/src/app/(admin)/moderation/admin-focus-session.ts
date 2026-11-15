@@ -23,8 +23,9 @@ import { hasAdminFocusParam, readAdminFocus, stripAdminFocusHref, type AdminFocu
 export type AdminDeeplinkOutcome = 'found' | 'not_found' | 'forbidden' | 'invalid' | 'abandoned'
 
 export interface AdminDeeplinkRow {
-  /** The focus kind, or 'unknown' when the focus is malformed. */
-  kind: AdminFocusKind | 'unknown'
+  /** The focus kind, 'unknown' when the focus is malformed, or 'tab' for a `?tab=` naming no tab
+   *  (admin-tab-url.ts invalidTabRow). */
+  kind: AdminFocusKind | 'unknown' | 'tab'
   outcome: AdminDeeplinkOutcome
   /** The admin tab that took (or would have taken) the focus, or 'unknown'. */
   tab: string

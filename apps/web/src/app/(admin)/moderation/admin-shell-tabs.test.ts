@@ -1,6 +1,6 @@
 // admin-shell-tabs.test.ts — tier -> visible admin tabs (pure). Mirrors design §5.
 import { describe, it, expect } from 'vitest'
-import { visibleTabs } from './admin-shell-tabs'
+import { TAB_ORDER, visibleTabs } from './admin-shell-tabs'
 import type { AdminTier } from '@/lib/admin-tier'
 
 const CM: AdminTier = 'community_moderator'
@@ -26,8 +26,11 @@ describe('visibleTabs', () => {
   })
   it('PA sees every tab', () => {
     expect(set(visibleTabs(PA, false))).toEqual(
-      set(['overview', 'events', 'moderation', 'community', 'organizations', 'resources', 'businesses', 'manage', 'people', 'settings']),
+      set(['overview', 'events', 'moderation', 'community', 'organizations', 'resources', 'businesses', 'manage', 'people']),
     )
+  })
+  it('the Settings placeholder is no tab (removed in P6 W1: a placeholder delivers nothing)', () => {
+    expect((TAB_ORDER as readonly string[]).includes('settings')).toBe(false)
   })
   it('an org-admin with no tier sees Events only', () => {
     expect(set(visibleTabs(null, true))).toEqual(set(['events']))

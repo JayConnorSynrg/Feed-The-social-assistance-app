@@ -166,6 +166,568 @@ step in that test, and the test fails until the list below is regenerated.
 | `errIncomplete` | hmn | Not every signature could be read, so no file was made. Try again. | Nyeem tsis tau txhua tus kos npe, yog li tsis tau ua daim ntawv. Thov rov sim dua. | 2026-11-14 | machine-drafted, needs native review |
 | `errGeneric` | hmn | The download failed and no file was made. Try again. | Rub tsis tau thiab tsis tau ua daim ntawv. Thov rov sim dua. | 2026-11-14 | machine-drafted, needs native review |
 
+### `lib/i18n-admin-shell.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `organizer` | ht | Organizer | Òganizatè | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | ht | Organization | Òganizasyon | 2026-11-15 | machine-drafted, needs native review |
+| `allOrganizations` | ht | All Organizations | Tout òganizasyon yo | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | ht | Admin sections | Seksyon administrasyon | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | ht | Overview | Apèsi | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | ht | Events | Evènman | 2026-11-15 | machine-drafted, needs native review |
+| `tabModeration` | ht | Moderation | Moderasyon | 2026-11-15 | machine-drafted, needs native review |
+| `tabCommunity` | ht | Community | Kominote | 2026-11-15 | machine-drafted, needs native review |
+| `tabOrganizations` | ht | Organizations | Òganizasyon yo | 2026-11-15 | machine-drafted, needs native review |
+| `tabResources` | ht | Resources | Resous | 2026-11-15 | machine-drafted, needs native review |
+| `tabBusinesses` | ht | Businesses | Biznis | 2026-11-15 | machine-drafted, needs native review |
+| `tabManage` | ht | Manage | Jere | 2026-11-15 | machine-drafted, needs native review |
+| `tabPeople` | ht | People | Moun | 2026-11-15 | machine-drafted, needs native review |
+| `organizer` | so | Organizer | Abaabule | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | so | Organization | Urur | 2026-11-15 | machine-drafted, needs native review |
+| `allOrganizations` | so | All Organizations | Dhammaan ururada | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | so | Admin sections | Qaybaha maamulka | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | so | Overview | Guudmar | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | so | Events | Dhacdooyin | 2026-11-15 | machine-drafted, needs native review |
+| `tabModeration` | so | Moderation | Dib-u-eegis | 2026-11-15 | machine-drafted, needs native review |
+| `tabCommunity` | so | Community | Bulshada | 2026-11-15 | machine-drafted, needs native review |
+| `tabOrganizations` | so | Organizations | Ururada | 2026-11-15 | machine-drafted, needs native review |
+| `tabResources` | so | Resources | Kheyraadka | 2026-11-15 | machine-drafted, needs native review |
+| `tabBusinesses` | so | Businesses | Ganacsiyada | 2026-11-15 | machine-drafted, needs native review |
+| `tabManage` | so | Manage | Maamul | 2026-11-15 | machine-drafted, needs native review |
+| `tabPeople` | so | People | Dadka | 2026-11-15 | machine-drafted, needs native review |
+| `organizer` | am | Organizer | አደራጅ | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | am | Organization | ድርጅት | 2026-11-15 | machine-drafted, needs native review |
+| `allOrganizations` | am | All Organizations | ሁሉም ድርጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | am | Admin sections | የአስተዳደር ክፍሎች | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | am | Overview | አጠቃላይ እይታ | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | am | Events | ዝግጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `tabModeration` | am | Moderation | ቁጥጥር | 2026-11-15 | machine-drafted, needs native review |
+| `tabCommunity` | am | Community | ማህበረሰብ | 2026-11-15 | machine-drafted, needs native review |
+| `tabOrganizations` | am | Organizations | ድርጅቶች | 2026-11-15 | machine-drafted, needs native review |
+| `tabResources` | am | Resources | ሀብቶች | 2026-11-15 | machine-drafted, needs native review |
+| `tabBusinesses` | am | Businesses | ንግዶች | 2026-11-15 | machine-drafted, needs native review |
+| `tabManage` | am | Manage | አስተዳድር | 2026-11-15 | machine-drafted, needs native review |
+| `tabPeople` | am | People | ሰዎች | 2026-11-15 | machine-drafted, needs native review |
+| `organizer` | hmn | Organizer | Tus npaj | 2026-11-15 | machine-drafted, needs native review |
+| `organization` | hmn | Organization | Koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `allOrganizations` | hmn | All Organizations | Txhua lub koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `sections` | hmn | Admin sections | Cov ntu tswj | 2026-11-15 | machine-drafted, needs native review |
+| `tabOverview` | hmn | Overview | Saib tag nrho | 2026-11-15 | machine-drafted, needs native review |
+| `tabEvents` | hmn | Events | Cov kev tshwm sim | 2026-11-15 | machine-drafted, needs native review |
+| `tabModeration` | hmn | Moderation | Kev tswj xyuas | 2026-11-15 | machine-drafted, needs native review |
+| `tabCommunity` | hmn | Community | Zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `tabOrganizations` | hmn | Organizations | Cov koom haum | 2026-11-15 | machine-drafted, needs native review |
+| `tabResources` | hmn | Resources | Cov peev txheej | 2026-11-15 | machine-drafted, needs native review |
+| `tabBusinesses` | hmn | Businesses | Cov lag luam | 2026-11-15 | machine-drafted, needs native review |
+| `tabManage` | hmn | Manage | Tswj | 2026-11-15 | machine-drafted, needs native review |
+| `tabPeople` | hmn | People | Neeg | 2026-11-15 | machine-drafted, needs native review |
+
+### `lib/i18n-assistant.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `greetingTitle` | ht | Hi, This is Feed. | Bonjou, se Feed. | 2026-11-15 | machine-drafted, needs native review |
+| `greetingSubtitle` | ht | What can we help you gather today? | Kisa nou ka ede w rasanble jodi a? | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesTitle` | ht | Find Resources | Jwenn resous | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesBody` | ht | Discover local food banks, housing assistance, healthcare, and more near you. | Dekouvri bank manje, èd pou lojman, swen sante ak plis toupre w. | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityTitle` | ht | Check Eligibility | Verifye kalifikasyon | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityBody` | ht | See what benefits programs you may qualify for based on your situation. | Gade ki pwogram benefis ou ka kalifye pou yo selon sitiyasyon w. | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsTitle` | ht | Get Help with Forms | Jwenn èd ak fòm | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsBody` | ht | Get guided help understanding and completing benefit applications. | Jwenn èd gide pou konprann epi ranpli aplikasyon pou benefis. | 2026-11-15 | machine-drafted, needs native review |
+| `signInPrompt` | ht | Please {link} to chat with FEED Assistant. | Tanpri {link} pou w pale ak Asistan FEED. | 2026-11-15 | machine-drafted, needs native review |
+| `signInLink` | ht | sign in | konekte | 2026-11-15 | machine-drafted, needs native review |
+| `reconnecting` | ht | Reconnecting… | Ap rekonekte… | 2026-11-15 | machine-drafted, needs native review |
+| `retrying` | ht | Retrying… | Ap eseye ankò… | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholder` | ht | Ask me anything about benefits, resources, or assistance... | Mande m nenpòt bagay sou benefis, resous oswa èd... | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholderGuest` | ht | Sign in to start chatting... | Konekte pou kòmanse pale... | 2026-11-15 | machine-drafted, needs native review |
+| `replyPlaceholder` | ht | Type your message... | Ekri mesaj ou... | 2026-11-15 | machine-drafted, needs native review |
+| `sendMessage` | ht | Send message | Voye mesaj | 2026-11-15 | machine-drafted, needs native review |
+| `stopResponse` | ht | Stop response | Kanpe repons lan | 2026-11-15 | machine-drafted, needs native review |
+| `tagFindResources` | ht | Find resources | Jwenn resous | 2026-11-15 | machine-drafted, needs native review |
+| `tagEligibility` | ht | Program Eligibility | Kalifikasyon pou pwogram | 2026-11-15 | machine-drafted, needs native review |
+| `tagFood` | ht | Food | Manje | 2026-11-15 | machine-drafted, needs native review |
+| `tagSocialServices` | ht | Social Services | Sèvis sosyal | 2026-11-15 | machine-drafted, needs native review |
+| `tagHealthcare` | ht | Healthcare | Swen sante | 2026-11-15 | machine-drafted, needs native review |
+| `replyFindMore` | ht | Find more resources | Jwenn plis resous | 2026-11-15 | machine-drafted, needs native review |
+| `replyDirections` | ht | Get directions | Jwenn direksyon | 2026-11-15 | machine-drafted, needs native review |
+| `replyEligibility` | ht | Check my eligibility | Verifye kalifikasyon mwen | 2026-11-15 | machine-drafted, needs native review |
+| `replyTalk` | ht | Talk to someone | Pale ak yon moun | 2026-11-15 | machine-drafted, needs native review |
+| `resourceApply` | ht | Apply | Aplike | 2026-11-15 | machine-drafted, needs native review |
+| `resourceVisit` | ht | Visit | Vizite | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDirections` | ht | Directions | Direksyon | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSave` | ht | Save | Anrejistre | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaving` | ht | Saving… | Ap anrejistre… | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaved` | ht | Saved | Li anrejistre | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | ht | Could not save {name}. Please try again. | Nou pa t ka anrejistre {name}. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `viaModel` | ht | via {model} | pa {model} | 2026-11-15 | machine-drafted, needs native review |
+| `flowCancel` | ht | Cancel | Anile | 2026-11-15 | machine-drafted, needs native review |
+| `flowContinue` | ht | Continue | Kontinye | 2026-11-15 | machine-drafted, needs native review |
+| `flowProcessing` | ht | Processing… | Ap trete… | 2026-11-15 | machine-drafted, needs native review |
+| `flowDone` | ht | Done | Fini | 2026-11-15 | machine-drafted, needs native review |
+| `flowBack` | ht | Back | Retounen | 2026-11-15 | machine-drafted, needs native review |
+| `flowStep` | ht | Step {current} of {total} | Etap {current} sou {total} | 2026-11-15 | machine-drafted, needs native review |
+| `rfName` | ht | Find Resources | Jwenn resous | 2026-11-15 | machine-drafted, needs native review |
+| `rfDescription` | ht | Find food, housing, healthcare, and other resources near you | Jwenn manje, lojman, swen sante ak lòt resous toupre w | 2026-11-15 | machine-drafted, needs native review |
+| `rfCategoryQ` | ht | What type of help are you looking for? | Ki kalite èd w ap chèche? | 2026-11-15 | machine-drafted, needs native review |
+| `rfFood` | ht | Food Assistance | Èd pou manje | 2026-11-15 | machine-drafted, needs native review |
+| `rfHousing` | ht | Housing & Shelter | Lojman ak abri | 2026-11-15 | machine-drafted, needs native review |
+| `rfHealthcare` | ht | Healthcare | Swen sante | 2026-11-15 | machine-drafted, needs native review |
+| `rfUtilities` | ht | Utilities (Electric, Gas, Water) | Sèvis piblik (kouran, gaz, dlo) | 2026-11-15 | machine-drafted, needs native review |
+| `rfEmployment` | ht | Employment & Job Training | Travay ak fòmasyon pou travay | 2026-11-15 | machine-drafted, needs native review |
+| `rfFamily` | ht | Childcare & Family Services | Gadri ak sèvis pou fanmi | 2026-11-15 | machine-drafted, needs native review |
+| `rfLegal` | ht | Legal Aid | Èd legal | 2026-11-15 | machine-drafted, needs native review |
+| `rfMentalHealth` | ht | Mental Health | Sante mantal | 2026-11-15 | machine-drafted, needs native review |
+| `rfOther` | ht | Other | Lòt | 2026-11-15 | machine-drafted, needs native review |
+| `rfUrgencyQ` | ht | How urgent is your need? | Ki jan bezwen ou ijan? | 2026-11-15 | machine-drafted, needs native review |
+| `rfImmediate` | ht | Immediate (today) | Touswit (jodi a) | 2026-11-15 | machine-drafted, needs native review |
+| `rfThisWeek` | ht | This week | Semèn sa a | 2026-11-15 | machine-drafted, needs native review |
+| `rfMonth` | ht | Within a month | Nan yon mwa | 2026-11-15 | machine-drafted, needs native review |
+| `rfExploring` | ht | Just exploring options | M ap gade opsyon yo sèlman | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationQ` | ht | What is your zip code or city? | Ki kòd postal oswa vil ou? | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationPh` | ht | Enter zip code or city name | Antre kòd postal la oswa non vil la | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalQ` | ht | Anything else we should know? (optional) | Èske gen lòt bagay nou ta dwe konnen? (si ou vle) | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalPh` | ht | E.g., family size, specific requirements, accessibility needs | Pa egzanp: kantite moun nan fanmi an, egzijans espesyal, bezwen aksè | 2026-11-15 | machine-drafted, needs native review |
+| `ecName` | ht | Check Eligibility | Verifye kalifikasyon | 2026-11-15 | machine-drafted, needs native review |
+| `ecDescription` | ht | See what benefits programs you may qualify for | Gade ki pwogram benefis ou ka kalifye pou yo | 2026-11-15 | machine-drafted, needs native review |
+| `ecHouseholdQ` | ht | How many people live in your household (including yourself)? | Konbyen moun ki rete lakay ou (avè w ladan l)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecJustMe` | ht | 1 (just me) | 1 (se mwen sèlman) | 2026-11-15 | machine-drafted, needs native review |
+| `ecChildrenQ` | ht | Are there any children under 18 in your household? | Èske gen timoun ki poko gen 18 an lakay ou? | 2026-11-15 | machine-drafted, needs native review |
+| `optYes` | ht | Yes | Wi | 2026-11-15 | machine-drafted, needs native review |
+| `optNo` | ht | No | Non | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgesQ` | ht | What are the ages of the children? | Ki laj timoun yo? | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeInfant` | ht | Under 1 year | Mwens pase 1 an | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeToddler` | ht | 1-5 years | 1 a 5 an | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeChild` | ht | 6-12 years | 6 a 12 an | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeTeen` | ht | 13-17 years | 13 a 17 an | 2026-11-15 | machine-drafted, needs native review |
+| `ecPregnantQ` | ht | Is anyone in the household currently pregnant? | Èske gen yon moun lakay ou ki ansent kounye a? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeQ` | ht | What is your approximate monthly household income (before taxes)? | Konbyen kòb fanmi an fè pa mwa apeprè (anvan taks)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeNone` | ht | No income | Pa gen revni | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeUnder` | ht | Under {amount} | Mwens pase {amount} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeRange` | ht | {from} - {to} | Ant {from} ak {to} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeOver` | ht | Over {amount} | Plis pase {amount} | 2026-11-15 | machine-drafted, needs native review |
+| `ecEmploymentQ` | ht | What is your current employment status? | Ki sitiyasyon travay ou kounye a? | 2026-11-15 | machine-drafted, needs native review |
+| `ecFullTime` | ht | Employed full-time | Travay aplentan | 2026-11-15 | machine-drafted, needs native review |
+| `ecPartTime` | ht | Employed part-time | Travay a tan pasyèl | 2026-11-15 | machine-drafted, needs native review |
+| `ecSelfEmployed` | ht | Self-employed | Travay pou tèt mwen | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedLooking` | ht | Unemployed - looking for work | San travay - m ap chèche | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedNotLooking` | ht | Unemployed - not looking | San travay - m pa ap chèche | 2026-11-15 | machine-drafted, needs native review |
+| `ecDisability` | ht | Unable to work (disability) | Mwen pa ka travay (andikap) | 2026-11-15 | machine-drafted, needs native review |
+| `ecRetired` | ht | Retired | Pran retrèt | 2026-11-15 | machine-drafted, needs native review |
+| `ecStudent` | ht | Student | Elèv oswa etidyan | 2026-11-15 | machine-drafted, needs native review |
+| `ecBenefitsQ` | ht | Are you currently receiving any benefits? (select all that apply) | Èske w ap resevwa benefis kounye a? (chwazi tout sa ki aplike) | 2026-11-15 | machine-drafted, needs native review |
+| `ecSnap` | ht | SNAP (Food Stamps) | SNAP (koupon manje) | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicaid` | ht | Medicaid | Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicare` | ht | Medicare | Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `ecSsi` | ht | SSI/SSDI | SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `ecTanf` | ht | TANF | TANF | 2026-11-15 | machine-drafted, needs native review |
+| `ecWic` | ht | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
+| `ecHousingAssistance` | ht | Housing assistance | Èd pou lojman | 2026-11-15 | machine-drafted, needs native review |
+| `ecNone` | ht | None of these | Okenn nan yo | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | ht | What state do you live in? | Nan ki eta ou rete? | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | ht | Enter state name or abbreviation | Antre non eta a oswa abrevyasyon l | 2026-11-15 | machine-drafted, needs native review |
+| `fhName` | ht | Form Help | Èd ak fòm | 2026-11-15 | machine-drafted, needs native review |
+| `fhDescription` | ht | Get help understanding and completing benefit applications | Jwenn èd pou konprann epi ranpli aplikasyon pou benefis | 2026-11-15 | machine-drafted, needs native review |
+| `fhFormQ` | ht | Which form or application do you need help with? | Ak ki fòm oswa aplikasyon ou bezwen èd? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSnap` | ht | SNAP (Food Stamps) Application | Aplikasyon SNAP (koupon manje) | 2026-11-15 | machine-drafted, needs native review |
+| `fhMedicaid` | ht | Medicaid Application | Aplikasyon Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `fhTanf` | ht | TANF Application | Aplikasyon TANF | 2026-11-15 | machine-drafted, needs native review |
+| `fhHousing` | ht | Housing Assistance Application | Aplikasyon pou èd lojman | 2026-11-15 | machine-drafted, needs native review |
+| `fhUnemployment` | ht | Unemployment Application | Aplikasyon pou chomaj | 2026-11-15 | machine-drafted, needs native review |
+| `fhSsi` | ht | SSI/SSDI Application | Aplikasyon SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `fhOther` | ht | Other form | Lòt fòm | 2026-11-15 | machine-drafted, needs native review |
+| `fhHelpQ` | ht | What kind of help do you need? | Ki kalite èd ou bezwen? | 2026-11-15 | machine-drafted, needs native review |
+| `fhDocuments` | ht | Understand what documents I need | Konprann ki dokiman m bezwen | 2026-11-15 | machine-drafted, needs native review |
+| `fhExplain` | ht | Explain what questions mean | Eksplike sa kesyon yo vle di | 2026-11-15 | machine-drafted, needs native review |
+| `fhSection` | ht | Help with a specific section | Èd ak yon seksyon presi | 2026-11-15 | machine-drafted, needs native review |
+| `fhReview` | ht | Review before I submit | Revize anvan m voye l | 2026-11-15 | machine-drafted, needs native review |
+| `fhGeneral` | ht | General guidance through the form | Konsèy jeneral pou tout fòm nan | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionQ` | ht | Which section are you working on? | Sou ki seksyon w ap travay? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionPh` | ht | E.g., "Income", "Household Members", "Assets" | Pa egzanp: "Revni", "Moun lakay la", "Byen" | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionQ` | ht | What is the question you need help understanding? | Ki kesyon ou bezwen èd pou konprann? | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionPh` | ht | Type or paste the question from the form | Ekri oswa kole kesyon ki nan fòm nan | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificQ` | ht | What specific question do you have about this section? | Ki kesyon presi ou genyen sou seksyon sa a? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificPh` | ht | Describe what you're confused about | Esplike sa ki pa klè pou ou | 2026-11-15 | machine-drafted, needs native review |
+| `fhStatusQ` | ht | Have you already started the application? | Èske ou deja kòmanse aplikasyon an? | 2026-11-15 | machine-drafted, needs native review |
+| `fhNotStarted` | ht | No, haven't started yet | Non, m poko kòmanse | 2026-11-15 | machine-drafted, needs native review |
+| `fhInProgress` | ht | Yes, partway through | Wi, m nan mitan l | 2026-11-15 | machine-drafted, needs native review |
+| `fhAlmostDone` | ht | Yes, almost done | Wi, m prèske fini | 2026-11-15 | machine-drafted, needs native review |
+| `greetingTitle` | so | Hi, This is Feed. | Salaan, kani waa Feed. | 2026-11-15 | machine-drafted, needs native review |
+| `greetingSubtitle` | so | What can we help you gather today? | Maxaan maanta kaa caawin karnaa inaad hesho? | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesTitle` | so | Find Resources | Hel kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesBody` | so | Discover local food banks, housing assistance, healthcare, and more near you. | Ogow bangiyada cuntada, kaalmada guryaha, daryeelka caafimaadka iyo wax kale oo kuu dhow. | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityTitle` | so | Check Eligibility | Hubi u-qalmitaanka | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityBody` | so | See what benefits programs you may qualify for based on your situation. | Arag barnaamijyada gargaarka ee aad u qalmi karto iyadoo lagu salaynayo xaaladdaada. | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsTitle` | so | Get Help with Forms | Caawimaad foomamka | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsBody` | so | Get guided help understanding and completing benefit applications. | Hel caawimaad la hagayo si aad u fahanto oo u buuxiso codsiyada gargaarka. | 2026-11-15 | machine-drafted, needs native review |
+| `signInPrompt` | so | Please {link} to chat with FEED Assistant. | Fadlan {link} si aad ula sheekaysato Kaaliyaha FEED. | 2026-11-15 | machine-drafted, needs native review |
+| `signInLink` | so | sign in | gal | 2026-11-15 | machine-drafted, needs native review |
+| `reconnecting` | so | Reconnecting… | Dib ayaa loo xiriirayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `retrying` | so | Retrying… | Mar kale ayaa la isku dayayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholder` | so | Ask me anything about benefits, resources, or assistance... | I weydii wax kasta oo ku saabsan gargaarka, kheyraadka ama caawimaadda... | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholderGuest` | so | Sign in to start chatting... | Gal si aad u bilowdo sheekaysiga... | 2026-11-15 | machine-drafted, needs native review |
+| `replyPlaceholder` | so | Type your message... | Qor fariintaada... | 2026-11-15 | machine-drafted, needs native review |
+| `sendMessage` | so | Send message | Dir fariinta | 2026-11-15 | machine-drafted, needs native review |
+| `stopResponse` | so | Stop response | Jooji jawaabta | 2026-11-15 | machine-drafted, needs native review |
+| `tagFindResources` | so | Find resources | Hel kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `tagEligibility` | so | Program Eligibility | U-qalmitaanka barnaamijka | 2026-11-15 | machine-drafted, needs native review |
+| `tagFood` | so | Food | Cunto | 2026-11-15 | machine-drafted, needs native review |
+| `tagSocialServices` | so | Social Services | Adeegyada bulshada | 2026-11-15 | machine-drafted, needs native review |
+| `tagHealthcare` | so | Healthcare | Daryeel caafimaad | 2026-11-15 | machine-drafted, needs native review |
+| `replyFindMore` | so | Find more resources | Hel kheyraad kale | 2026-11-15 | machine-drafted, needs native review |
+| `replyDirections` | so | Get directions | Hel tilmaamaha jidka | 2026-11-15 | machine-drafted, needs native review |
+| `replyEligibility` | so | Check my eligibility | Hubi u-qalmitaankayga | 2026-11-15 | machine-drafted, needs native review |
+| `replyTalk` | so | Talk to someone | La hadal qof | 2026-11-15 | machine-drafted, needs native review |
+| `resourceApply` | so | Apply | Codso | 2026-11-15 | machine-drafted, needs native review |
+| `resourceVisit` | so | Visit | Booqo | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDirections` | so | Directions | Tilmaamaha jidka | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSave` | so | Save | Kaydi | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaving` | so | Saving… | Waa la kaydinayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaved` | so | Saved | Waa la kaydiyay | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | so | Could not save {name}. Please try again. | {name} lama kaydin karin. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `viaModel` | so | via {model} | iyadoo loo marayo {model} | 2026-11-15 | machine-drafted, needs native review |
+| `flowCancel` | so | Cancel | Jooji | 2026-11-15 | machine-drafted, needs native review |
+| `flowContinue` | so | Continue | Sii wad | 2026-11-15 | machine-drafted, needs native review |
+| `flowProcessing` | so | Processing… | Waa la habaynayaa… | 2026-11-15 | machine-drafted, needs native review |
+| `flowDone` | so | Done | Dhammaatay | 2026-11-15 | machine-drafted, needs native review |
+| `flowBack` | so | Back | Dib u noqo | 2026-11-15 | machine-drafted, needs native review |
+| `flowStep` | so | Step {current} of {total} | Tallaabada {current} ee {total} | 2026-11-15 | machine-drafted, needs native review |
+| `rfName` | so | Find Resources | Hel kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `rfDescription` | so | Find food, housing, healthcare, and other resources near you | Hel cunto, guri, daryeel caafimaad iyo kheyraad kale oo kuu dhow | 2026-11-15 | machine-drafted, needs native review |
+| `rfCategoryQ` | so | What type of help are you looking for? | Caawimaad noocee ah ayaad raadinaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `rfFood` | so | Food Assistance | Kaalmada cuntada | 2026-11-15 | machine-drafted, needs native review |
+| `rfHousing` | so | Housing & Shelter | Guri iyo hoy | 2026-11-15 | machine-drafted, needs native review |
+| `rfHealthcare` | so | Healthcare | Daryeel caafimaad | 2026-11-15 | machine-drafted, needs native review |
+| `rfUtilities` | so | Utilities (Electric, Gas, Water) | Adeegyada (koronto, gaas, biyo) | 2026-11-15 | machine-drafted, needs native review |
+| `rfEmployment` | so | Employment & Job Training | Shaqo iyo tababar shaqo | 2026-11-15 | machine-drafted, needs native review |
+| `rfFamily` | so | Childcare & Family Services | Xannaanada carruurta iyo adeegyada qoyska | 2026-11-15 | machine-drafted, needs native review |
+| `rfLegal` | so | Legal Aid | Kaalmo sharci | 2026-11-15 | machine-drafted, needs native review |
+| `rfMentalHealth` | so | Mental Health | Caafimaadka maskaxda | 2026-11-15 | machine-drafted, needs native review |
+| `rfOther` | so | Other | Kale | 2026-11-15 | machine-drafted, needs native review |
+| `rfUrgencyQ` | so | How urgent is your need? | Baahidaadu intee bay degdeg tahay? | 2026-11-15 | machine-drafted, needs native review |
+| `rfImmediate` | so | Immediate (today) | Isla markiiba (maanta) | 2026-11-15 | machine-drafted, needs native review |
+| `rfThisWeek` | so | This week | Toddobaadkan | 2026-11-15 | machine-drafted, needs native review |
+| `rfMonth` | so | Within a month | Bil gudaheed | 2026-11-15 | machine-drafted, needs native review |
+| `rfExploring` | so | Just exploring options | Kaliya waan eegayaa doorashooyinka | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationQ` | so | What is your zip code or city? | Waa maxay koodhka boostada ama magaaladaada? | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationPh` | so | Enter zip code or city name | Geli koodhka boostada ama magaca magaalada | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalQ` | so | Anything else we should know? (optional) | Ma jiraan wax kale oo ay tahay inaan ogaano? (ikhtiyaari) | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalPh` | so | E.g., family size, specific requirements, accessibility needs | Tusaale: tirada qoyska, shuruudo gaar ah, baahiyaha gelitaanka | 2026-11-15 | machine-drafted, needs native review |
+| `ecName` | so | Check Eligibility | Hubi u-qalmitaanka | 2026-11-15 | machine-drafted, needs native review |
+| `ecDescription` | so | See what benefits programs you may qualify for | Arag barnaamijyada gargaarka ee aad u qalmi karto | 2026-11-15 | machine-drafted, needs native review |
+| `ecHouseholdQ` | so | How many people live in your household (including yourself)? | Immisa qof ayaa ku nool qoyskaaga (adiga oo ku jira)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecJustMe` | so | 1 (just me) | 1 (aniga oo keliya) | 2026-11-15 | machine-drafted, needs native review |
+| `ecChildrenQ` | so | Are there any children under 18 in your household? | Qoyskaaga ma ku jiraan carruur ka yar 18 sano? | 2026-11-15 | machine-drafted, needs native review |
+| `optYes` | so | Yes | Haa | 2026-11-15 | machine-drafted, needs native review |
+| `optNo` | so | No | Maya | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgesQ` | so | What are the ages of the children? | Carruurtu immisa jir bay yihiin? | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeInfant` | so | Under 1 year | Ka yar 1 sano | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeToddler` | so | 1-5 years | 1-5 sano | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeChild` | so | 6-12 years | 6-12 sano | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeTeen` | so | 13-17 years | 13-17 sano | 2026-11-15 | machine-drafted, needs native review |
+| `ecPregnantQ` | so | Is anyone in the household currently pregnant? | Qoyska qof ma uur leeyahay hadda? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeQ` | so | What is your approximate monthly household income (before taxes)? | Waa imisa qiyaas ahaan dakhliga bishii ee qoyskaaga (ka hor canshuurta)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeNone` | so | No income | Dakhli ma jiro | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeUnder` | so | Under {amount} | Ka yar {amount} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeRange` | so | {from} - {to} | {from} ilaa {to} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeOver` | so | Over {amount} | Ka badan {amount} | 2026-11-15 | machine-drafted, needs native review |
+| `ecEmploymentQ` | so | What is your current employment status? | Waa maxay xaaladdaada shaqo ee hadda? | 2026-11-15 | machine-drafted, needs native review |
+| `ecFullTime` | so | Employed full-time | Shaqo waqti buuxa | 2026-11-15 | machine-drafted, needs native review |
+| `ecPartTime` | so | Employed part-time | Shaqo waqti dhiman | 2026-11-15 | machine-drafted, needs native review |
+| `ecSelfEmployed` | so | Self-employed | Iska shaqeysta | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedLooking` | so | Unemployed - looking for work | Shaqo la’aan - shaqo raadinaya | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedNotLooking` | so | Unemployed - not looking | Shaqo la’aan - aan raadin | 2026-11-15 | machine-drafted, needs native review |
+| `ecDisability` | so | Unable to work (disability) | Aan shaqeyn karin (naafo) | 2026-11-15 | machine-drafted, needs native review |
+| `ecRetired` | so | Retired | Hawlgab | 2026-11-15 | machine-drafted, needs native review |
+| `ecStudent` | so | Student | Arday | 2026-11-15 | machine-drafted, needs native review |
+| `ecBenefitsQ` | so | Are you currently receiving any benefits? (select all that apply) | Hadda ma helaysaa wax gargaar ah? (dooro dhammaan kuwa khuseeya) | 2026-11-15 | machine-drafted, needs native review |
+| `ecSnap` | so | SNAP (Food Stamps) | SNAP (kaararka cuntada) | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicaid` | so | Medicaid | Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicare` | so | Medicare | Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `ecSsi` | so | SSI/SSDI | SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `ecTanf` | so | TANF | TANF | 2026-11-15 | machine-drafted, needs native review |
+| `ecWic` | so | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
+| `ecHousingAssistance` | so | Housing assistance | Kaalmada guryaha | 2026-11-15 | machine-drafted, needs native review |
+| `ecNone` | so | None of these | Midna kuma jiro | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | so | What state do you live in? | Gobolkee ayaad ku nooshahay? | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | so | Enter state name or abbreviation | Geli magaca gobolka ama soo gaabintiisa | 2026-11-15 | machine-drafted, needs native review |
+| `fhName` | so | Form Help | Caawimaad foom | 2026-11-15 | machine-drafted, needs native review |
+| `fhDescription` | so | Get help understanding and completing benefit applications | Hel caawimaad aad ku fahanto oo aad ku buuxiso codsiyada gargaarka | 2026-11-15 | machine-drafted, needs native review |
+| `fhFormQ` | so | Which form or application do you need help with? | Foomkee ama codsigee ayaad caawimaad uga baahan tahay? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSnap` | so | SNAP (Food Stamps) Application | Codsiga SNAP (kaararka cuntada) | 2026-11-15 | machine-drafted, needs native review |
+| `fhMedicaid` | so | Medicaid Application | Codsiga Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `fhTanf` | so | TANF Application | Codsiga TANF | 2026-11-15 | machine-drafted, needs native review |
+| `fhHousing` | so | Housing Assistance Application | Codsiga kaalmada guryaha | 2026-11-15 | machine-drafted, needs native review |
+| `fhUnemployment` | so | Unemployment Application | Codsiga shaqo la’aanta | 2026-11-15 | machine-drafted, needs native review |
+| `fhSsi` | so | SSI/SSDI Application | Codsiga SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `fhOther` | so | Other form | Foom kale | 2026-11-15 | machine-drafted, needs native review |
+| `fhHelpQ` | so | What kind of help do you need? | Caawimaad noocee ah ayaad u baahan tahay? | 2026-11-15 | machine-drafted, needs native review |
+| `fhDocuments` | so | Understand what documents I need | Fahan dukumentiyada aan u baahanahay | 2026-11-15 | machine-drafted, needs native review |
+| `fhExplain` | so | Explain what questions mean | Sharax waxa su’aaluhu ka dhigan yihiin | 2026-11-15 | machine-drafted, needs native review |
+| `fhSection` | so | Help with a specific section | Caawimaad qayb gaar ah | 2026-11-15 | machine-drafted, needs native review |
+| `fhReview` | so | Review before I submit | Dib u eeg ka hor intaanan dirin | 2026-11-15 | machine-drafted, needs native review |
+| `fhGeneral` | so | General guidance through the form | Hagid guud oo foomka oo dhan ah | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionQ` | so | Which section are you working on? | Qaybtee ayaad ka shaqaynaysaa? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionPh` | so | E.g., "Income", "Household Members", "Assets" | Tusaale: "Dakhliga", "Xubnaha qoyska", "Hantida" | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionQ` | so | What is the question you need help understanding? | Waa maxay su’aasha aad u baahan tahay inaad fahanto? | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionPh` | so | Type or paste the question from the form | Qor ama ku dheji su’aasha foomka | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificQ` | so | What specific question do you have about this section? | Su’aal gaar ah oo noocee ah ayaad ka qabtaa qaybtan? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificPh` | so | Describe what you're confused about | Sharax waxa kugu adag | 2026-11-15 | machine-drafted, needs native review |
+| `fhStatusQ` | so | Have you already started the application? | Ma horay u bilowday codsiga? | 2026-11-15 | machine-drafted, needs native review |
+| `fhNotStarted` | so | No, haven't started yet | Maya, weli ma bilaabin | 2026-11-15 | machine-drafted, needs native review |
+| `fhInProgress` | so | Yes, partway through | Haa, waan bar maray | 2026-11-15 | machine-drafted, needs native review |
+| `fhAlmostDone` | so | Yes, almost done | Haa, waan ku dhowahay inaan dhammeeyo | 2026-11-15 | machine-drafted, needs native review |
+| `greetingTitle` | am | Hi, This is Feed. | ሰላም፣ ይህ Feed ነው። | 2026-11-15 | machine-drafted, needs native review |
+| `greetingSubtitle` | am | What can we help you gather today? | ዛሬ ምን እንዲያገኙ ልንረዳዎ እንችላለን? | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesTitle` | am | Find Resources | ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesBody` | am | Discover local food banks, housing assistance, healthcare, and more near you. | በአቅራቢያዎ ያሉ የምግብ ባንኮችን፣ የመኖሪያ ቤት ድጋፍን፣ የጤና እንክብካቤን እና ሌሎችንም ያግኙ። | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityTitle` | am | Check Eligibility | ብቁነትን ያረጋግጡ | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityBody` | am | See what benefits programs you may qualify for based on your situation. | እንደ ሁኔታዎ ብቁ ሊሆኑባቸው የሚችሉ የጥቅማ ጥቅም ፕሮግራሞችን ይመልከቱ። | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsTitle` | am | Get Help with Forms | በቅጾች እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsBody` | am | Get guided help understanding and completing benefit applications. | የጥቅማ ጥቅም ማመልከቻዎችን ለመረዳት እና ለመሙላት የሚመራ እገዛ ያግኙ። | 2026-11-15 | machine-drafted, needs native review |
+| `signInPrompt` | am | Please {link} to chat with FEED Assistant. | ከFEED ረዳት ጋር ለመወያየት እባክዎ {link}። | 2026-11-15 | machine-drafted, needs native review |
+| `signInLink` | am | sign in | ይግቡ | 2026-11-15 | machine-drafted, needs native review |
+| `reconnecting` | am | Reconnecting… | እንደገና በመገናኘት ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `retrying` | am | Retrying… | እንደገና በመሞከር ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholder` | am | Ask me anything about benefits, resources, or assistance... | ስለ ጥቅማ ጥቅሞች፣ ሀብቶች ወይም እገዛ ማንኛውንም ነገር ይጠይቁኝ... | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholderGuest` | am | Sign in to start chatting... | መወያየት ለመጀመር ይግቡ... | 2026-11-15 | machine-drafted, needs native review |
+| `replyPlaceholder` | am | Type your message... | መልእክትዎን ይጻፉ... | 2026-11-15 | machine-drafted, needs native review |
+| `sendMessage` | am | Send message | መልእክት ላክ | 2026-11-15 | machine-drafted, needs native review |
+| `stopResponse` | am | Stop response | መልሱን አቁም | 2026-11-15 | machine-drafted, needs native review |
+| `tagFindResources` | am | Find resources | ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `tagEligibility` | am | Program Eligibility | የፕሮግራም ብቁነት | 2026-11-15 | machine-drafted, needs native review |
+| `tagFood` | am | Food | ምግብ | 2026-11-15 | machine-drafted, needs native review |
+| `tagSocialServices` | am | Social Services | ማህበራዊ አገልግሎቶች | 2026-11-15 | machine-drafted, needs native review |
+| `tagHealthcare` | am | Healthcare | የጤና እንክብካቤ | 2026-11-15 | machine-drafted, needs native review |
+| `replyFindMore` | am | Find more resources | ተጨማሪ ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `replyDirections` | am | Get directions | አቅጣጫ ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `replyEligibility` | am | Check my eligibility | ብቁነቴን አረጋግጥ | 2026-11-15 | machine-drafted, needs native review |
+| `replyTalk` | am | Talk to someone | ከሰው ጋር ይነጋገሩ | 2026-11-15 | machine-drafted, needs native review |
+| `resourceApply` | am | Apply | ያመልክቱ | 2026-11-15 | machine-drafted, needs native review |
+| `resourceVisit` | am | Visit | ይጎብኙ | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDirections` | am | Directions | አቅጣጫ | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSave` | am | Save | አስቀምጥ | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaving` | am | Saving… | በማስቀመጥ ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaved` | am | Saved | ተቀምጧል | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | am | Could not save {name}. Please try again. | {name}ን ማስቀመጥ አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `viaModel` | am | via {model} | በ{model} | 2026-11-15 | machine-drafted, needs native review |
+| `flowCancel` | am | Cancel | ሰርዝ | 2026-11-15 | machine-drafted, needs native review |
+| `flowContinue` | am | Continue | ቀጥል | 2026-11-15 | machine-drafted, needs native review |
+| `flowProcessing` | am | Processing… | በሂደት ላይ… | 2026-11-15 | machine-drafted, needs native review |
+| `flowDone` | am | Done | ተጠናቋል | 2026-11-15 | machine-drafted, needs native review |
+| `flowBack` | am | Back | ተመለስ | 2026-11-15 | machine-drafted, needs native review |
+| `flowStep` | am | Step {current} of {total} | ደረጃ {current} ከ{total} | 2026-11-15 | machine-drafted, needs native review |
+| `rfName` | am | Find Resources | ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `rfDescription` | am | Find food, housing, healthcare, and other resources near you | በአቅራቢያዎ ምግብ፣ መኖሪያ፣ የጤና እንክብካቤ እና ሌሎች ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `rfCategoryQ` | am | What type of help are you looking for? | ምን ዓይነት እገዛ እየፈለጉ ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `rfFood` | am | Food Assistance | የምግብ ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
+| `rfHousing` | am | Housing & Shelter | መኖሪያ እና መጠለያ | 2026-11-15 | machine-drafted, needs native review |
+| `rfHealthcare` | am | Healthcare | የጤና እንክብካቤ | 2026-11-15 | machine-drafted, needs native review |
+| `rfUtilities` | am | Utilities (Electric, Gas, Water) | መገልገያዎች (መብራት፣ ጋዝ፣ ውሃ) | 2026-11-15 | machine-drafted, needs native review |
+| `rfEmployment` | am | Employment & Job Training | ሥራ እና የሥራ ሥልጠና | 2026-11-15 | machine-drafted, needs native review |
+| `rfFamily` | am | Childcare & Family Services | የሕፃናት እንክብካቤ እና የቤተሰብ አገልግሎቶች | 2026-11-15 | machine-drafted, needs native review |
+| `rfLegal` | am | Legal Aid | የሕግ ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
+| `rfMentalHealth` | am | Mental Health | የአእምሮ ጤና | 2026-11-15 | machine-drafted, needs native review |
+| `rfOther` | am | Other | ሌላ | 2026-11-15 | machine-drafted, needs native review |
+| `rfUrgencyQ` | am | How urgent is your need? | ፍላጎትዎ ምን ያህል አስቸኳይ ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `rfImmediate` | am | Immediate (today) | ወዲያውኑ (ዛሬ) | 2026-11-15 | machine-drafted, needs native review |
+| `rfThisWeek` | am | This week | በዚህ ሳምንት | 2026-11-15 | machine-drafted, needs native review |
+| `rfMonth` | am | Within a month | በአንድ ወር ውስጥ | 2026-11-15 | machine-drafted, needs native review |
+| `rfExploring` | am | Just exploring options | አማራጮችን ብቻ እያየሁ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationQ` | am | What is your zip code or city? | የፖስታ ኮድዎ ወይም ከተማዎ ምንድን ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationPh` | am | Enter zip code or city name | የፖስታ ኮድ ወይም የከተማ ስም ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalQ` | am | Anything else we should know? (optional) | ማወቅ ያለብን ሌላ ነገር አለ? (አማራጭ) | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalPh` | am | E.g., family size, specific requirements, accessibility needs | ለምሳሌ፦ የቤተሰብ ብዛት፣ ልዩ መስፈርቶች፣ የተደራሽነት ፍላጎቶች | 2026-11-15 | machine-drafted, needs native review |
+| `ecName` | am | Check Eligibility | ብቁነትን ያረጋግጡ | 2026-11-15 | machine-drafted, needs native review |
+| `ecDescription` | am | See what benefits programs you may qualify for | ብቁ ሊሆኑባቸው የሚችሉ የጥቅማ ጥቅም ፕሮግራሞችን ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
+| `ecHouseholdQ` | am | How many people live in your household (including yourself)? | በቤተሰብዎ ውስጥ ስንት ሰዎች ይኖራሉ (እርስዎን ጨምሮ)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecJustMe` | am | 1 (just me) | 1 (እኔ ብቻ) | 2026-11-15 | machine-drafted, needs native review |
+| `ecChildrenQ` | am | Are there any children under 18 in your household? | በቤተሰብዎ ውስጥ ከ18 ዓመት በታች የሆኑ ልጆች አሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `optYes` | am | Yes | አዎ | 2026-11-15 | machine-drafted, needs native review |
+| `optNo` | am | No | አይ | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgesQ` | am | What are the ages of the children? | የልጆቹ ዕድሜ ስንት ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeInfant` | am | Under 1 year | ከ1 ዓመት በታች | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeToddler` | am | 1-5 years | 1-5 ዓመት | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeChild` | am | 6-12 years | 6-12 ዓመት | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeTeen` | am | 13-17 years | 13-17 ዓመት | 2026-11-15 | machine-drafted, needs native review |
+| `ecPregnantQ` | am | Is anyone in the household currently pregnant? | በአሁኑ ጊዜ በቤተሰቡ ውስጥ ነፍሰ ጡር አለ? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeQ` | am | What is your approximate monthly household income (before taxes)? | የቤተሰብዎ ግምታዊ ወርሃዊ ገቢ (ከግብር በፊት) ምን ያህል ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeNone` | am | No income | ገቢ የለም | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeUnder` | am | Under {amount} | ከ{amount} በታች | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeRange` | am | {from} - {to} | ከ{from} እስከ {to} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeOver` | am | Over {amount} | ከ{amount} በላይ | 2026-11-15 | machine-drafted, needs native review |
+| `ecEmploymentQ` | am | What is your current employment status? | የአሁኑ የሥራ ሁኔታዎ ምንድን ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `ecFullTime` | am | Employed full-time | የሙሉ ጊዜ ሠራተኛ | 2026-11-15 | machine-drafted, needs native review |
+| `ecPartTime` | am | Employed part-time | የትርፍ ጊዜ ሠራተኛ | 2026-11-15 | machine-drafted, needs native review |
+| `ecSelfEmployed` | am | Self-employed | የግል ሥራ | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedLooking` | am | Unemployed - looking for work | ሥራ አጥ - ሥራ እየፈለግሁ | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedNotLooking` | am | Unemployed - not looking | ሥራ አጥ - እየፈለግሁ አይደለም | 2026-11-15 | machine-drafted, needs native review |
+| `ecDisability` | am | Unable to work (disability) | መሥራት አልችልም (አካል ጉዳት) | 2026-11-15 | machine-drafted, needs native review |
+| `ecRetired` | am | Retired | ጡረተኛ | 2026-11-15 | machine-drafted, needs native review |
+| `ecStudent` | am | Student | ተማሪ | 2026-11-15 | machine-drafted, needs native review |
+| `ecBenefitsQ` | am | Are you currently receiving any benefits? (select all that apply) | በአሁኑ ጊዜ ማንኛውንም ጥቅማ ጥቅም እያገኙ ነው? (የሚመለከቱትን ሁሉ ይምረጡ) | 2026-11-15 | machine-drafted, needs native review |
+| `ecSnap` | am | SNAP (Food Stamps) | SNAP (የምግብ ኩፖን) | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicaid` | am | Medicaid | Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicare` | am | Medicare | Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `ecSsi` | am | SSI/SSDI | SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `ecTanf` | am | TANF | TANF | 2026-11-15 | machine-drafted, needs native review |
+| `ecWic` | am | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
+| `ecHousingAssistance` | am | Housing assistance | የመኖሪያ ቤት ድጋፍ | 2026-11-15 | machine-drafted, needs native review |
+| `ecNone` | am | None of these | ከእነዚህ ውስጥ የለም | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | am | What state do you live in? | በየትኛው ግዛት ይኖራሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | am | Enter state name or abbreviation | የግዛቱን ስም ወይም ምህጻረ ቃል ያስገቡ | 2026-11-15 | machine-drafted, needs native review |
+| `fhName` | am | Form Help | የቅጽ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `fhDescription` | am | Get help understanding and completing benefit applications | የጥቅማ ጥቅም ማመልከቻዎችን ለመረዳት እና ለመሙላት እገዛ ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `fhFormQ` | am | Which form or application do you need help with? | በየትኛው ቅጽ ወይም ማመልከቻ እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSnap` | am | SNAP (Food Stamps) Application | የSNAP (የምግብ ኩፖን) ማመልከቻ | 2026-11-15 | machine-drafted, needs native review |
+| `fhMedicaid` | am | Medicaid Application | የMedicaid ማመልከቻ | 2026-11-15 | machine-drafted, needs native review |
+| `fhTanf` | am | TANF Application | የTANF ማመልከቻ | 2026-11-15 | machine-drafted, needs native review |
+| `fhHousing` | am | Housing Assistance Application | የመኖሪያ ቤት ድጋፍ ማመልከቻ | 2026-11-15 | machine-drafted, needs native review |
+| `fhUnemployment` | am | Unemployment Application | የሥራ አጥነት ማመልከቻ | 2026-11-15 | machine-drafted, needs native review |
+| `fhSsi` | am | SSI/SSDI Application | የSSI/SSDI ማመልከቻ | 2026-11-15 | machine-drafted, needs native review |
+| `fhOther` | am | Other form | ሌላ ቅጽ | 2026-11-15 | machine-drafted, needs native review |
+| `fhHelpQ` | am | What kind of help do you need? | ምን ዓይነት እገዛ ይፈልጋሉ? | 2026-11-15 | machine-drafted, needs native review |
+| `fhDocuments` | am | Understand what documents I need | የሚያስፈልጉኝን ሰነዶች ማወቅ | 2026-11-15 | machine-drafted, needs native review |
+| `fhExplain` | am | Explain what questions mean | ጥያቄዎቹ ምን ማለት እንደሆኑ ማብራራት | 2026-11-15 | machine-drafted, needs native review |
+| `fhSection` | am | Help with a specific section | በአንድ የተወሰነ ክፍል እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `fhReview` | am | Review before I submit | ከማስገባቴ በፊት መገምገም | 2026-11-15 | machine-drafted, needs native review |
+| `fhGeneral` | am | General guidance through the form | በቅጹ በሙሉ አጠቃላይ መመሪያ | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionQ` | am | Which section are you working on? | በየትኛው ክፍል ላይ እየሠሩ ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionPh` | am | E.g., "Income", "Household Members", "Assets" | ለምሳሌ፦ "ገቢ"፣ "የቤተሰብ አባላት"፣ "ንብረቶች" | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionQ` | am | What is the question you need help understanding? | ለመረዳት እገዛ የሚፈልጉት ጥያቄ ምንድን ነው? | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionPh` | am | Type or paste the question from the form | ከቅጹ ላይ ያለውን ጥያቄ ይጻፉ ወይም ይለጥፉ | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificQ` | am | What specific question do you have about this section? | ስለዚህ ክፍል ምን የተለየ ጥያቄ አለዎት? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificPh` | am | Describe what you're confused about | ግራ ያጋባዎትን ይግለጹ | 2026-11-15 | machine-drafted, needs native review |
+| `fhStatusQ` | am | Have you already started the application? | ማመልከቻውን አስቀድመው ጀምረዋል? | 2026-11-15 | machine-drafted, needs native review |
+| `fhNotStarted` | am | No, haven't started yet | አይ፣ ገና አልጀመርኩም | 2026-11-15 | machine-drafted, needs native review |
+| `fhInProgress` | am | Yes, partway through | አዎ፣ በከፊል ጨርሻለሁ | 2026-11-15 | machine-drafted, needs native review |
+| `fhAlmostDone` | am | Yes, almost done | አዎ፣ ልጨርስ ነው | 2026-11-15 | machine-drafted, needs native review |
+| `greetingTitle` | hmn | Hi, This is Feed. | Nyob zoo, no yog Feed. | 2026-11-15 | machine-drafted, needs native review |
+| `greetingSubtitle` | hmn | What can we help you gather today? | Hnub no peb pab tau koj nrhiav dab tsi? | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesTitle` | hmn | Find Resources | Nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `cardResourcesBody` | hmn | Discover local food banks, housing assistance, healthcare, and more near you. | Nrhiav cov chaw muab zaub mov, kev pab vaj tse, kev kho mob thiab lwm yam nyob ze koj. | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityTitle` | hmn | Check Eligibility | Kuaj seb koj tsim nyog | 2026-11-15 | machine-drafted, needs native review |
+| `cardEligibilityBody` | hmn | See what benefits programs you may qualify for based on your situation. | Saib seb koj yuav tsim nyog tau cov kev pab cuam txiaj ntsig twg raws li koj qhov xwm txheej. | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsTitle` | hmn | Get Help with Forms | Kev pab sau ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `cardFormsBody` | hmn | Get guided help understanding and completing benefit applications. | Tau kev pab coj kom nkag siab thiab sau cov ntawv thov txiaj ntsig. | 2026-11-15 | machine-drafted, needs native review |
+| `signInPrompt` | hmn | Please {link} to chat with FEED Assistant. | Thov {link} los tham nrog Tus Pab FEED. | 2026-11-15 | machine-drafted, needs native review |
+| `signInLink` | hmn | sign in | nkag mus | 2026-11-15 | machine-drafted, needs native review |
+| `reconnecting` | hmn | Reconnecting… | Tab tom rov txuas… | 2026-11-15 | machine-drafted, needs native review |
+| `retrying` | hmn | Retrying… | Tab tom sim dua… | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholder` | hmn | Ask me anything about benefits, resources, or assistance... | Nug kuv txhua yam txog txiaj ntsig, kev pab lossis kev txhawb nqa... | 2026-11-15 | machine-drafted, needs native review |
+| `inputPlaceholderGuest` | hmn | Sign in to start chatting... | Nkag mus los pib tham... | 2026-11-15 | machine-drafted, needs native review |
+| `replyPlaceholder` | hmn | Type your message... | Ntaus koj cov lus... | 2026-11-15 | machine-drafted, needs native review |
+| `sendMessage` | hmn | Send message | Xa lus | 2026-11-15 | machine-drafted, needs native review |
+| `stopResponse` | hmn | Stop response | Nres cov lus teb | 2026-11-15 | machine-drafted, needs native review |
+| `tagFindResources` | hmn | Find resources | Nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `tagEligibility` | hmn | Program Eligibility | Kev tsim nyog rau kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
+| `tagFood` | hmn | Food | Zaub mov | 2026-11-15 | machine-drafted, needs native review |
+| `tagSocialServices` | hmn | Social Services | Kev pab hauv zej zog | 2026-11-15 | machine-drafted, needs native review |
+| `tagHealthcare` | hmn | Healthcare | Kev kho mob | 2026-11-15 | machine-drafted, needs native review |
+| `replyFindMore` | hmn | Find more resources | Nrhiav kev pab ntxiv | 2026-11-15 | machine-drafted, needs native review |
+| `replyDirections` | hmn | Get directions | Tau txoj kev mus | 2026-11-15 | machine-drafted, needs native review |
+| `replyEligibility` | hmn | Check my eligibility | Kuaj seb kuv tsim nyog | 2026-11-15 | machine-drafted, needs native review |
+| `replyTalk` | hmn | Talk to someone | Tham nrog ib tug neeg | 2026-11-15 | machine-drafted, needs native review |
+| `resourceApply` | hmn | Apply | Thov | 2026-11-15 | machine-drafted, needs native review |
+| `resourceVisit` | hmn | Visit | Mus saib | 2026-11-15 | machine-drafted, needs native review |
+| `resourceDirections` | hmn | Directions | Txoj kev mus | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSave` | hmn | Save | Khaws | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaving` | hmn | Saving… | Tab tom khaws… | 2026-11-15 | machine-drafted, needs native review |
+| `resourceSaved` | hmn | Saved | Khaws lawm | 2026-11-15 | machine-drafted, needs native review |
+| `saveFailed` | hmn | Could not save {name}. Please try again. | Khaws tsis tau {name}. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `viaModel` | hmn | via {model} | los ntawm {model} | 2026-11-15 | machine-drafted, needs native review |
+| `flowCancel` | hmn | Cancel | Tso tseg | 2026-11-15 | machine-drafted, needs native review |
+| `flowContinue` | hmn | Continue | Mus ntxiv | 2026-11-15 | machine-drafted, needs native review |
+| `flowProcessing` | hmn | Processing… | Tab tom ua… | 2026-11-15 | machine-drafted, needs native review |
+| `flowDone` | hmn | Done | Tiav lawm | 2026-11-15 | machine-drafted, needs native review |
+| `flowBack` | hmn | Back | Rov qab | 2026-11-15 | machine-drafted, needs native review |
+| `flowStep` | hmn | Step {current} of {total} | Kauj ruam {current} ntawm {total} | 2026-11-15 | machine-drafted, needs native review |
+| `rfName` | hmn | Find Resources | Nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `rfDescription` | hmn | Find food, housing, healthcare, and other resources near you | Nrhiav zaub mov, vaj tse, kev kho mob thiab lwm yam kev pab nyob ze koj | 2026-11-15 | machine-drafted, needs native review |
+| `rfCategoryQ` | hmn | What type of help are you looking for? | Koj tab tom nrhiav kev pab hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `rfFood` | hmn | Food Assistance | Kev pab zaub mov | 2026-11-15 | machine-drafted, needs native review |
+| `rfHousing` | hmn | Housing & Shelter | Vaj tse thiab chaw nyob | 2026-11-15 | machine-drafted, needs native review |
+| `rfHealthcare` | hmn | Healthcare | Kev kho mob | 2026-11-15 | machine-drafted, needs native review |
+| `rfUtilities` | hmn | Utilities (Electric, Gas, Water) | Hluav taws, roj thiab dej | 2026-11-15 | machine-drafted, needs native review |
+| `rfEmployment` | hmn | Employment & Job Training | Hauj lwm thiab kev cob qhia ua hauj lwm | 2026-11-15 | machine-drafted, needs native review |
+| `rfFamily` | hmn | Childcare & Family Services | Kev zov me nyuam thiab kev pab tsev neeg | 2026-11-15 | machine-drafted, needs native review |
+| `rfLegal` | hmn | Legal Aid | Kev pab txog kev cai lij choj | 2026-11-15 | machine-drafted, needs native review |
+| `rfMentalHealth` | hmn | Mental Health | Kev noj qab haus huv ntawm lub siab | 2026-11-15 | machine-drafted, needs native review |
+| `rfOther` | hmn | Other | Lwm yam | 2026-11-15 | machine-drafted, needs native review |
+| `rfUrgencyQ` | hmn | How urgent is your need? | Koj qhov kev xav tau ceev npaum li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `rfImmediate` | hmn | Immediate (today) | Tam sim no (hnub no) | 2026-11-15 | machine-drafted, needs native review |
+| `rfThisWeek` | hmn | This week | Lub lim tiam no | 2026-11-15 | machine-drafted, needs native review |
+| `rfMonth` | hmn | Within a month | Hauv ib hlis | 2026-11-15 | machine-drafted, needs native review |
+| `rfExploring` | hmn | Just exploring options | Tsuas yog saib xaiv xwb | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationQ` | hmn | What is your zip code or city? | Koj tus zip code lossis lub nroog yog dab tsi? | 2026-11-15 | machine-drafted, needs native review |
+| `rfLocationPh` | hmn | Enter zip code or city name | Sau tus zip code lossis lub npe nroog | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalQ` | hmn | Anything else we should know? (optional) | Puas muaj lwm yam peb yuav tsum paub? (xaiv tau) | 2026-11-15 | machine-drafted, needs native review |
+| `rfAdditionalPh` | hmn | E.g., family size, specific requirements, accessibility needs | Piv txwv: tsev neeg muaj pes tsawg tus, tej yam tshwj xeeb, kev xav tau kom yooj yim siv | 2026-11-15 | machine-drafted, needs native review |
+| `ecName` | hmn | Check Eligibility | Kuaj seb koj tsim nyog | 2026-11-15 | machine-drafted, needs native review |
+| `ecDescription` | hmn | See what benefits programs you may qualify for | Saib seb koj yuav tsim nyog tau cov kev pab cuam txiaj ntsig twg | 2026-11-15 | machine-drafted, needs native review |
+| `ecHouseholdQ` | hmn | How many people live in your household (including yourself)? | Muaj pes tsawg tus neeg nyob hauv koj tsev (suav koj thiab)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecJustMe` | hmn | 1 (just me) | 1 (kuv ib leeg) | 2026-11-15 | machine-drafted, needs native review |
+| `ecChildrenQ` | hmn | Are there any children under 18 in your household? | Puas muaj me nyuam hnub nyoog qis dua 18 xyoo nyob hauv koj tsev? | 2026-11-15 | machine-drafted, needs native review |
+| `optYes` | hmn | Yes | Muaj | 2026-11-15 | machine-drafted, needs native review |
+| `optNo` | hmn | No | Tsis muaj | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgesQ` | hmn | What are the ages of the children? | Cov me nyuam muaj pes tsawg xyoo? | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeInfant` | hmn | Under 1 year | Qis dua 1 xyoos | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeToddler` | hmn | 1-5 years | 1-5 xyoos | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeChild` | hmn | 6-12 years | 6-12 xyoos | 2026-11-15 | machine-drafted, needs native review |
+| `ecAgeTeen` | hmn | 13-17 years | 13-17 xyoos | 2026-11-15 | machine-drafted, needs native review |
+| `ecPregnantQ` | hmn | Is anyone in the household currently pregnant? | Puas muaj leej twg hauv tsev tab tom cev xeeb tub? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeQ` | hmn | What is your approximate monthly household income (before taxes)? | Koj tsev neeg tau nyiaj txiag ib hlis kwv yees li cas (ua ntej them se)? | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeNone` | hmn | No income | Tsis muaj nyiaj tau | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeUnder` | hmn | Under {amount} | Qis dua {amount} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeRange` | hmn | {from} - {to} | {from} txog {to} | 2026-11-15 | machine-drafted, needs native review |
+| `ecIncomeOver` | hmn | Over {amount} | Ntau tshaj {amount} | 2026-11-15 | machine-drafted, needs native review |
+| `ecEmploymentQ` | hmn | What is your current employment status? | Koj txoj hauj lwm tam sim no zoo li cas? | 2026-11-15 | machine-drafted, needs native review |
+| `ecFullTime` | hmn | Employed full-time | Ua hauj lwm puv sij hawm | 2026-11-15 | machine-drafted, needs native review |
+| `ecPartTime` | hmn | Employed part-time | Ua hauj lwm ib nrab sij hawm | 2026-11-15 | machine-drafted, needs native review |
+| `ecSelfEmployed` | hmn | Self-employed | Ua lag luam rau kuv tus kheej | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedLooking` | hmn | Unemployed - looking for work | Tsis muaj hauj lwm - tab tom nrhiav | 2026-11-15 | machine-drafted, needs native review |
+| `ecUnemployedNotLooking` | hmn | Unemployed - not looking | Tsis muaj hauj lwm - tsis nrhiav | 2026-11-15 | machine-drafted, needs native review |
+| `ecDisability` | hmn | Unable to work (disability) | Ua tsis tau hauj lwm (xiam oob qhab) | 2026-11-15 | machine-drafted, needs native review |
+| `ecRetired` | hmn | Retired | So hauj lwm lawm | 2026-11-15 | machine-drafted, needs native review |
+| `ecStudent` | hmn | Student | Tub ntxhais kawm ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `ecBenefitsQ` | hmn | Are you currently receiving any benefits? (select all that apply) | Koj puas tab tom tau txais txiaj ntsig dab tsi? (xaiv txhua yam uas muaj) | 2026-11-15 | machine-drafted, needs native review |
+| `ecSnap` | hmn | SNAP (Food Stamps) | SNAP (daim pib yuav zaub mov) | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicaid` | hmn | Medicaid | Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `ecMedicare` | hmn | Medicare | Medicare | 2026-11-15 | machine-drafted, needs native review |
+| `ecSsi` | hmn | SSI/SSDI | SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `ecTanf` | hmn | TANF | TANF | 2026-11-15 | machine-drafted, needs native review |
+| `ecWic` | hmn | WIC | WIC | 2026-11-15 | machine-drafted, needs native review |
+| `ecHousingAssistance` | hmn | Housing assistance | Kev pab vaj tse | 2026-11-15 | machine-drafted, needs native review |
+| `ecNone` | hmn | None of these | Tsis muaj ib yam | 2026-11-15 | machine-drafted, needs native review |
+| `ecStateQ` | hmn | What state do you live in? | Koj nyob lub xeev twg? | 2026-11-15 | machine-drafted, needs native review |
+| `ecStatePh` | hmn | Enter state name or abbreviation | Sau lub npe xeev lossis lub npe luv | 2026-11-15 | machine-drafted, needs native review |
+| `fhName` | hmn | Form Help | Kev pab sau ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `fhDescription` | hmn | Get help understanding and completing benefit applications | Tau kev pab kom nkag siab thiab sau cov ntawv thov txiaj ntsig | 2026-11-15 | machine-drafted, needs native review |
+| `fhFormQ` | hmn | Which form or application do you need help with? | Koj xav tau kev pab nrog daim ntawv twg? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSnap` | hmn | SNAP (Food Stamps) Application | Daim ntawv thov SNAP (daim pib yuav zaub mov) | 2026-11-15 | machine-drafted, needs native review |
+| `fhMedicaid` | hmn | Medicaid Application | Daim ntawv thov Medicaid | 2026-11-15 | machine-drafted, needs native review |
+| `fhTanf` | hmn | TANF Application | Daim ntawv thov TANF | 2026-11-15 | machine-drafted, needs native review |
+| `fhHousing` | hmn | Housing Assistance Application | Daim ntawv thov kev pab vaj tse | 2026-11-15 | machine-drafted, needs native review |
+| `fhUnemployment` | hmn | Unemployment Application | Daim ntawv thov nyiaj poob hauj lwm | 2026-11-15 | machine-drafted, needs native review |
+| `fhSsi` | hmn | SSI/SSDI Application | Daim ntawv thov SSI/SSDI | 2026-11-15 | machine-drafted, needs native review |
+| `fhOther` | hmn | Other form | Lwm daim ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `fhHelpQ` | hmn | What kind of help do you need? | Koj xav tau kev pab hom twg? | 2026-11-15 | machine-drafted, needs native review |
+| `fhDocuments` | hmn | Understand what documents I need | Paub tias kuv xav tau cov ntaub ntawv twg | 2026-11-15 | machine-drafted, needs native review |
+| `fhExplain` | hmn | Explain what questions mean | Piav qhia cov lus nug txhais li cas | 2026-11-15 | machine-drafted, needs native review |
+| `fhSection` | hmn | Help with a specific section | Pab ib ntu tshwj xeeb | 2026-11-15 | machine-drafted, needs native review |
+| `fhReview` | hmn | Review before I submit | Saib dua ua ntej kuv xa | 2026-11-15 | machine-drafted, needs native review |
+| `fhGeneral` | hmn | General guidance through the form | Kev qhia dav dav rau tag nrho daim ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionQ` | hmn | Which section are you working on? | Koj tab tom sau ntu twg? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSectionPh` | hmn | E.g., "Income", "Household Members", "Assets" | Piv txwv: "Nyiaj tau", "Cov neeg hauv tsev", "Khoom muaj nqis" | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionQ` | hmn | What is the question you need help understanding? | Lo lus nug twg koj xav kom pab kom nkag siab? | 2026-11-15 | machine-drafted, needs native review |
+| `fhQuestionPh` | hmn | Type or paste the question from the form | Ntaus lossis muab lo lus nug ntawm daim ntawv tso rau ntawm no | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificQ` | hmn | What specific question do you have about this section? | Koj muaj lus nug dab tsi tshwj xeeb txog ntu no? | 2026-11-15 | machine-drafted, needs native review |
+| `fhSpecificPh` | hmn | Describe what you're confused about | Piav seb yam twg ua rau koj tsis meej | 2026-11-15 | machine-drafted, needs native review |
+| `fhStatusQ` | hmn | Have you already started the application? | Koj puas tau pib sau daim ntawv thov lawm? | 2026-11-15 | machine-drafted, needs native review |
+| `fhNotStarted` | hmn | No, haven't started yet | Tsis tau, kuv tseem tsis tau pib | 2026-11-15 | machine-drafted, needs native review |
+| `fhInProgress` | hmn | Yes, partway through | Tau, kuv sau tau ib nrab | 2026-11-15 | machine-drafted, needs native review |
+| `fhAlmostDone` | hmn | Yes, almost done | Tau, kuv yuav luag tiav | 2026-11-15 | machine-drafted, needs native review |
+
 ### `lib/i18n-feed-badges.ts`
 
 | Key | Locale | English | Text | Added | Status |
@@ -1524,6 +2086,119 @@ step in that test, and the test fails until the list below is regenerated.
 | `connection` | am | We're having trouble connecting. Please check your connection and try again. | ለመገናኘት ችግር አጋጥሞናል። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
 | `permission` | hmn | You don't have permission to view this right now. Please try again or contact support. | Tam sim no koj tsis muaj cai saib qhov no. Thov sim dua los yog hu rau kev pab. | 2026-10-11 | machine-drafted, needs native review |
 | `connection` | hmn | We're having trouble connecting. Please check your connection and try again. | Peb muaj teeb meem txuas. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+
+### `lib/i18n-overview.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `welcomeBack` | ht | Welcome back, {name}! | Byenveni ankò, {name}! | 2026-11-15 | machine-drafted, needs native review |
+| `friend` | ht | Friend | zanmi | 2026-11-15 | machine-drafted, needs native review |
+| `quickActions` | ht | Quick Actions | Aksyon rapid | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesTitle` | ht | Find Resources | Jwenn resous | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesBody` | ht | Discover local food banks, housing assistance, healthcare, and more near you. | Dekouvri bank manje, èd pou lojman, swen sante ak plis toupre w. | 2026-11-15 | machine-drafted, needs native review |
+| `assistantTitle` | ht | AI Assistant | Asistan IA | 2026-11-15 | machine-drafted, needs native review |
+| `assistantBody` | ht | Get personalized help finding resources and applying for benefits. | Jwenn èd pèsonalize pou jwenn resous epi aplike pou benefis. | 2026-11-15 | machine-drafted, needs native review |
+| `programsTitle` | ht | Browse Programs | Gade pwogram yo | 2026-11-15 | machine-drafted, needs native review |
+| `programsBody` | ht | Explore all available benefits and services by category. | Eksplore tout benefis ak sèvis ki disponib pa kategori. | 2026-11-15 | machine-drafted, needs native review |
+| `wizardTitle` | ht | Resource Wizard | Gid resous | 2026-11-15 | machine-drafted, needs native review |
+| `wizardBody` | ht | Guided help finding resources | Èd gide pou jwenn resous | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsTitle` | ht | My Applications | Aplikasyon m yo | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsBody` | ht | Track your benefit applications and see their current status. | Swiv aplikasyon benefis ou yo epi wè kote yo ye kounye a. | 2026-11-15 | machine-drafted, needs native review |
+| `documentsTitle` | ht | My Documents | Dokiman m yo | 2026-11-15 | machine-drafted, needs native review |
+| `documentsBody` | ht | Securely store and manage your important documents. | Konsève epi jere dokiman enpòtan ou yo an sekirite. | 2026-11-15 | machine-drafted, needs native review |
+| `applyTitle` | ht | Apply for Benefits | Aplike pou benefis | 2026-11-15 | machine-drafted, needs native review |
+| `applyBody` | ht | Fill out and submit forms for SNAP, Medicaid, and other programs. | Ranpli epi voye fòm pou SNAP, Medicaid ak lòt pwogram. | 2026-11-15 | machine-drafted, needs native review |
+| `recentActivity` | ht | Recent Activity | Aktivite resan | 2026-11-15 | machine-drafted, needs native review |
+| `loadingActivity` | ht | Loading recent activity | Ap chaje aktivite resan | 2026-11-15 | machine-drafted, needs native review |
+| `activityTimedOut` | ht | Activity timed out — please check your connection and retry. | Aktivite a pran twòp tan — tanpri verifye koneksyon ou epi eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `activityFailed` | ht | Recent activity could not be loaded. Please try again. | Nou pa t ka chaje aktivite resan yo. Tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `noActivity` | ht | No recent activity yet. Start by exploring resources or posting in the community feed! | Poko gen aktivite resan. Kòmanse pa eksplore resous oswa poste nan kominote a! | 2026-11-15 | machine-drafted, needs native review |
+| `activityPosted` | ht | Posted: “{excerpt}” | Ou poste: “{excerpt}” | 2026-11-15 | machine-drafted, needs native review |
+| `activityLiked` | ht | Liked: “{excerpt}” | Ou renmen: “{excerpt}” | 2026-11-15 | machine-drafted, needs native review |
+| `activityLikedPost` | ht | Liked a post | Ou renmen yon piblikasyon | 2026-11-15 | machine-drafted, needs native review |
+| `upcomingReminders` | ht | Upcoming Reminders | Rapèl k ap vini | 2026-11-15 | machine-drafted, needs native review |
+| `noReminders` | ht | No upcoming reminders. Reminders will appear here when you have appointments or deadlines. | Pa gen rapèl k ap vini. Rapèl yo ap parèt la a lè ou gen randevou oswa dat limit. | 2026-11-15 | machine-drafted, needs native review |
+| `welcomeBack` | so | Welcome back, {name}! | Ku soo dhowow mar kale, {name}! | 2026-11-15 | machine-drafted, needs native review |
+| `friend` | so | Friend | saaxiib | 2026-11-15 | machine-drafted, needs native review |
+| `quickActions` | so | Quick Actions | Ficillo degdeg ah | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesTitle` | so | Find Resources | Hel kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesBody` | so | Discover local food banks, housing assistance, healthcare, and more near you. | Ogow bangiyada cuntada, kaalmada guryaha, daryeelka caafimaadka iyo wax kale oo kuu dhow. | 2026-11-15 | machine-drafted, needs native review |
+| `assistantTitle` | so | AI Assistant | Kaaliyaha AI | 2026-11-15 | machine-drafted, needs native review |
+| `assistantBody` | so | Get personalized help finding resources and applying for benefits. | Hel caawimaad adiga kuu gaar ah oo aad ku hesho kheyraad oo aad ku codsato gargaar. | 2026-11-15 | machine-drafted, needs native review |
+| `programsTitle` | so | Browse Programs | Daalaco barnaamijyada | 2026-11-15 | machine-drafted, needs native review |
+| `programsBody` | so | Explore all available benefits and services by category. | Sahami dhammaan gargaarka iyo adeegyada la heli karo qayb kasta. | 2026-11-15 | machine-drafted, needs native review |
+| `wizardTitle` | so | Resource Wizard | Hagaha kheyraadka | 2026-11-15 | machine-drafted, needs native review |
+| `wizardBody` | so | Guided help finding resources | Caawimaad la hagayo oo aad ku hesho kheyraad | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsTitle` | so | My Applications | Codsiyadayda | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsBody` | so | Track your benefit applications and see their current status. | La soco codsiyadaada gargaarka oo arag xaaladdooda hadda. | 2026-11-15 | machine-drafted, needs native review |
+| `documentsTitle` | so | My Documents | Dukumentiyadayda | 2026-11-15 | machine-drafted, needs native review |
+| `documentsBody` | so | Securely store and manage your important documents. | Si ammaan ah u kaydi oo u maamul dukumentiyadaada muhiimka ah. | 2026-11-15 | machine-drafted, needs native review |
+| `applyTitle` | so | Apply for Benefits | Codso gargaar | 2026-11-15 | machine-drafted, needs native review |
+| `applyBody` | so | Fill out and submit forms for SNAP, Medicaid, and other programs. | Buuxi oo dir foomamka SNAP, Medicaid iyo barnaamijyo kale. | 2026-11-15 | machine-drafted, needs native review |
+| `recentActivity` | so | Recent Activity | Dhaqdhaqaaqa dhowaan | 2026-11-15 | machine-drafted, needs native review |
+| `loadingActivity` | so | Loading recent activity | Waxaa la soo rarayaa dhaqdhaqaaqa dhowaan | 2026-11-15 | machine-drafted, needs native review |
+| `activityTimedOut` | so | Activity timed out — please check your connection and retry. | Dhaqdhaqaaqa wuu daahay — fadlan hubi xiriirkaaga oo isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `activityFailed` | so | Recent activity could not be loaded. Please try again. | Dhaqdhaqaaqa dhowaan lama soo rari karin. Fadlan isku day mar kale. | 2026-11-15 | machine-drafted, needs native review |
+| `noActivity` | so | No recent activity yet. Start by exploring resources or posting in the community feed! | Weli ma jiro dhaqdhaqaaq dhowaan. Ku bilow inaad sahamiso kheyraadka ama aad wax ku qorto bulshada! | 2026-11-15 | machine-drafted, needs native review |
+| `activityPosted` | so | Posted: “{excerpt}” | Waad qortay: “{excerpt}” | 2026-11-15 | machine-drafted, needs native review |
+| `activityLiked` | so | Liked: “{excerpt}” | Waad jeclaatay: “{excerpt}” | 2026-11-15 | machine-drafted, needs native review |
+| `activityLikedPost` | so | Liked a post | Waxaad jeclaatay qoraal | 2026-11-15 | machine-drafted, needs native review |
+| `upcomingReminders` | so | Upcoming Reminders | Xasuusiyeyaasha soo socda | 2026-11-15 | machine-drafted, needs native review |
+| `noReminders` | so | No upcoming reminders. Reminders will appear here when you have appointments or deadlines. | Ma jiraan xasuusiyeyaal soo socda. Xasuusiyeyaashu halkan ayay ka soo muuqan doonaan marka aad leedahay ballamo ama waqtiyo kama dambays ah. | 2026-11-15 | machine-drafted, needs native review |
+| `welcomeBack` | am | Welcome back, {name}! | እንኳን ደህና መጡ፣ {name}! | 2026-11-15 | machine-drafted, needs native review |
+| `friend` | am | Friend | ወዳጃችን | 2026-11-15 | machine-drafted, needs native review |
+| `quickActions` | am | Quick Actions | ፈጣን እርምጃዎች | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesTitle` | am | Find Resources | ሀብቶችን ያግኙ | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesBody` | am | Discover local food banks, housing assistance, healthcare, and more near you. | በአቅራቢያዎ ያሉ የምግብ ባንኮችን፣ የመኖሪያ ቤት ድጋፍን፣ የጤና እንክብካቤን እና ሌሎችንም ያግኙ። | 2026-11-15 | machine-drafted, needs native review |
+| `assistantTitle` | am | AI Assistant | የAI ረዳት | 2026-11-15 | machine-drafted, needs native review |
+| `assistantBody` | am | Get personalized help finding resources and applying for benefits. | ሀብቶችን ለማግኘት እና ለጥቅማ ጥቅሞች ለማመልከት የግል እገዛ ያግኙ። | 2026-11-15 | machine-drafted, needs native review |
+| `programsTitle` | am | Browse Programs | ፕሮግራሞችን ያስሱ | 2026-11-15 | machine-drafted, needs native review |
+| `programsBody` | am | Explore all available benefits and services by category. | ሁሉንም የሚገኙ ጥቅማ ጥቅሞችን እና አገልግሎቶችን በምድብ ያስሱ። | 2026-11-15 | machine-drafted, needs native review |
+| `wizardTitle` | am | Resource Wizard | የሀብት መመሪያ | 2026-11-15 | machine-drafted, needs native review |
+| `wizardBody` | am | Guided help finding resources | ሀብቶችን ለማግኘት የሚመራ እገዛ | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsTitle` | am | My Applications | የእኔ ማመልከቻዎች | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsBody` | am | Track your benefit applications and see their current status. | የጥቅማ ጥቅም ማመልከቻዎችዎን ይከታተሉ እና አሁን ያሉበትን ሁኔታ ይመልከቱ። | 2026-11-15 | machine-drafted, needs native review |
+| `documentsTitle` | am | My Documents | የእኔ ሰነዶች | 2026-11-15 | machine-drafted, needs native review |
+| `documentsBody` | am | Securely store and manage your important documents. | አስፈላጊ ሰነዶችዎን በደህንነት ያስቀምጡ እና ያስተዳድሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `applyTitle` | am | Apply for Benefits | ለጥቅማ ጥቅሞች ያመልክቱ | 2026-11-15 | machine-drafted, needs native review |
+| `applyBody` | am | Fill out and submit forms for SNAP, Medicaid, and other programs. | ለSNAP፣ Medicaid እና ለሌሎች ፕሮግራሞች ቅጾችን ይሙሉ እና ያስገቡ። | 2026-11-15 | machine-drafted, needs native review |
+| `recentActivity` | am | Recent Activity | የቅርብ ጊዜ እንቅስቃሴ | 2026-11-15 | machine-drafted, needs native review |
+| `loadingActivity` | am | Loading recent activity | የቅርብ ጊዜ እንቅስቃሴ በመጫን ላይ | 2026-11-15 | machine-drafted, needs native review |
+| `activityTimedOut` | am | Activity timed out — please check your connection and retry. | እንቅስቃሴውን መጫን ጊዜ አልፎበታል — እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `activityFailed` | am | Recent activity could not be loaded. Please try again. | የቅርብ ጊዜ እንቅስቃሴን መጫን አልተቻለም። እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `noActivity` | am | No recent activity yet. Start by exploring resources or posting in the community feed! | እስካሁን የቅርብ ጊዜ እንቅስቃሴ የለም። ሀብቶችን በማሰስ ወይም በማህበረሰቡ ውስጥ በመለጠፍ ይጀምሩ! | 2026-11-15 | machine-drafted, needs native review |
+| `activityPosted` | am | Posted: “{excerpt}” | ለጥፈዋል፦ «{excerpt}» | 2026-11-15 | machine-drafted, needs native review |
+| `activityLiked` | am | Liked: “{excerpt}” | ወደዋል፦ «{excerpt}» | 2026-11-15 | machine-drafted, needs native review |
+| `activityLikedPost` | am | Liked a post | አንድ ልጥፍ ወደዋል | 2026-11-15 | machine-drafted, needs native review |
+| `upcomingReminders` | am | Upcoming Reminders | መጪ አስታዋሾች | 2026-11-15 | machine-drafted, needs native review |
+| `noReminders` | am | No upcoming reminders. Reminders will appear here when you have appointments or deadlines. | መጪ አስታዋሾች የሉም። ቀጠሮዎች ወይም የጊዜ ገደቦች ሲኖሩዎት አስታዋሾች እዚህ ይታያሉ። | 2026-11-15 | machine-drafted, needs native review |
+| `welcomeBack` | hmn | Welcome back, {name}! | Zoo siab txais tos koj rov qab los, {name}! | 2026-11-15 | machine-drafted, needs native review |
+| `friend` | hmn | Friend | phooj ywg | 2026-11-15 | machine-drafted, needs native review |
+| `quickActions` | hmn | Quick Actions | Kev ua sai | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesTitle` | hmn | Find Resources | Nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `findResourcesBody` | hmn | Discover local food banks, housing assistance, healthcare, and more near you. | Nrhiav cov chaw muab zaub mov, kev pab vaj tse, kev kho mob thiab lwm yam nyob ze koj. | 2026-11-15 | machine-drafted, needs native review |
+| `assistantTitle` | hmn | AI Assistant | Tus pab AI | 2026-11-15 | machine-drafted, needs native review |
+| `assistantBody` | hmn | Get personalized help finding resources and applying for benefits. | Tau kev pab rau koj tus kheej los nrhiav kev pab thiab thov cov txiaj ntsig. | 2026-11-15 | machine-drafted, needs native review |
+| `programsTitle` | hmn | Browse Programs | Saib cov kev pab cuam | 2026-11-15 | machine-drafted, needs native review |
+| `programsBody` | hmn | Explore all available benefits and services by category. | Saib txhua yam txiaj ntsig thiab kev pab muaj raws li pawg. | 2026-11-15 | machine-drafted, needs native review |
+| `wizardTitle` | hmn | Resource Wizard | Tus coj nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `wizardBody` | hmn | Guided help finding resources | Kev pab coj ib kauj ruam zuj zus los nrhiav kev pab | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsTitle` | hmn | My Applications | Kuv cov ntawv thov | 2026-11-15 | machine-drafted, needs native review |
+| `applicationsBody` | hmn | Track your benefit applications and see their current status. | Taug qab koj cov ntawv thov txiaj ntsig thiab saib lawv qhov xwm txheej tam sim no. | 2026-11-15 | machine-drafted, needs native review |
+| `documentsTitle` | hmn | My Documents | Kuv cov ntaub ntawv | 2026-11-15 | machine-drafted, needs native review |
+| `documentsBody` | hmn | Securely store and manage your important documents. | Khaws thiab tswj koj cov ntaub ntawv tseem ceeb kom muaj kev nyab xeeb. | 2026-11-15 | machine-drafted, needs native review |
+| `applyTitle` | hmn | Apply for Benefits | Thov txiaj ntsig | 2026-11-15 | machine-drafted, needs native review |
+| `applyBody` | hmn | Fill out and submit forms for SNAP, Medicaid, and other programs. | Sau thiab xa cov ntawv rau SNAP, Medicaid thiab lwm cov kev pab cuam. | 2026-11-15 | machine-drafted, needs native review |
+| `recentActivity` | hmn | Recent Activity | Tej yam ua tsis ntev los no | 2026-11-15 | machine-drafted, needs native review |
+| `loadingActivity` | hmn | Loading recent activity | Tab tom thauj tej yam ua tsis ntev los no | 2026-11-15 | machine-drafted, needs native review |
+| `activityTimedOut` | hmn | Activity timed out — please check your connection and retry. | Thauj tsis tau raws sij hawm — thov kuaj xyuas koj qhov kev sib txuas thiab sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `activityFailed` | hmn | Recent activity could not be loaded. Please try again. | Thauj tsis tau tej yam ua tsis ntev los no. Thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `noActivity` | hmn | No recent activity yet. Start by exploring resources or posting in the community feed! | Tseem tsis tau muaj dab tsi ua tsis ntev los no. Pib los ntawm kev saib kev pab lossis tshaj tawm hauv zej zog! | 2026-11-15 | machine-drafted, needs native review |
+| `activityPosted` | hmn | Posted: “{excerpt}” | Koj tshaj tawm: “{excerpt}” | 2026-11-15 | machine-drafted, needs native review |
+| `activityLiked` | hmn | Liked: “{excerpt}” | Koj nyiam: “{excerpt}” | 2026-11-15 | machine-drafted, needs native review |
+| `activityLikedPost` | hmn | Liked a post | Koj nyiam ib qho kev tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
+| `upcomingReminders` | hmn | Upcoming Reminders | Cov lus ceeb toom tom ntej | 2026-11-15 | machine-drafted, needs native review |
+| `noReminders` | hmn | No upcoming reminders. Reminders will appear here when you have appointments or deadlines. | Tsis muaj lus ceeb toom tom ntej. Cov lus ceeb toom yuav tshwm ntawm no thaum koj muaj kev teem caij lossis hnub kawg. | 2026-11-15 | machine-drafted, needs native review |
 
 ### `lib/i18n-settings-language.ts`
 

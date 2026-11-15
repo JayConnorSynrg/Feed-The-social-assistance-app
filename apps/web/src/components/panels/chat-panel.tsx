@@ -1,7 +1,11 @@
 'use client'
 
 // apps/web/src/components/panels/chat-panel.tsx
-// AI Chat interface panel - wired to real Supabase edge function via useChat hook
+// AI Chat interface panel - wired to real Supabase edge function via useChat hook.
+// The landing panel after sign-in. Every word FEED writes here is in the viewer's language
+// (lib/i18n-assistant.ts) and the panel is marked with it; messages (the member's and the
+// assistant's) keep their own direction and take no page language. The prompts this panel builds
+// for the assistant (screening results, wizard context) are unchanged by the language.
 
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
@@ -18,8 +22,12 @@ import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-res
 import { usePanelContext } from '@/components/layout/feed-shell'
 import type { SystemPromptKey } from '@/lib/ai/system-prompts'
 import { buildExplainRequest, type SafeErrorContext } from '@/lib/ai/error-explainer'
-import { t, dir } from '@/lib/i18n'
+import { t, dir, type Locale } from '@/lib/i18n'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { assistantT, type AssistantKey } from '@/lib/i18n-assistant'
+import { formatMessage, isolate, splitMessage } from '@/lib/format-message'
+import { formatClock } from '@/lib/i18n-intl'
+import { browserTimeZone } from '@/lib/event-time'
 import { logger } from '@/lib/logger'
 
 // ============================================
@@ -37,7 +45,7 @@ function FlowCard({ icon: Icon, iconBg, title, description, onClick }: FlowCardP
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-start p-4 rounded-xl border border-stone-200 bg-[#faf9f6] hover:border-primary/50 hover:bg-[#f5f3ee] transition-all text-left group shadow-sm"
+      className="flex flex-col items-start p-4 rounded-xl border border-stone-200 bg-[#faf9f6] hover:border-primary/50 hover:bg-[#f5f3ee] transition-all text-start group shadow-sm"
     >
       <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center mb-3`}>
         <Icon className="w-5 h-5" />
@@ -55,12 +63,12 @@ function FlowCard({ icon: Icon, iconBg, title, description, onClick }: FlowCardP
 // ============================================
 // QUICK ACTION TAGS
 // ============================================
-const QUICK_TAGS = [
-  { label: 'Find resources', icon: Search },
-  { label: 'Program Eligibility', icon: FileText },
-  { label: 'Food', icon: Apple },
-  { label: 'Social Services', icon: Building2 },
-  { label: 'Healthcare', icon: Heart },
+const QUICK_TAGS: ReadonlyArray<{ id: string; key: AssistantKey; icon: React.ElementType }> = [
+  { id: 'resources', key: 'tagFindResources', icon: Search },
+  { id: 'eligibility', key: 'tagEligibility', icon: FileText },
+  { id: 'food', key: 'tagFood', icon: Apple },
+  { id: 'social', key: 'tagSocialServices', icon: Building2 },
+  { id: 'health', key: 'tagHealthcare', icon: Heart },
 ]
 
 interface QuickTagProps {
@@ -133,8 +141,11 @@ function parseMessageContent(
     isSaved?: (name: string) => boolean
     savingNames?: Set<string>
     saveError?: string | null
+    /** The viewer's language: the buttons FEED adds to a suggested resource are marked with it. */
+    locale?: Locale
   }
 ): React.ReactNode[] {
+  const locale = opts?.locale ?? 'en'
   if (!content) return []
 
   const parts: React.ReactNode[] = []
@@ -175,7 +186,7 @@ function parseMessageContent(
                 </a>
               )}
             </div>
-            <div className="flex gap-1 flex-shrink-0">
+            <div lang={locale} dir={dir(locale)} className="flex gap-1 flex-shrink-0">
               {applyUrl && applyUrl !== 'N/A' && applyUrl !== 'null' && applyUrl !== 'undefined' && (
                 <a
                   href={applyUrl.startsWith('http') ? applyUrl : `https://${applyUrl}`}
@@ -183,7 +194,7 @@ function parseMessageContent(
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 text-xs rounded-lg bg-[#c2410c] text-white hover:bg-[#9a3412] transition-colors font-medium"
                 >
-                  Apply
+                  {assistantT(locale, 'resourceApply')}
                 </a>
               )}
               {website && website !== 'N/A' && website !== 'null' && (
@@ -193,7 +204,7 @@ function parseMessageContent(
                   rel="noopener noreferrer"
                   className="px-2 py-1 text-xs rounded-lg bg-[#4a5d23] text-white hover:bg-[#3d4e1c] transition-colors"
                 >
-                  Visit
+                  {assistantT(locale, 'resourceVisit')}
                 </a>
               )}
               {address && (
@@ -203,7 +214,7 @@ function parseMessageContent(
                   rel="noopener noreferrer"
                   className="px-2 py-1 text-xs rounded-lg bg-stone-200 text-stone-700 hover:bg-stone-300 transition-colors"
                 >
-                  Directions
+                  {assistantT(locale, 'resourceDirections')}
                 </a>
               )}
               {opts?.onSave && (() => {
@@ -231,11 +242,11 @@ function parseMessageContent(
                     }`}
                   >
                     {isSaved ? (
-                      <span className="flex items-center gap-1"><BookmarkCheck className="w-3 h-3" /> Saved</span>
+                      <span className="flex items-center gap-1"><BookmarkCheck className="w-3 h-3" /> {assistantT(locale, 'resourceSaved')}</span>
                     ) : isSaving ? (
-                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3 animate-pulse" /> Saving…</span>
+                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3 animate-pulse" /> {assistantT(locale, 'resourceSaving')}</span>
                     ) : (
-                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" /> Save</span>
+                      <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" /> {assistantT(locale, 'resourceSave')}</span>
                     )}
                   </button>
                 )
@@ -370,16 +381,18 @@ function buildScreeningRequest(answers: Record<string, string>) {
 // ============================================
 // CHAT MESSAGE COMPONENT
 // ============================================
-const QUICK_REPLIES = ['Find more resources', 'Get directions', 'Check my eligibility', 'Talk to someone']
+// A quick reply is sent as the member's own message, in the words the member reads on it.
+const QUICK_REPLIES: readonly AssistantKey[] = ['replyFindMore', 'replyDirections', 'replyEligibility', 'replyTalk']
 
 interface ChatMessageViewProps {
   message: ChatMessage
   onQuickReply?: (text: string) => void
   onSaveResource?: (input: SaveResourceInput) => Promise<boolean>
   isResourceSaved?: (name: string) => boolean
+  locale: Locale
 }
 
-function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSaved }: ChatMessageViewProps) {
+function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSaved, locale }: ChatMessageViewProps) {
   const isUser = message.role === 'user'
   const [savingNames, setSavingNames] = useState<Set<string>>(new Set())
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -389,44 +402,46 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
     setSaveError(null)
     try {
       const ok = await onSaveResource!(input)
+      const failed = formatMessage(assistantT(locale, 'saveFailed'), { name: isolate(input.resource_name) })
       if (!ok) {
-        setSaveError(`Could not save "${input.resource_name}". Please try again.`)
+        setSaveError(failed)
         setSavingNames(prev => { const next = new Set(prev); next.delete(input.resource_name); return next })
         return false
       }
       // Remove from saving set — isSaved will become true via hook re-render
       setSavingNames(prev => { const next = new Set(prev); next.delete(input.resource_name); return next })
       return true
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Save failed'
-      setSaveError(msg)
+    } catch {
+      setSaveError(formatMessage(assistantT(locale, 'saveFailed'), { name: isolate(input.resource_name) }))
       setSavingNames(prev => { const next = new Set(prev); next.delete(input.resource_name); return next })
       return false
     }
-  }, [onSaveResource])
+  }, [onSaveResource, locale])
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-3 ${
           isUser
-            ? 'bg-primary text-primary-foreground rounded-br-md'
-            : 'bg-muted rounded-bl-md'
+            ? 'bg-primary text-primary-foreground rounded-ee-md'
+            : 'bg-muted rounded-es-md'
         }`}
       >
-        <div className="text-base">
+        {/* The member's or the assistant's own words: their own direction, no page language. */}
+        <div lang="" dir="auto" className="text-base">
           {message.content
             ? parseMessageContent(message.content, {
                 onSave: onSaveResource ? handleSave : undefined,
                 isSaved: isResourceSaved,
                 savingNames,
                 saveError,
+                locale,
               })
             : message.isStreaming
             ? null
             : null}
           {saveError && (
-            <p className="text-xs text-red-600 mt-1">{saveError}</p>
+            <p role="alert" lang={locale} dir={dir(locale)} className="text-xs text-red-600 mt-1">{saveError}</p>
           )}
         </div>
         {message.isStreaming && !message.content && (
@@ -439,24 +454,24 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
         <div className="flex items-center gap-2 mt-1">
           {message.timestamp && (
             <p className={`text-[10px] ${isUser ? 'text-primary-foreground/70' : 'text-stone-500'}`}>
-              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {formatClock(message.timestamp.toISOString(), locale, browserTimeZone())}
             </p>
           )}
           {message.model && !isUser && (
             <p className="text-[10px] text-stone-500">
-              via {message.model.split('/').pop()}
+              {formatMessage(assistantT(locale, 'viaModel'), { model: message.model.split('/').pop() ?? '' })}
             </p>
           )}
         </div>
         {message.role === 'assistant' && !message.isStreaming && onQuickReply && (
           <div className="flex flex-wrap gap-2 mt-3">
-            {QUICK_REPLIES.map((option) => (
+            {QUICK_REPLIES.map((key) => (
               <button
-                key={option}
-                onClick={() => onQuickReply(option)}
+                key={key}
+                onClick={() => onQuickReply(assistantT(locale, key))}
                 className="px-3 py-1.5 text-sm rounded-full border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 hover:border-[#4a5d23] hover:text-[#4a5d23] transition-colors"
               >
-                {option}
+                {assistantT(locale, key)}
               </button>
             ))}
           </div>
@@ -511,7 +526,7 @@ export function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerPr
         data-testid="chat-retry-btn"
         className="flex-shrink-0 px-3 py-1 rounded-md bg-red-700 text-white text-xs font-medium hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        {isRetrying ? <span lang="en" dir="ltr">Retrying…</span> : t(locale, 'tryAgain')}
+        {isRetrying ? assistantT(locale, 'retrying') : t(locale, 'tryAgain')}
       </button>
     </div>
   )
@@ -520,11 +535,13 @@ export function ChatErrorBanner({ kind, onRetry, isRetrying }: ChatErrorBannerPr
 // ============================================
 // SIGN IN PROMPT
 // ============================================
-function SignInPrompt() {
+function SignInPrompt({ locale }: { locale: Locale }) {
+  // The link stays an element in JSX; only the words around it come from the dictionary.
+  const [before, after] = splitMessage(assistantT(locale, 'signInPrompt'), 'link')
   return (
     <div className="flex items-center justify-center p-4 bg-amber-50 rounded-lg border border-amber-200">
       <p className="text-sm text-amber-700">
-        Please <Link href="/login" className="font-medium underline">sign in</Link> to chat with FEED Assistant.
+        {before}<Link href="/login" className="font-medium underline">{assistantT(locale, 'signInLink')}</Link>{after}
       </p>
     </div>
   )
@@ -546,6 +563,8 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   const { saveResource, isResourceSavedByName } = useSavedResources()
   const { panelParams, setPanelParams, setActivePanel } = usePanelContext()
   const supabaseRef = useRef(createClient())
+  // The viewer's language, the one every surface reads (cookie, profile and device agree).
+  const locale = useProfileLocale()
 
   const {
     messages,
@@ -741,9 +760,9 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     await sendMessage(message)
   }
 
-  const handleTagClick = (tag: string) => {
-    setActiveTag(tag)
-    setInputValue(tag)
+  const handleTagClick = (tag: { id: string; key: AssistantKey }) => {
+    setActiveTag(tag.id)
+    setInputValue(assistantT(locale, tag.key))
   }
 
   const handleFeatureClick = (feature: string) => {
@@ -768,7 +787,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   // Render guided flow if one is selected
   if (selectedFlow) {
     return (
-      <div className="h-full flex flex-col">
+      <div lang={locale} dir={dir(locale)} className="h-full flex flex-col">
         <GuidedFlowComponent
           flow={selectedFlow}
           onComplete={handleFlowComplete}
@@ -778,8 +797,19 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     )
   }
 
+  const sendLabel = assistantT(locale, 'sendMessage')
+  const quickTag = (tag: (typeof QUICK_TAGS)[number]) => (
+    <QuickTag
+      key={tag.id}
+      label={assistantT(locale, tag.key)}
+      icon={tag.icon}
+      isActive={activeTag === tag.id}
+      onClick={() => handleTagClick(tag)}
+    />
+  )
+
   return (
-    <div className="h-full flex flex-col">
+    <div lang={locale} dir={dir(locale)} className="h-full flex flex-col">
       {showGreeting ? (
         // ============================================
         // GREETING VIEW (Initial State)
@@ -788,10 +818,10 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
           {/* Greeting Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold mb-2">
-              Hi, This is Feed.
+              {assistantT(locale, 'greetingTitle')}
             </h1>
             <p className="text-lg text-stone-500">
-              What can we help you gather today?
+              {assistantT(locale, 'greetingSubtitle')}
             </p>
           </div>
 
@@ -800,33 +830,33 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             <FlowCard
               icon={Sparkles}
               iconBg="bg-yellow-100 text-yellow-600"
-              title="Find Resources"
-              description="Discover local food banks, housing assistance, healthcare, and more near you."
+              title={assistantT(locale, 'cardResourcesTitle')}
+              description={assistantT(locale, 'cardResourcesBody')}
               onClick={() => handleFeatureClick('resources')}
             />
             <FlowCard
               icon={CheckCircle}
               iconBg="bg-blue-100 text-blue-600"
-              title="Check Eligibility"
-              description="See what benefits programs you may qualify for based on your situation."
+              title={assistantT(locale, 'cardEligibilityTitle')}
+              description={assistantT(locale, 'cardEligibilityBody')}
               onClick={() => handleFeatureClick('eligibility')}
             />
             <FlowCard
               icon={FileText}
               iconBg="bg-green-100 text-green-600"
-              title="Get Help with Forms"
-              description="Get guided help understanding and completing benefit applications."
+              title={assistantT(locale, 'cardFormsTitle')}
+              description={assistantT(locale, 'cardFormsBody')}
               onClick={() => handleFeatureClick('forms')}
             />
           </div>
 
-          {!isAuthenticated && <SignInPrompt />}
+          {!isAuthenticated && <SignInPrompt locale={locale} />}
 
           {/* Chat Input */}
           <div className="w-full space-y-3 mt-4">
             {isRetrying && (
               <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
-                Reconnecting…
+                {assistantT(locale, 'reconnecting')}
               </div>
             )}
             {error && !isRetrying && (
@@ -837,30 +867,26 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder={isAuthenticated ? 'Ask me anything about benefits, resources, or assistance...' : 'Sign in to start chatting...'}
-                className="pr-12 py-6 rounded-xl bg-[#f8f6f1] border-stone-200"
+                placeholder={assistantT(locale, isAuthenticated ? 'inputPlaceholder' : 'inputPlaceholderGuest')}
+                aria-label={assistantT(locale, isAuthenticated ? 'inputPlaceholder' : 'inputPlaceholderGuest')}
+                dir="auto"
+                className="pe-12 py-6 rounded-xl bg-[#f8f6f1] border-stone-200"
                 disabled={!isAuthenticated}
               />
               <Button
                 onClick={handleSend}
                 disabled={!inputValue.trim() || isLoading || !isAuthenticated}
                 size="icon"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
+                aria-label={sendLabel}
+                className="absolute end-2 top-1/2 -translate-y-1/2 rounded-lg"
               >
-                <Send className="w-4 h-4" />
+                <Send aria-hidden="true" className="w-4 h-4 rtl:-scale-x-100" />
               </Button>
             </div>
 
             {/* Quick Tags */}
             <div className="flex flex-wrap gap-2 justify-center">
-              {QUICK_TAGS.map((tag) => (
-                <QuickTag
-                  key={tag.label}
-                  {...tag}
-                  isActive={activeTag === tag.label}
-                  onClick={() => handleTagClick(tag.label)}
-                />
-              ))}
+              {QUICK_TAGS.map(quickTag)}
             </div>
           </div>
         </div>
@@ -878,6 +904,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
                 onQuickReply={sendMessage}
                 onSaveResource={saveResource}
                 isResourceSaved={isResourceSavedByName}
+                locale={locale}
               />
             ))}
             <div ref={messagesEndRef} />
@@ -887,7 +914,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
           {isRetrying && (
             <div className="px-4 pb-1">
               <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
-                Reconnecting…
+                {assistantT(locale, 'reconnecting')}
               </div>
             </div>
           )}
@@ -906,40 +933,37 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Type your message..."
-                className="pr-12 py-4 rounded-xl"
+                placeholder={assistantT(locale, 'replyPlaceholder')}
+                aria-label={assistantT(locale, 'replyPlaceholder')}
+                dir="auto"
+                className="pe-12 py-4 rounded-xl"
               />
               {isLoading ? (
                 <Button
                   onClick={stopStreaming}
                   size="icon"
                   variant="outline"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
+                  aria-label={assistantT(locale, 'stopResponse')}
+                  className="absolute end-2 top-1/2 -translate-y-1/2 rounded-lg"
                 >
-                  <Square className="w-3 h-3" />
+                  <Square aria-hidden="true" className="w-3 h-3" />
                 </Button>
               ) : (
                 <Button
                   onClick={handleSend}
                   disabled={!inputValue.trim()}
                   size="icon"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg"
+                  aria-label={sendLabel}
+                  className="absolute end-2 top-1/2 -translate-y-1/2 rounded-lg"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send aria-hidden="true" className="w-4 h-4 rtl:-scale-x-100" />
                 </Button>
               )}
             </div>
 
             {/* Quick Tags */}
             <div className="flex flex-wrap gap-2">
-              {QUICK_TAGS.slice(0, 4).map((tag) => (
-                <QuickTag
-                  key={tag.label}
-                  {...tag}
-                  isActive={activeTag === tag.label}
-                  onClick={() => handleTagClick(tag.label)}
-                />
-              ))}
+              {QUICK_TAGS.slice(0, 4).map(quickTag)}
             </div>
           </div>
         </>

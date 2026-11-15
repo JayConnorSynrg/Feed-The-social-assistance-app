@@ -183,6 +183,14 @@ export function formatFixed(n: number, digits: number, locale: Locale): string {
   ).format(n)
 }
 
+/** "$1,000" — whole US dollars, in the locale's digits, grouping and currency placement. */
+export function formatUsd(n: number, locale: Locale): string {
+  return cached(
+    `usd|${locale}`,
+    () => new Intl.NumberFormat(intlTags(locale), { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+  ).format(n)
+}
+
 /** "45%" for a whole percentage (0–100). */
 export function formatPercent(percent: number, locale: Locale): string {
   return cached(
