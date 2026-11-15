@@ -30,7 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { dir } from '@/lib/i18n'
 import { orgFormT } from '@/lib/i18n-org-forms'
-import { formatMessage } from '@/lib/format-message'
+import { formatMessage, isolate } from '@/lib/format-message'
+import { announce } from '../../row-focus'
 import { orgAdminT } from '@/lib/i18n-org-admin'
 import { ORG_ADMIN_INDEX } from '@/lib/org-admin-paths'
 import { orgTypeKey } from '@/components/org-form/org-labels'
@@ -99,7 +100,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
 
   const handleSaved = useCallback(
     (result: { id: string; created: boolean; name: string }) => {
-      savedNotice.current = formatMessage(orgFormT(locale, 'savedUpdated'), { name: result.name })
+      savedNotice.current = formatMessage(orgFormT(locale, 'savedUpdated'), { name: isolate(result.name) })
       setPanelOpen(false)
       // Re-run the server page so the header shows the saved name.
       router.refresh()
@@ -241,7 +242,7 @@ export function OrgAdminShell({ org, isPlatformAdmin }: OrgAdminShellProps) {
           restoreFocusAfterPanel(e, editButtonRef.current)
           const text = savedNotice.current
           savedNotice.current = null
-          if (text) setNotice(text)
+          if (text) announce(setNotice, text)
         }}
       />
     </div>

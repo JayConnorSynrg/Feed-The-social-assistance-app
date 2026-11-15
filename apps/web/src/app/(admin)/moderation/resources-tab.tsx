@@ -41,7 +41,7 @@ import {
   adminResourcesT, contentTypeLabel, namedControl,
 } from '@/lib/i18n-admin-resources'
 import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
-import { afterLayout, focusAfterRowRemoval } from './row-focus'
+import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
 import {
   ResourceEditDialog,
   type ResourceEditDialogInput,
@@ -228,6 +228,9 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
   const queueHeading = useRef<HTMLHeadingElement | null>(null)
   const bulkButton = useRef<HTMLButtonElement | null>(null)
   const restoreBulk = useRef(false)
+  // Opening the bulk confirmation replaces the button that had focus: focus moves to Confirm.
+  const bulkConfirmButton = useRef<HTMLButtonElement | null>(null)
+  const focusBulkConfirm = useRef(false)
   // An approve the dialog confirmed: announced and focused once the dialog has fully closed.
   const dialogDone = useRef<{ text: string; focus: string | null } | null>(null)
   // The cards on screen, in order (set each render): where focus goes when one leaves.
@@ -267,8 +270,13 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
     })
   }, [pending])
 
-  // Cancel on the bulk confirmation brings back the Bulk approve button: focus returns to it.
+  // Cancel on the bulk confirmation brings back the Bulk approve button: focus returns to it;
+  // opening it moves focus to its Confirm (described by the question).
   useEffect(() => {
+    if (focusBulkConfirm.current) {
+      focusBulkConfirm.current = false
+      afterLayout(() => bulkConfirmButton.current?.focus())
+    }
     if (!restoreBulk.current) return
     restoreBulk.current = false
     bulkButton.current?.focus()
@@ -444,7 +452,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
 
       if (opts.announce !== false) {
         focusTarget.current = { id: focusAfterRowRemoval(visibleIdsRef.current, item.id) }
-        setStatus(formatMessage(adminResourcesT(locale, 'approvedStatus'), { name: isolate(item.name) }))
+        announce(setStatus, formatMessage(adminResourcesT(locale, 'approvedStatus'), { name: isolate(item.name) }))
       }
       setPending((prev) => prev.filter((p) => p.id !== item.id))
       return true
@@ -498,7 +506,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
     if (!done) return // Cancel: Radix returns focus to the card's Approve button, which is still there.
     dialogDone.current = null
     event.preventDefault()
-    setStatus(done.text)
+    announce(setStatus, done.text)
     const node = done.focus ? chevrons.current.get(done.focus) : null
     ;(node ?? queueHeading.current)?.focus()
   }, [])
@@ -515,7 +523,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
       )
       if (error) throw error
       focusTarget.current = { id: focusAfterRowRemoval(visibleIdsRef.current, item.id) }
-      setStatus(formatMessage(adminResourcesT(locale, 'rejectedStatus'), { name: isolate(item.name) }))
+      announce(setStatus, formatMessage(adminResourcesT(locale, 'rejectedStatus'), { name: isolate(item.name) }))
       setPending((prev) => prev.filter((p) => p.id !== item.id))
     } catch (err) {
       // W2: reject failures reach logger.error → app_logs (was console-only).
@@ -547,7 +555,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
     for (const item of items) {
       if (await handleApprove(item, { announce: false })) approved++
     }
-    setStatus(moderationCount(BULK_DONE, approved, locale))
+    announce(setStatus, moderationCount(BULK_DONE, approved, locale))
     setBulkRunning(false)
   }, [pending, handleApprove, isPA, locale])
 
@@ -589,20 +597,21 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
               placeholder={t('nearPlaceholder')}
               value={nearLocation.label}
               onChange={(e) => setNearLocation({ label: e.target.value, lat: null, lng: null })}
-              disabled={discovering}
+              readOnly={discovering}
               className="min-w-0 flex-1 basis-48 text-stone-900 placeholder:text-stone-500 text-sm"
             />
             <button
               type="button"
               onClick={() => {
+                if (discovering) return
                 // Explicitly overwrites — no prev.label guard (unlike the mount effect)
                 void resolveGeoLabel().then((geo) => {
                   if (!geo) return
                   setNearLocation({ label: geo.label, lat: geo.lat, lng: geo.lng })
                 })
               }}
-              disabled={discovering}
-              className={`min-h-6 rounded-sm text-xs text-lime-800 hover:text-lime-900 hover:underline shrink-0 disabled:opacity-40 ${FOCUS_RING}`}
+              aria-disabled={discovering || undefined}
+              className={`min-h-6 rounded-sm text-xs text-lime-800 hover:text-lime-900 hover:underline shrink-0 ${FOCUS_RING}`}
             >
               {t('useMyLocation')}
             </button>
@@ -620,13 +629,20 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !discovering) void handleDiscover() }}
-                disabled={discovering}
+                readOnly={discovering}
                 className="min-w-0 flex-1 basis-56 text-stone-900 placeholder:text-stone-500"
               />
+              {/* aria-disabled + guard (not disabled): the pressed button keeps focus while Discover
+                  runs (its label says so); with no query it is a solid grey. readOnly boxes keep focus too. */}
               <Button
-                onClick={() => void handleDiscover()}
-                disabled={discovering || !query.trim()}
-                className="bg-lime-700 hover:bg-lime-800 text-white shrink-0"
+                data-testid="resources-discover"
+                onClick={() => { if (!discovering && query.trim()) void handleDiscover() }}
+                aria-disabled={discovering || !query.trim() || undefined}
+                className={
+                  !query.trim() && !discovering
+                    ? 'bg-stone-200 text-stone-700 hover:bg-stone-200 shrink-0'
+                    : 'bg-lime-700 hover:bg-lime-800 text-white shrink-0'
+                }
               >
                 {discovering ? (
                   <><Loader2 className="h-4 w-4 me-2 animate-spin" aria-hidden="true" />{t('discovering')}</>
@@ -715,14 +731,16 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
             <>
               {bulkConfirm ? (
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-stone-700">
+                  <span id="resources-bulk-question" className="text-xs text-stone-700">
                     {moderationCount(BULK_CONFIRM, highConfidenceItems.length, locale)}
                   </span>
                   <Button
+                    ref={bulkConfirmButton}
                     size="sm"
                     className="bg-green-700 hover:bg-green-800 text-white h-7 text-xs"
-                    onClick={() => void handleBulkApprove()}
-                    disabled={bulkRunning}
+                    aria-describedby="resources-bulk-question"
+                    onClick={() => { if (!bulkRunning) void handleBulkApprove() }}
+                    aria-disabled={bulkRunning || undefined}
                   >
                     {bulkRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : t('confirm')}
                   </Button>
@@ -743,8 +761,11 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
                   ref={bulkButton}
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs border-green-700 text-green-800 hover:bg-green-50 aria-disabled:opacity-60"
-                  onClick={busyGuard(bulkRunning, () => setBulkConfirm(true))}
+                  className="h-7 text-xs border-green-700 text-green-800 hover:bg-green-50"
+                  onClick={busyGuard(bulkRunning, () => {
+                    focusBulkConfirm.current = true
+                    setBulkConfirm(true)
+                  })}
                   aria-disabled={bulkRunning || undefined}
                 >
                   <Check className="h-3.5 w-3.5 me-1" aria-hidden="true" />
@@ -909,7 +930,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
                         {item.description && (
                           <p lang="" dir="auto" className="line-clamp-4">{item.description}</p>
                         )}
-                        {item.phone && <p>{formatMessage(t('phoneLine'), { phone: item.phone })}</p>}
+                        {item.phone && <p>{formatMessage(t('phoneLine'), { phone: isolate(item.phone) })}</p>}
                         {item.category && (
                           <p>{formatMessage(t('categoryLine'), { category: resourceCategoryLabel(item.category, locale) })}</p>
                         )}
@@ -939,7 +960,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
                     {(contentType !== 'form' || isPA) ? (
                     <Button
                       size="sm"
-                      className="flex-1 bg-green-700 hover:bg-green-800 text-white h-7 text-xs aria-disabled:opacity-60"
+                      className="flex-1 bg-green-700 hover:bg-green-800 text-white h-7 text-xs"
                       onClick={busyGuard(busy, () => {
                         // Forms have no resource fields to edit — keep the
                         // one-click approve_form_template path. resource/link
@@ -962,7 +983,7 @@ export function ResourcesTab({ locale }: { locale: Locale }) {
                     {contentType !== 'form' && (
                       <Button
                         size="sm"
-                        className={`flex-1 h-7 text-xs aria-disabled:opacity-60 ${DESTRUCTIVE_BUTTON_CLASS}`}
+                        className={`flex-1 h-7 text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
                         onClick={busyGuard(busy, () => void handleReject(item))}
                         aria-disabled={busy || undefined}
                         aria-label={namedControl(t('reject'), item.name)}

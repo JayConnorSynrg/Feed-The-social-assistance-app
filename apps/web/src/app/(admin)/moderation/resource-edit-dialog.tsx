@@ -522,13 +522,13 @@ export function ResourceEditDialog({
 
         <DialogFooter className="flex-wrap gap-2">
           {/* aria-disabled while saving (not disabled): the pressed button keeps focus. */}
-          <Button variant="outline" className="border-stone-500 aria-disabled:opacity-60" onClick={close} aria-disabled={saving || undefined}>
+          <Button variant="outline" className="border-stone-500" onClick={close} aria-disabled={saving || undefined}>
             <X className="h-4 w-4 me-1" aria-hidden="true" /> {t('cancel')}
           </Button>
           <Button
             onClick={() => void handleSave()}
             aria-disabled={saving || undefined}
-            className="bg-lime-700 hover:bg-lime-800 text-white aria-disabled:opacity-60"
+            className="bg-lime-700 hover:bg-lime-800 text-white"
           >
             {saving ? (
               <><Loader2 className="h-4 w-4 me-2 animate-spin" aria-hidden="true" />{isApprove ? t('confirming') : t('saving')}</>

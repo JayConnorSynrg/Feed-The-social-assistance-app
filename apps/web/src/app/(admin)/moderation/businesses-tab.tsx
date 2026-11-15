@@ -74,7 +74,7 @@ import { adminResourcesT, namedControl } from '@/lib/i18n-admin-resources'
 import { DESTRUCTIVE_BUTTON_CLASS } from './post-moderation-actions'
 import { useAdminFocusSession } from './use-admin-focus'
 import { AdminFocusNoticeLine, type AdminFocusNotice } from './admin-focus-notice'
-import { afterLayout, focusAfterRowRemoval } from './row-focus'
+import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
 
 // The editable-field draft the inline edit form holds while open (mirrors AdminBusinessEdit; empty
 // strings in the inputs, coerced to the null/trimmed shape by adminUpdateBusiness at write time).
@@ -122,7 +122,8 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<EditDraft | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [togglingId, setTogglingId] = useState<string | null>(null)
+  // Rows whose Deactivate / Reactivate is running: each row blocks only its own second press.
+  const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(() => new Set())
 
   // The result of the last action (always mounted, so each one is announced).
   const [status, setStatus] = useState('')
@@ -197,7 +198,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
         )
         if (error) throw error
         pendingFocus.current = { id: focusAfterRowRemoval(pending.map((p) => p.id), item.id) }
-        setStatus(formatMessage(adminResourcesT(locale, 'approvedStatus'), { name: isolate(item.name) }))
+        announce(setStatus, formatMessage(adminResourcesT(locale, 'approvedStatus'), { name: isolate(item.name) }))
         setPending((prev) => prev.filter((p) => p.id !== item.id))
         // The row moves from pending -> approved; refresh the approved list so it appears there.
         await loadApproved()
@@ -225,7 +226,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
         )
         if (error) throw error
         pendingFocus.current = { id: focusAfterRowRemoval(pending.map((p) => p.id), item.id) }
-        setStatus(formatMessage(adminResourcesT(locale, 'rejectedStatus'), { name: isolate(item.name) }))
+        announce(setStatus, formatMessage(adminResourcesT(locale, 'rejectedStatus'), { name: isolate(item.name) }))
         setPending((prev) => prev.filter((p) => p.id !== item.id))
       } catch (err) {
         logger.error('admin.business.reject', err, { org_id: item.id, outcome: 'error' })
@@ -306,7 +307,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
         // then return it to the row's Edit button.
         approvedHeading.current?.focus()
         approvedFocus.current = { id: item.id }
-        setStatus(formatMessage(orgFormT(locale, 'savedUpdated'), { name: isolate(draft.name.trim()) }))
+        announce(setStatus, formatMessage(orgFormT(locale, 'savedUpdated'), { name: isolate(draft.name.trim()) }))
         setEditingId(null)
         setDraft(null)
         await loadApproved()
@@ -327,9 +328,9 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
 
   const handleToggleActive = useCallback(
     async (item: AdminBusiness) => {
-      if (togglingId) return
+      if (togglingIds.has(item.id)) return
       const next = !item.is_active
-      setTogglingId(item.id)
+      setTogglingIds((ids) => new Set(ids).add(item.id))
       setApprovedError(null)
       // Truthful optimistic toggle: flip is_active in place (badge + button update, the row STAYS in
       // the list so both directions stay visible), then AWAIT the persist and revert on failure. The
@@ -337,16 +338,20 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
       setApproved((prev) => prev.map((b) => (b.id === item.id ? { ...b, is_active: next } : b)))
       try {
         await adminSetBusinessActive(supabase, item.id, next)
-        setStatus(formatMessage(orgFormT(locale, next ? 'orgReactivated' : 'orgDeactivated'), { name: isolate(item.name) }))
+        announce(setStatus, formatMessage(orgFormT(locale, next ? 'orgReactivated' : 'orgDeactivated'), { name: isolate(item.name) }))
       } catch (err) {
         setApproved((prev) => prev.map((b) => (b.id === item.id ? { ...b, is_active: item.is_active } : b)))
         logger.error('admin.business.set_active', err, { org_id: item.id, active: next, outcome: 'error' })
         setApprovedError(formatMessage(orgFormT(locale, 'toggleFailed'), { name: isolate(item.name) }))
       } finally {
-        setTogglingId(null)
+        setTogglingIds((ids) => {
+          const left = new Set(ids)
+          left.delete(item.id)
+          return left
+        })
       }
     },
-    [supabase, togglingId, locale]
+    [supabase, togglingIds, locale]
   )
 
   // "Edit in admin" link that opened nothing, and the action result line. Rendered from the first
@@ -446,7 +451,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
                       <Button
                         id={pendingApproveId(item.id)}
                         size="sm"
-                        className="flex-1 bg-green-700 hover:bg-green-800 text-white h-8 text-xs aria-disabled:opacity-60"
+                        className="flex-1 bg-green-700 hover:bg-green-800 text-white h-8 text-xs"
                         onClick={() => { if (!busy) void handleApprove(item) }}
                         aria-disabled={busy || undefined}
                         aria-label={namedControl(t('approve'), item.name)}
@@ -460,7 +465,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
                       </Button>
                       <Button
                         size="sm"
-                        className={`flex-1 h-8 text-xs aria-disabled:opacity-60 ${DESTRUCTIVE_BUTTON_CLASS}`}
+                        className={`flex-1 h-8 text-xs ${DESTRUCTIVE_BUTTON_CLASS}`}
                         onClick={() => { if (!busy) void handleReject(item) }}
                         aria-disabled={busy || undefined}
                         aria-label={namedControl(t('reject'), item.name)}
@@ -505,7 +510,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
             {approved.map((item) => {
               const isEditing = editingId === item.id
               const isSaving = savingId === item.id
-              const isToggling = togglingId === item.id
+              const isToggling = togglingIds.has(item.id)
               const addr = [item.address, item.city, item.state].filter(Boolean).join(', ')
               return (
                 <li key={item.id} className="rounded-xl border border-stone-200 bg-white p-4">
@@ -565,7 +570,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
                               setRevealId(item.id)
                             }}
                             aria-disabled={isToggling || undefined}
-                            className={`min-h-6 rounded-sm text-[#4a5d23] hover:text-[#3d4d1c] text-xs font-medium inline-flex items-center gap-1 aria-disabled:opacity-60 ${FOCUS_RING}`}
+                            className={`min-h-6 rounded-sm text-[#4a5d23] hover:text-[#3d4d1c] text-xs font-medium inline-flex items-center gap-1 ${FOCUS_RING}`}
                             aria-label={namedControl(tr('actionEdit'), item.name)}
                           >
                             <Pencil className="h-3 w-3" aria-hidden="true" /> {tr('actionEdit')}
@@ -578,7 +583,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
                               (item.is_active
                                 ? 'text-red-700 hover:text-red-800'
                                 : 'text-[#4a5d23] hover:text-[#3d4d1c]') +
-                              ` min-h-6 rounded-sm text-xs font-medium inline-flex items-center gap-1 aria-disabled:opacity-60 ${FOCUS_RING}`
+                              ` min-h-6 rounded-sm text-xs font-medium inline-flex items-center gap-1 ${FOCUS_RING}`
                             }
                             aria-label={namedControl(tr(item.is_active ? 'actionDeactivate' : 'actionReactivate'), item.name)}
                           >
@@ -679,7 +684,11 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
                       <div className="flex flex-wrap gap-2">
                         <Button
                           size="sm"
-                          className="bg-[#4a5d23] hover:bg-[#3d4d1c] text-white h-8 text-xs aria-disabled:opacity-60"
+                          className={
+                            draft.name.trim()
+                              ? 'bg-[#4a5d23] hover:bg-[#3d4d1c] text-white h-8 text-xs'
+                              : 'bg-stone-200 text-stone-700 hover:bg-stone-200 h-8 text-xs'
+                          }
                           onClick={() => void handleSaveEdit(item)}
                           aria-disabled={isSaving || !draft.name.trim() || undefined}
                         >
@@ -692,7 +701,7 @@ export function BusinessesTab({ locale }: { locale: Locale }) {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 border-stone-500 text-xs aria-disabled:opacity-60"
+                          className="h-8 border-stone-500 text-xs"
                           onClick={() => { if (!isSaving) cancelEdit() }}
                           aria-disabled={isSaving || undefined}
                         >

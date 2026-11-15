@@ -24,7 +24,11 @@ import { moderationCount } from '@/lib/i18n-admin-moderation'
 import { eventMemberT } from '@/lib/i18n-event-member'
 import { CHECKIN_COUNT, PEOPLE_CONFIRMED, PEOPLE_WORD, orgAdminT } from '@/lib/i18n-org-admin'
 import { namedControl } from '@/lib/i18n-admin-resources'
-import { afterLayout, focusAfterRowRemoval } from './row-focus'
+import { afterLayout, announce, focusAfterRowRemoval } from './row-focus'
+
+/** The walk-in stepper's +/- buttons; at a bound a solid grey (not a dim, so the ring keeps contrast). */
+const STEP_CLASS =
+  'h-10 w-10 rounded-full border-2 border-stone-500 bg-white text-stone-700 font-bold hover:border-[#4a5d23] flex items-center justify-center aria-disabled:bg-stone-200 aria-disabled:text-stone-700 aria-disabled:hover:border-stone-500'
 
 /** Each waiting row's Confirm button. */
 export const kioskConfirmId = (userId: string) => `kiosk-confirm-${userId}`
@@ -81,6 +85,20 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
   const loadFailing = useRef(false)
   // A confirmed person leaves the waiting list: focus their next neighbour's Confirm, else Add household.
   const walkinButton = useRef<HTMLButtonElement | null>(null)
+  // The result line clears 2.5 s after the LAST result: one timer, replaced by each new result.
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showFlash = useCallback((text: string) => {
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+    // Emptied, then filled after layout: a repeated identical result is announced again.
+    announce(setFlash, text)
+    flashTimer.current = setTimeout(() => {
+      flashTimer.current = null
+      setFlash(null)
+    }, 2500)
+  }, [])
+  useEffect(() => () => {
+    if (flashTimer.current) clearTimeout(flashTimer.current)
+  }, [])
 
   const fetchAttendance = useCallback(async () => {
     const { data: j, error } = await supabase.rpc('event_attendance', { p_occurrence: occurrence.id })
@@ -132,7 +150,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
       setActionError(formatMessage(orgAdminT(locale, 'kioskConfirmFailed'), { name: isolate(att.name) }))
     } else {
       logger.info('admin.checkin.kiosk.confirm', { occurrence_id: occurrence.id, method: 'organizer_kiosk' })
-      setFlash(formatMessage(orgAdminT(locale, 'flashConfirmed'), { name: isolate(att.name) }))
+      showFlash(formatMessage(orgAdminT(locale, 'flashConfirmed'), { name: isolate(att.name) }))
       const waitingIds = (data?.attendees ?? []).filter((a) => a.status === 'early').map((a) => a.user_id)
       const next = focusAfterRowRemoval(waitingIds, att.user_id)
       await fetchAttendance()
@@ -141,13 +159,13 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
       })
     }
     setBusyId(null)
-    setTimeout(() => setFlash(null), 2500)
-  }, [busyId, supabase, occurrence.id, fetchAttendance, locale, data])
+  }, [busyId, supabase, occurrence.id, fetchAttendance, locale, data, showFlash])
 
   // Add an anonymous household (walk-in with no account). p_user = null.
   const addWalkin = useCallback(async () => {
     if (busyId) return
     setBusyId('walkin')
+    setActionError(null)
     const { error } = await supabase.rpc('organizer_confirm', {
       p_occurrence: occurrence.id,
       p_user: undefined,
@@ -158,14 +176,15 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
       setActionError(orgAdminT(locale, 'kioskWalkinFailed'))
     } else {
       logger.info('admin.checkin.kiosk.walkin', { occurrence_id: occurrence.id, household_size: walkinSize })
-      setFlash(orgAdminT(locale, 'flashWalkin'))
+      showFlash(orgAdminT(locale, 'flashWalkin'))
       setWalkinSize(1)
       await fetchAttendance()
     }
     setBusyId(null)
-    setTimeout(() => setFlash(null), 2500)
-  }, [busyId, supabase, occurrence.id, walkinSize, fetchAttendance, locale])
+  }, [busyId, supabase, occurrence.id, walkinSize, fetchAttendance, locale, showFlash])
 
+  const atMin = walkinSize <= HOUSEHOLD_MIN
+  const atMax = walkinSize >= HOUSEHOLD_MAX
   const when = formatEventWhen(occurrence.starts_at, occurrence.ends_at, occurrence.time_zone, locale)
 
   const rate = (r: number | null) => (r === null || Number.isNaN(r) ? formatRatePct(r) : formatPercent(Math.round(r * 100), locale))
@@ -244,7 +263,7 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
                         onClick={() => confirmAttendee(att)}
                         aria-disabled={busyId !== null || undefined}
                         aria-label={namedControl(t('confirm'), att.name)}
-                        className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-lime-700 hover:bg-lime-800 aria-disabled:bg-lime-700/60 text-white text-sm font-semibold px-3 py-2 transition-colors"
+                        className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-lime-700 hover:bg-lime-800 text-white text-sm font-semibold px-3 py-2 transition-colors"
                       >
                         {busyId === att.user_id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserCheck className="h-4 w-4" aria-hidden="true" />}
                         {t('confirm')}
@@ -259,32 +278,42 @@ export function OrganizerCheckinDisplay({ occurrence, open, onOpenChange, locale
             <section>
               <h2 className="text-sm font-semibold text-stone-700 uppercase tracking-wide mb-2">{t('walkinTitle')}</h2>
               <div className="rounded-xl border border-stone-200 bg-white px-4 py-4 flex flex-wrap items-center justify-between gap-4">
+                {/* Two buttons and a live value (not the APG spinbutton): the kiosk is used by touch at a
+                    door, where two large +/- targets beat arrow keys on a focused number, and each press
+                    is heard as the new size with its word ("3 people"). At a bound the button is
+                    aria-disabled (it keeps focus) and its press does nothing. */}
                 <div className="flex items-center gap-4">
                   <button
                     type="button"
-                    onClick={() => setWalkinSize((n) => Math.max(HOUSEHOLD_MIN, n - 1))}
-                    className="h-10 w-10 rounded-full border-2 border-stone-500 bg-white text-stone-700 font-bold hover:border-[#4a5d23] flex items-center justify-center"
+                    data-testid="walkin-decrease"
+                    onClick={() => { if (!atMin) setWalkinSize((n) => Math.max(HOUSEHOLD_MIN, n - 1)) }}
+                    aria-disabled={atMin || undefined}
+                    className={STEP_CLASS}
                     aria-label={eventMemberT(locale, 'householdDecrease')}
                   >
                     <Minus className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <span className="text-3xl font-bold text-stone-900 min-w-[2.5rem] text-center tabular-nums">{formatCount(walkinSize, locale)}</span>
+                  <span data-testid="walkin-size" aria-live="polite" aria-atomic="true" className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-stone-900 min-w-[2.5rem] text-center tabular-nums">{formatCount(walkinSize, locale)}</span>
+                    <span className="text-xs text-stone-600">{pluralMessage(PEOPLE_WORD[locale] ?? PEOPLE_WORD.en, walkinSize, locale)}</span>
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setWalkinSize((n) => Math.min(HOUSEHOLD_MAX, n + 1))}
-                    className="h-10 w-10 rounded-full border-2 border-stone-500 bg-white text-stone-700 font-bold hover:border-[#4a5d23] flex items-center justify-center"
+                    data-testid="walkin-increase"
+                    onClick={() => { if (!atMax) setWalkinSize((n) => Math.min(HOUSEHOLD_MAX, n + 1)) }}
+                    aria-disabled={atMax || undefined}
+                    className={STEP_CLASS}
                     aria-label={eventMemberT(locale, 'householdIncrease')}
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <span className="text-xs text-stone-600">{pluralMessage(PEOPLE_WORD[locale] ?? PEOPLE_WORD.en, walkinSize, locale)}</span>
                 </div>
                 <button
                   type="button"
                   ref={walkinButton}
                   onClick={() => { if (busyId === null) void addWalkin() }}
                   aria-disabled={busyId !== null || undefined}
-                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#4a5d23] hover:bg-[#3d4d1c] aria-disabled:bg-[#4a5d23]/60 text-white text-sm font-semibold px-4 py-2.5 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#4a5d23] hover:bg-[#3d4d1c] text-white text-sm font-semibold px-4 py-2.5 transition-colors"
                 >
                   {busyId === 'walkin' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserPlus className="h-4 w-4" aria-hidden="true" />}
                   {t('addHousehold')}

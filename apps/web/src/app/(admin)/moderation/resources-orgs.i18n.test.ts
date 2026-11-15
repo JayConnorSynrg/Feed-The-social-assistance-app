@@ -709,6 +709,7 @@ describe('Resources: focus and announcements', () => {
     ;(byLabelStart(tree, R('ko', 'reject'))[0].props.onClick as () => void)()
     let after = await c.flush()
     runFrames()
+    after = c.rerender()
     expect(chevrons.get(CLINIC)!.focus).toHaveBeenCalledTimes(1)
     expect(statusText(after, 'resources-queue-status')).toContain('مخزن الحي')
     expect(statusText(after, 'resources-queue-status')).toContain(R('ko', 'rejectedStatus').replace('{name}', '').trim().slice(-4))
@@ -748,6 +749,7 @@ describe('Resources: focus and announcements', () => {
     expect(statusText(after, 'resources-queue-status')).toBe('')
     const preventDefault = vi.fn()
     ;(findAll(after, (e) => e.type === ResourceEditDialog)[0].props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault })
+    runFrames()
     after = c.rerender()
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(chevrons.get(CLINIC)!.focus).toHaveBeenCalledTimes(1)
@@ -772,6 +774,7 @@ describe('Businesses: focus and announcements', () => {
     ;(byLabelStart(tree, R('ko', 'approve'))[0].props.onClick as () => void)()
     tree = await c.flush()
     runFrames()
+    tree = c.rerender()
     expect(next.focus).toHaveBeenCalledTimes(1)
     expect(statusText(tree, 'businesses-status')).toContain('مقهى الزاوية')
     const heading = fakeNode()
@@ -798,6 +801,7 @@ describe('Businesses: focus and announcements', () => {
     ;(findAll(tree, (e) => e.props.children === R('ko', 'save'))[0].props.onClick as () => void)()
     tree = await c.flush()
     runFrames()
+    tree = c.rerender()
     expect(edit.focus).toHaveBeenCalledTimes(2)
     expect(statusText(tree, 'businesses-status')).toBe(orgFormT('ko', 'savedUpdated').replace('{name}', '\u2068Café du Coin\u2069'))
     const toggle = byLabelStart(tree, orgFormT('ko', 'actionDeactivate'))[0]
@@ -807,6 +811,8 @@ describe('Businesses: focus and announcements', () => {
     expect(during.some((b) => b.props['aria-disabled'] === true)).toBe(true)
     expect(during.every((b) => b.props.disabled === undefined)).toBe(true)
     tree = await c.flush()
+    runFrames()
+    tree = c.rerender()
     expect(statusText(tree, 'businesses-status')).toBe(orgFormT('ko', 'orgDeactivated').replace('{name}', '\u2068Café du Coin\u2069'))
   })
 })
@@ -823,6 +829,7 @@ describe('the roster and the kiosk: focus and announcements', () => {
     h.from.organization_members = { data: [MEMBERS[1]], error: null }
     let after = await c.flush()
     runFrames()
+    after = c.rerender()
     expect(next.focus).toHaveBeenCalledTimes(1)
     expect((after as unknown as { props: { status: string } }).props.status).toBe(O('ko', 'memberRemoved'))
     const add = fakeNode()
@@ -846,6 +853,7 @@ describe('the roster and the kiosk: focus and announcements', () => {
     ;(findAll(tree, (e) => e.props.id === kioskConfirmId('a1'))[0].props.onClick as () => void)()
     tree = await c.flush()
     runFrames()
+    c.rerender()
     expect(next.focus).toHaveBeenCalledTimes(1)
     const status = findAll(content(), (e) => e.props.role === 'status')[0]
     expect(markupText(html(el('div', null, status.props.children as never)))).toContain('Nguyễn An')
@@ -954,6 +962,275 @@ describe('failures show a translated line and write one row with their code only
       const content = findAll(c.tree(), (e) => e.type === DialogPrimitive.Content)[0]
       expect(text(inDialog(content.props.children))).toContain(O('ko', 'kioskLoadFailed'))
       expect(logged()).not.toContain('أمينة')
+      c.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// PR #255 fix round: never lose focus, hear every result exactly once — repeats included
+// ---------------------------------------------------------------------------------------------
+
+type RosterProps = {
+  status: string
+  removingId: string | null
+  add: { error: string | null }
+  rosterError: string | null
+  onRemove: (id: string) => Promise<void>
+  onChangeRole: (id: string, role: string) => Promise<void>
+  onAddUserIdChange: (v: string) => void
+  onAdd: () => Promise<void>
+}
+const rosterProps = (c: { tree: () => unknown }) => (c.tree() as { props: RosterProps }).props
+const rosterView = (over: Record<string, unknown>) =>
+  mount(() =>
+    OrgMembersView({
+      orgId: 'org', locale: 'ko', members: MEMBERS, loading: false, loadError: null, rosterError: null, status: '', readOnly: false,
+      add: { userId: 'u', role: 'member', adding: false, error: null },
+      onAddUserIdChange: () => {}, onAddRoleChange: () => {}, onAdd: () => {}, onRemove: () => {}, onChangeRole: () => {},
+      ...over,
+    } as never),
+  ).tree()
+
+describe('B1 — bulk approve: Confirm takes focus and is described by the question', () => {
+  it('opening the confirmation focuses Confirm, which points at the question', async () => {
+    const { c, tree } = await openQueue('ko')
+    const open = findAll(tree, (e) => e.props.ref && String(markupText(html(el('span', null, e.props.children as never)))).includes(R('ko', 'bulkApprove').split('(')[0].trim()))[0]
+    ;(open.props.onClick as () => void)()
+    const after = c.rerender()
+    const confirm = findAll(after, (e) => e.props['aria-describedby'] === 'resources-bulk-question')
+    expect(confirm).toHaveLength(1)
+    expect(findAll(after, (e) => e.props.id === 'resources-bulk-question')).toHaveLength(1)
+    const node = fakeNode()
+    ;(confirm[0].props.ref as { current: unknown }).current = node
+    runFrames()
+    expect(node.focus).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('B2 — the roster: re-reads keep the table; role change and Remove keep focus', () => {
+  it('a re-read with rows on screen keeps the table (aria-busy), never the loading line; an empty roster shows it', () => {
+    const busy = html(rosterView({ loading: true }))
+    expect(busy).toContain('<table')
+    expect(busy).toContain('aria-busy="true"')
+    expect(markupText(busy)).not.toContain(O('ko', 'membersLoading'))
+    expect(markupText(html(rosterView({ loading: true, members: [] })))).toContain(O('ko', 'membersLoading'))
+  })
+
+  it('after a role change focus returns to that row’s role trigger (stable id)', async () => {
+    const c = mount(() => OrgMembers({ orgId: 'org', locale: 'ko' }))
+    await c.flush()
+    const trigger = fakeNode()
+    h.elements.set('roster-org-role-m2', trigger)
+    h.from.organization_members = { data: [{ id: 'm2' }], error: null }
+    await rosterProps(c).onChangeRole('m2', 'admin')
+    h.from.organization_members = { data: MEMBERS, error: null }
+    await c.flush()
+    runFrames()
+    expect(trigger.focus).toHaveBeenCalledTimes(1)
+    expect(findAll(rosterView({}), (e) => e.props.id === 'roster-org-role-m2')).toHaveLength(1)
+  })
+
+  it('Remove moves focus BEFORE the roster re-reads (never through <body>); a second press on the busy row does nothing', async () => {
+    const c = mount(() => OrgMembers({ orgId: 'org', locale: 'ko' }))
+    await c.flush()
+    const next = { focus: vi.fn(() => h.calls.push(['focus'])) }
+    h.elements.set(rosterRemoveId('org', 'm2'), next)
+    h.calls.length = 0
+    h.from.organization_members = { data: [{ id: 'm1' }], error: null }
+    const first = rosterProps(c).onRemove('m1')
+    c.rerender()
+    expect(rosterProps(c).removingId).toBe('m1')
+    await rosterProps(c).onRemove('m1')
+    await first
+    const order = h.calls.map((x) => (x[0] === 'focus' ? 'focus' : `${x[0]}.${x[1]}`))
+    expect(order.filter((x) => x === 'organization_members.delete')).toHaveLength(1)
+    expect(order.indexOf('focus')).toBeGreaterThan(order.indexOf('organization_members.delete'))
+    expect(order.indexOf('focus')).toBeLessThan(order.lastIndexOf('organization_members.select'))
+    const removeBusy = findAll(rosterView({ removingId: 'm1' }), (e) => e.props.id === rosterRemoveId('org', 'm1'))[0]
+    expect([removeBusy.props['aria-disabled'], removeBusy.props.disabled]).toEqual([true, undefined])
+  })
+})
+
+describe('H1 — an add failure is always shown and announced', () => {
+  it('the add form has its own always-mounted alert beside the roster’s', () => {
+    const quiet = rosterView({})
+    expect(findAll(quiet, (e) => e.props['data-testid'] === 'roster-add-alert-org')[0].props.role).toBe('alert')
+    const both = rosterView({ rosterError: O('ko', 'removeFailed'), add: { userId: 'u', role: 'member', adding: false, error: O('ko', 'addDuplicate') } })
+    const t = markupText(html(both))
+    expect(t).toContain(O('ko', 'removeFailed'))
+    expect(t).toContain(O('ko', 'addDuplicate'))
+  })
+
+  it('starting an add clears an earlier remove failure', async () => {
+    const c = mount(() => OrgMembers({ orgId: 'org', locale: 'ko' }))
+    await c.flush()
+    h.from.organization_members = { data: [], error: null }
+    await rosterProps(c).onRemove('m1')
+    await c.flush()
+    expect(rosterProps(c).rosterError).toBe(O('ko', 'removeFailed'))
+    rosterProps(c).onAddUserIdChange('u-new')
+    c.rerender()
+    h.from.organization_members = { data: null, error: { code: '23505' } }
+    await rosterProps(c).onAdd()
+    await c.flush()
+    expect(rosterProps(c).rosterError).toBeNull()
+    expect(rosterProps(c).add.error).toBe(O('ko', 'addDuplicate'))
+  })
+})
+
+describe('H2 — the walk-in stepper is heard and safe at its bounds', () => {
+  const kiosk = () => mount(() => OrganizerCheckinDisplay({ occurrence: OCCURRENCE, open: true, onOpenChange: () => {}, locale: 'en' }))
+  const get = (tree: unknown, id: string) => findAll(tree, (e) => e.props['data-testid'] === id)[0]
+
+  it('the value is a polite, atomic live region with the people word', async () => {
+    const c = kiosk()
+    const tree = await c.flush()
+    const value = get(tree, 'walkin-size')
+    expect([value.props['aria-live'], value.props['aria-atomic']]).toEqual(['polite', 'true'])
+    expect(markupText(html(value as never))).toBe('1person')
+    ;(get(tree, 'walkin-increase').props.onClick as () => void)()
+    expect(markupText(html(get(c.rerender(), 'walkin-size') as never))).toBe('2people')
+  })
+
+  it('at a bound the button is aria-disabled (never disabled) and its press does nothing', async () => {
+    const c = kiosk()
+    let tree = await c.flush()
+    const dec = get(tree, 'walkin-decrease')
+    expect([dec.props['aria-disabled'], dec.props.disabled]).toEqual([true, undefined])
+    ;(dec.props.onClick as () => void)()
+    tree = c.rerender()
+    expect(markupText(html(get(tree, 'walkin-size') as never))).toBe('1person')
+    for (let i = 0; i < 25; i++) {
+      ;(get(c.tree(), 'walkin-increase').props.onClick as () => void)()
+      c.rerender()
+    }
+    tree = c.tree()
+    expect(markupText(html(get(tree, 'walkin-size') as never))).toBe('20people')
+    expect(get(tree, 'walkin-increase').props['aria-disabled']).toBe(true)
+    expect(get(tree, 'walkin-decrease').props['aria-disabled']).toBeUndefined()
+  })
+})
+
+describe('H3 — a repeated identical result is announced again', () => {
+  it('announce() empties the region, then fills it after layout', async () => {
+    const { announce } = await import('./row-focus')
+    const seen: string[] = []
+    announce((v) => seen.push(v), 'Saved')
+    expect(seen).toEqual([''])
+    runFrames()
+    expect(seen).toEqual(['', 'Saved'])
+  })
+
+  it('two identical role changes in a row: the status goes text → empty → text', async () => {
+    const c = mount(() => OrgMembers({ orgId: 'org', locale: 'ko' }))
+    await c.flush()
+    h.from.organization_members = { data: [{ id: 'm2' }], error: null }
+    await rosterProps(c).onChangeRole('m2', 'admin')
+    await c.flush()
+    runFrames()
+    c.rerender()
+    expect(rosterProps(c).status).toBe(O('ko', 'roleChanged'))
+    h.from.organization_members = { data: [{ id: 'm2' }], error: null }
+    await rosterProps(c).onChangeRole('m2', 'member')
+    await c.flush()
+    expect(rosterProps(c).status).toBe('')
+    runFrames()
+    c.rerender()
+    expect(rosterProps(c).status).toBe(O('ko', 'roleChanged'))
+  })
+
+  it('every W4 status setter goes through announce()', () => {
+    const SRC = fileURLToPath(new URL('.', import.meta.url))
+    for (const f of ['resources-tab.tsx', 'manage-resources-tab.tsx', 'businesses-tab.tsx', 'orgs-section.tsx', 'organizer-checkin-display.tsx', 'org/[id]/org-admin-shell.tsx', 'org/org-overview.tsx']) {
+      const src = readFileSync(SRC + f, 'utf8')
+      expect(src, f).not.toMatch(/\bset(Status|Notice)\((?!'')[^)]/)
+      expect(src, f).not.toMatch(/\bsetFlash\((?!null\))/)
+    }
+  })
+
+  it('no aria-disabled dim is left in a W4 file (the focus ring keeps full contrast)', () => {
+    const SRC = fileURLToPath(new URL('.', import.meta.url))
+    for (const f of ['resources-tab.tsx', 'manage-resources-tab.tsx', 'businesses-tab.tsx', 'resource-edit-dialog.tsx', 'orgs-section.tsx', 'organizer-checkin-display.tsx']) {
+      expect(readFileSync(SRC + f, 'utf8'), f).not.toMatch(/aria-disabled:(opacity-|bg-[^\s'"`]*\/\d)/)
+    }
+  })
+})
+
+describe('H5 — Discover keeps focus while it runs', () => {
+  it('no query: aria-disabled (solid grey), a press sends nothing; running: the boxes are readOnly, the button aria-disabled, a second press sends nothing', async () => {
+    let fetches = 0
+    vi.stubGlobal('fetch', () => {
+      fetches++
+      return new Promise(() => {})
+    })
+    const { c, tree } = await openQueue('ko')
+    const button = () => findAll(c.tree(), (e) => e.props['data-testid'] === 'resources-discover')[0]
+    expect([button().props['aria-disabled'], button().props.disabled]).toEqual([true, undefined])
+    expect(String(button().props.className)).toContain('bg-stone-200 text-stone-700')
+    ;(button().props.onClick as () => void)()
+    await c.flush(2)
+    expect(fetches).toBe(0)
+    ;(findAll(tree, (e) => e.props.id === 'resources-discover-query')[0].props.onChange as (e: unknown) => void)({ target: { value: 'food banks' } })
+    c.rerender()
+    ;(button().props.onClick as () => void)()
+    await c.flush(2)
+    expect(fetches).toBe(1)
+    for (const id of ['resources-discover-query', 'resources-discover-near']) {
+      const box = findAll(c.tree(), (e) => e.props.id === id)[0]
+      expect([box.props.readOnly, box.props.disabled], id).toEqual([true, undefined])
+    }
+    expect([button().props['aria-disabled'], button().props.disabled]).toEqual([true, undefined])
+    ;(button().props.onClick as () => void)()
+    await c.flush(2)
+    expect(fetches).toBe(1)
+  })
+})
+
+describe('security lows', () => {
+  it('a busy toggle blocks only its own row: another row’s toggle still runs', async () => {
+    const c = mount(() => BusinessesTab({ locale: 'ko' }))
+    const tree = await c.flush()
+    reset()
+    ;(byLabelStart(tree, orgFormT('ko', 'actionDeactivate'))[0].props.onClick as () => void)()
+    c.rerender()
+    ;(byLabelStart(c.tree(), orgFormT('ko', 'actionReactivate')).find((b) => String(b.props['aria-label']).includes('Old Mill'))!.props.onClick as () => void)()
+    await c.flush()
+    expect(h.calls).toEqual([['set_active', 'b3', false], ['set_active', 'b4', true]])
+  })
+
+  it('the kiosk: fail → recover → fail writes two load rows; a failed confirm writes its own row; a walk-in clears the old error', async () => {
+    vi.useFakeTimers()
+    try {
+      h.rpc.event_attendance = { data: null, error: { code: '42501' } }
+      const c = mount(() => OrganizerCheckinDisplay({ occurrence: OCCURRENCE, open: true, onOpenChange: () => {}, locale: 'ko' }))
+      await vi.advanceTimersByTimeAsync(0)
+      h.rpc.event_attendance = { data: ATTENDANCE, error: null }
+      await vi.advanceTimersByTimeAsync(10_000)
+      h.rpc.event_attendance = { data: null, error: { code: '57014' } }
+      await vi.advanceTimersByTimeAsync(10_000)
+      c.rerender()
+      expect(warn().filter(([n]) => n === 'admin.checkin.kiosk.failed')).toEqual([
+        ['admin.checkin.kiosk.failed', { op: 'load', code: '42501' }],
+        ['admin.checkin.kiosk.failed', { op: 'load', code: '57014' }],
+      ])
+      vi.mocked(logger.warn).mockClear()
+      h.rpc.event_attendance = { data: ATTENDANCE, error: null }
+      await vi.advanceTimersByTimeAsync(10_000)
+      c.rerender()
+      h.rpc.organizer_confirm = { data: null, error: { code: 'P0001', message: 'already confirmed "Nguyễn An"' } }
+      ;(findAll(c.tree(), (e) => e.props.id === kioskConfirmId('a1'))[0].props.onClick as () => void)()
+      await vi.advanceTimersByTimeAsync(0)
+      c.rerender()
+      expect(warn()).toEqual([['admin.checkin.kiosk.failed', { op: 'confirm', code: 'P0001' }]])
+      const alert = () => findAll(findAll(c.tree(), (e) => e.type === DialogPrimitive.Content)[0], (e) => e.props.role === 'alert')[0]
+      expect(markupText(html(el('div', null, alert().props.children as never)))).toContain('Nguyễn An')
+      h.rpc.organizer_confirm = { data: null, error: null }
+      ;(findAll(c.tree(), (e) => e.type === 'button' && Array.isArray(e.props.children) && (e.props.children as unknown[]).includes(O('ko', 'addHousehold')))[0].props.onClick as () => void)()
+      c.rerender()
+      expect(markupText(html(el('div', null, alert().props.children as never)))).toBe('')
       c.unmount()
     } finally {
       vi.useRealTimers()

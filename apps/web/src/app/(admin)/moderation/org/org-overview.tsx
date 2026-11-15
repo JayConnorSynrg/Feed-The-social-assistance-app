@@ -22,6 +22,7 @@ import type { Locale } from '@/lib/i18n'
 import { formatCount } from '@/lib/i18n-intl'
 import { orgAdminT, type OrgAdminMessages } from '@/lib/i18n-org-admin'
 import { ExtendSeriesButton } from '../extend-series-button'
+import { announce } from '../row-focus'
 import { fetchEndingSoon, fetchOrgOverview, type EndingSoonSeries, type OrgOverviewCounts } from './org-overview-data'
 
 const TILES: Array<{ key: keyof OrgOverviewCounts; label: keyof OrgAdminMessages }> = [
@@ -138,7 +139,7 @@ function EndingSoonSection({ orgId, locale }: { orgId: string; locale: Locale })
       }}
       onStart={() => setNotice('')}
       onExtended={(until) => {
-        setNotice(formatMessage(eventFormT(locale, 'seriesExtended'), { date: formatCalendarDate(until.slice(0, 10), locale) }))
+        announce(setNotice, formatMessage(eventFormT(locale, 'seriesExtended'), { date: formatCalendarDate(until.slice(0, 10), locale) }))
         // The extended series leaves this list (it now ends six months out): continue from the heading.
         headingRef.current?.focus()
         setReload((n) => n + 1)

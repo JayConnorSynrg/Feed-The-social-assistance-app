@@ -31,7 +31,7 @@ import { formatCount } from '@/lib/i18n-intl'
 import { orgFormT } from '@/lib/i18n-org-forms'
 import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { adminResourcesT, namedControl } from '@/lib/i18n-admin-resources'
-import { afterLayout } from './row-focus'
+import { afterLayout, announce } from './row-focus'
 import { US_STATES, STATE_TO_ABBR, normalizeState } from '@/lib/us-states'
 import { needsLocation } from '@/lib/geocode-accuracy'
 import { MapView, type MapViewHandle } from '@/components/map/map-view'
@@ -411,7 +411,7 @@ export function ManageResourcesTab({ locale }: { locale: Locale }) {
               <Button
                 onClick={() => { if (!loading) void loadResources() }}
                 aria-disabled={loading || undefined}
-                className="w-full bg-lime-700 hover:bg-lime-800 text-white aria-disabled:opacity-60"
+                className="w-full bg-lime-700 hover:bg-lime-800 text-white"
               >
                 {loading ? (
                   <><Loader2 className="h-4 w-4 me-2 animate-spin" aria-hidden="true" />{t('loading')}</>
@@ -593,7 +593,7 @@ export function ManageResourcesTab({ locale }: { locale: Locale }) {
             variant="outline"
             onClick={() => { if (!loadingMore) void loadMore() }}
             aria-disabled={loadingMore || undefined}
-            className="border-stone-500 text-stone-700 aria-disabled:opacity-60"
+            className="border-stone-500 text-stone-700"
           >
             {loadingMore ? (
               <><Loader2 className="h-4 w-4 me-2 animate-spin" aria-hidden="true" />{t('loading')}</>
@@ -619,7 +619,7 @@ export function ManageResourcesTab({ locale }: { locale: Locale }) {
           restoreFocusAfterResourceEdit(event, editedIdRef.current, document)
           const text = savedAnnouncement.current
           savedAnnouncement.current = null
-          if (text) setStatus(text)
+          if (text) announce(setStatus, text)
         }}
       />
     </div>

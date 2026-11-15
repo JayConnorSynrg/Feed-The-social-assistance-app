@@ -18,3 +18,13 @@ export function afterLayout(fn: () => void): void {
   const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (f: () => void) => setTimeout(f, 0)
   nextFrame(fn)
 }
+
+/**
+ * Put `text` in an always-mounted live region so it is announced every time — also when it equals
+ * the text already there (a repeated result): the region is emptied first and filled after layout,
+ * so assistive tech sees a change.
+ */
+export function announce(set: (text: string) => void, text: string): void {
+  set('')
+  afterLayout(() => set(text))
+}
