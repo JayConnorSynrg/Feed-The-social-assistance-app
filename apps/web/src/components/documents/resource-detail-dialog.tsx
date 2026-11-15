@@ -27,8 +27,8 @@ import { dir, type Locale } from '@/lib/i18n'
 import { documentsT, documentSize, type DocumentsKey } from '@/lib/i18n-documents'
 import { resourceCategoryLabel } from '@/lib/i18n-resource-categories'
 import { relativeAge } from '@/lib/relative-age'
-import { dateTimeFormatter, formatCount, formatPercent } from '@/lib/i18n-intl'
-import { browserTimeZone } from '@/lib/event-time'
+import { formatCount, formatPercent } from '@/lib/i18n-intl'
+import { formatCalendarDate } from '@/lib/event-time'
 import { formatMessage } from '@/lib/format-message'
 import { failureCode } from '@/lib/failure-code'
 import { logger } from '@/lib/logger'
@@ -286,7 +286,6 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
   }
 
   const categoryLabel = resource?.resource_category ? resourceCategoryLabel(resource.resource_category, locale) : ''
-  const shortDate = dateTimeFormatter(locale, browserTimeZone(), { month: 'short', day: 'numeric' })
   const iconButton = 'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-stone-700 hover:text-red-700 hover:bg-red-50'
   const addButton = 'bg-[#4a5d23] hover:bg-[#3d4d1c] text-white'
   const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
@@ -478,7 +477,8 @@ export function ResourceDetailDialog({ savedResourceId, open, onOpenChange }: Re
                         <div key={event.id} className="flex flex-wrap items-center gap-3">
                           <Calendar className="w-4 h-4 text-amber-700 flex-shrink-0" aria-hidden="true" />
                           <span className="text-sm font-medium text-stone-700 min-w-20 flex-shrink-0">
-                            {shortDate.format(new Date(event.event_date + 'T00:00:00'))}
+                            {/* A calendar date (YYYY-MM-DD, no time): never shifted through a zone. */}
+                            {formatCalendarDate(event.event_date, locale, { month: 'short', day: 'numeric' })}
                           </span>
                           {event.event_time && (
                             <span className="text-xs text-stone-700 flex-shrink-0" dir="ltr">

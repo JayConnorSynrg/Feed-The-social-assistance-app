@@ -91,7 +91,12 @@ Blob.prototype.arrayBuffer ??= function (this: Blob) {
   })
 }
 
+// The clock is fixed (only Date is faked; timers stay real for React and Radix), so ages and
+// dates never depend on when or where the suite runs.
+const NOW = new Date('2026-11-15T18:00:00Z')
+
 beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ['Date'] })
   h.error = null
   h.actionOk = true
   h.pdfPages = 0
@@ -105,6 +110,7 @@ beforeEach(() => {
   root = createRoot(container)
 })
 afterEach(() => {
+  vi.useRealTimers()
   act(() => root.unmount())
   container.remove()
   document.body.innerHTML = ''
@@ -128,6 +134,21 @@ describe('a saved resource’s detail dialog', () => {
     expect(dialog().textContent).toContain('11월 20일')
     expect(dialog().textContent).toContain('1.5MB')
     expect(dialog().textContent).not.toMatch(/Tasks|Schedule|Save Notes|Community Posts|Nov/)
+  })
+
+  // CI regression (81f71d7): in a UTC runtime the date read "11월 19일". The date-only value was
+  // parsed at local midnight and formatted in browserTimeZone(), which falls back to
+  // America/New_York for a zone without "/" ("UTC"). A calendar date now never passes a zone.
+  it.each(['UTC', 'America/Los_Angeles', 'Asia/Seoul', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'])('a calendar date reads the same day whatever the device zone (%s)', async (tz) => {
+    const saved = process.env.TZ
+    process.env.TZ = tz
+    try {
+      await render('ko', detail())
+      expect(dialog().textContent).toContain('11월 20일')
+      expect(dialog().textContent).not.toMatch(/11월 (19|21)일/)
+    } finally {
+      process.env.TZ = saved
+    }
   })
 
   it('Arabic: dir="rtl" on the dialog', async () => {
