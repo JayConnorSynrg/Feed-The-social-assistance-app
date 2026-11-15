@@ -54,3 +54,31 @@ export async function runPetitionExport(flag: InFlightFlag, petitionId: string, 
     flag.current = false
   }
 }
+
+/** What the section shows: the button's busy state, the status line, the alert line. */
+export interface ExportUi {
+  busy: boolean
+  status: string | null
+  error: string | null
+}
+
+export const IDLE_UI: ExportUi = { busy: false, status: null, error: null }
+
+/** A download starts: the status line says so (screen readers hear it); any old error is cleared. */
+export function startedUi(downloading: string): ExportUi {
+  return { busy: true, status: downloading, error: null }
+}
+
+/**
+ * A download ended. Done: the status line gives the count. Error: the status line is cleared first,
+ * so "Preparing CSV…" is never left beside the alert. A refused second tap ('busy') changes nothing.
+ */
+export function finishedUi(
+  current: ExportUi,
+  result: ExportRun,
+  text: { downloaded: (rowCount: number) => string; error: (code: string) => string },
+): ExportUi {
+  if (result.status === 'busy') return current
+  if (result.status === 'done') return { busy: false, status: text.downloaded(result.rowCount), error: null }
+  return { busy: false, status: null, error: text.error(result.code) }
+}

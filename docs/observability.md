@@ -411,7 +411,7 @@ through `privilegedFetch`, so one `x-request-id` is shared by every row below).
 | `petition.export` | `admin_actions` (via `record_admin_action`) | `actor_id`, `actor_tier`, `target_type='petition'`, `target_id`, `outcome` (`ok` · `error`), `reason` (the code), `details.row_count`, `request_id` | exactly once per attempt by a platform admin; a caller who is not one is refused before anything is read or written |
 | `admin.petition.export.complete` / `.error` | `app_logs` (browser) | `request_id` | the client's `privilegedFetch` latency row |
 
-The file is sent only after its `ok` audit row is written. No row carries a name, IP address or
+Only approved petitions can be exported (an admin's own draft is `not_found`). The file is sent only after its `ok` audit row is written. No row carries a name, IP address or
 device: the `request_id` joins the event to the audit row, which records the petition. The CSV holds
 Full Name, Signed At, Affirmation and Petition Version Hash only (`lib/petition-csv.ts`); IP address
 and user agent are read by `export_petition_signatures` on the server and dropped there. Reads are

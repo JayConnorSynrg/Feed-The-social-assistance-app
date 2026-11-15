@@ -16,8 +16,8 @@
  *   - UTF-8 with a byte-order mark, so Excel shows non-Latin names correctly;
  *   - RFC 4180: CRLF line ends; a field with a comma, double quote, CR or LF is
  *     quoted and its double quotes doubled;
- *   - formula-safe (CWE-1236): a cell starting with = + - @ TAB or CR gets a
- *     leading apostrophe so a spreadsheet shows it as text.
+ *   - formula-safe (CWE-1236): a cell starting (after any spaces) with = + - @
+ *     TAB or CR gets a leading apostrophe so a spreadsheet shows it as text.
  *
  * Pure and framework-free so it is unit-testable in isolation.
  */
@@ -47,9 +47,10 @@ export const UTF8_BOM = '﻿'
  * one of these can execute on open — CSV formula injection (CWE-1236).
  * Per the OWASP mitigation we prepend a single apostrophe so the cell is
  * treated as literal text. TAB (\t) and CR (\r) are included because some
- * spreadsheet importers strip them and re-evaluate the remaining payload.
+ * spreadsheet importers strip them and re-evaluate the remaining payload. Leading spaces are
+ * skipped first: some importers trim them, so ' =1+1' would also evaluate.
  */
-const FORMULA_TRIGGER = /^[=+\-@\t\r]/
+const FORMULA_TRIGGER = /^[ ]*[=+\-@\t\r]/
 
 /**
  * escapeCsvField — neutralize formula injection, then quote-and-escape one

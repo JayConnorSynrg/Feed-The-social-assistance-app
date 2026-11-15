@@ -85,11 +85,14 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   if (!isUuid(petitionId)) return auditedFail(400, 'invalid_id')
 
-  // Only approved petitions are visible (petition_select_approved), the same list the admin picks from.
+  // Approved petitions only — the list the admin picks from. The explicit status filter matters:
+  // RLS also shows a caller their own drafts (petitions_select_own_drafts), and exporting sets the
+  // withdrawal lock, so a direct POST must not reach a draft.
   const { data: petition, error: petitionErr } = await supabase
     .from('petitions')
     .select('id')
     .eq('id', petitionId)
+    .eq('status', 'approved')
     .maybeSingle()
   if (petitionErr) return auditedFail(500, 'read_failed')
   if (!petition) return auditedFail(404, 'not_found')

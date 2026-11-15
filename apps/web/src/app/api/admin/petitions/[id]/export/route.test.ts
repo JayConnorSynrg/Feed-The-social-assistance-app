@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
   user: { id: 'actor-pa' } as { id: string } | null,
   isAdmin: true as unknown,
   petitionExists: true,
+  /** The petition row's status; RLS also shows a caller their own drafts. */
+  petitionStatus: 'approved' as string,
   signatures: [] as Sig[],
   /** Simulates a server cap below the page size (e.g. max_rows lowered). */
   serverCap: 1000,
@@ -57,10 +59,20 @@ vi.mock('@/lib/supabase/server', () => ({
       }
       throw new Error(`unexpected rpc ${name}`)
     },
+    // Applies every .eq filter to the one petition row, as PostgREST would (after RLS lets it through).
     from: () => ({
-      select: () => ({
-        eq: () => ({ maybeSingle: async () => ({ data: state.petitionExists ? { id: PETITION } : null, error: null }) }),
-      }),
+      select: () => {
+        const filters: Array<[string, unknown]> = []
+        const q = {
+          eq: (col: string, val: unknown) => (filters.push([col, val]), q),
+          maybeSingle: async () => {
+            const row: Record<string, unknown> = { id: PETITION, status: state.petitionStatus }
+            const hit = state.petitionExists && filters.every(([c, v]) => row[c] === v)
+            return { data: hit ? { id: PETITION } : null, error: null }
+          },
+        }
+        return q
+      },
     }),
   }),
 }))
@@ -98,6 +110,7 @@ beforeEach(() => {
   state.user = { id: 'actor-pa' }
   state.isAdmin = true
   state.petitionExists = true
+  state.petitionStatus = 'approved'
   state.signatures = sigs(3)
   state.serverCap = 1000
   state.expectedOverride = null
@@ -231,5 +244,24 @@ describe('the record', () => {
     expect(state.recordCalls).toHaveLength(1)
     expect(state.recordCalls[0]).toMatchObject({ p_outcome: 'error', p_reason: 'read_failed' })
     expect(exportEvents()).toHaveLength(1)
+  })
+
+  it('a malformed petition id is 400 with exactly one error audit row whose target is null', async () => {
+    const res = await call('not-a-uuid')
+    expect(res.status).toBe(400)
+    await expect(res.json()).resolves.toMatchObject({ code: 'invalid_id' })
+    expect(state.exportCalls).toBe(0)
+    expect(state.recordCalls).toHaveLength(1)
+    expect(state.recordCalls[0]).toMatchObject({ p_outcome: 'error', p_reason: 'invalid_id', p_target_id: null })
+    expect(exportEvents()).toHaveLength(1)
+  })
+
+  it("a platform admin's own draft (visible to them through RLS) is 404: never read, never locked", async () => {
+    state.petitionStatus = 'draft'
+    const res = await call()
+    expect(res.status).toBe(404)
+    expect(state.exportCalls).toBe(0)
+    expect(state.recordCalls).toHaveLength(1)
+    expect(state.recordCalls[0]).toMatchObject({ p_outcome: 'error', p_reason: 'not_found' })
   })
 })

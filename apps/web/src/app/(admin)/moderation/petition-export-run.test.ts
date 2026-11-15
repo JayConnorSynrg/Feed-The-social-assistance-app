@@ -2,8 +2,8 @@
 // Owner: Jelal Connor / SYNRG SCALING, LLC
 //
 // The Download CSV button: single flight (a second tap while a download runs sends nothing), the
-// saved file and its name, the error code the alert line maps, and the section's wiring (a real
-// button with busy state, an alert region, no "coming soon" left in the Community tab).
+// saved file and its name, the error code the alert line maps, and the section's wiring (one
+// ref-held flag, no "coming soon" left in the Community tab).
 
 import { describe, it, expect, vi } from 'vitest'
 import fs from 'node:fs'
@@ -97,12 +97,10 @@ describe('wiring', () => {
     expect(tab).not.toMatch(/coming soon/i)
   })
 
-  it('the section uses one ref-held flag, a real button with busy state, and an alert region', () => {
+  it('the section uses one ref-held flag through privilegedFetch (markup is in petition-export-section.test.ts)', () => {
     const src = read('petition-export-section.tsx')
     expect(src).toMatch(/const inFlight = useRef\(false\)/)
     expect(src).toMatch(/runPetitionExport\(inFlight, /)
-    expect(src).toMatch(/<button\s+type="button"[\s\S]*?aria-busy=\{busy\}/)
-    expect(src).toMatch(/role="alert"[^>]*>\{error\}/)
     expect(src).toMatch(/privilegedFetch\('admin\.petition\.export'/)
   })
 })

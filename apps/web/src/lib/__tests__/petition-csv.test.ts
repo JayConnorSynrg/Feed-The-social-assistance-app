@@ -70,6 +70,15 @@ describe('escapeCsvField', () => {
       expect(escapeCsvField('=cmd(),x')).toBe('"\'=cmd(),x"')
     })
 
+    it('prefixes a formula hidden behind leading spaces (importers may trim them)', () => {
+      expect(escapeCsvField(' =1+1')).toBe("' =1+1")
+      expect(escapeCsvField('   @SUM(A1)')).toBe("'   @SUM(A1)")
+    })
+
+    it('does NOT prefix a value that merely starts with spaces', () => {
+      expect(escapeCsvField('  Jane')).toBe('  Jane')
+    })
+
     it('does NOT prefix a normal name', () => {
       expect(escapeCsvField('Jane Doe')).toBe('Jane Doe')
     })
