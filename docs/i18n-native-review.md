@@ -1463,6 +1463,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `heading` | ht | Preferred Language | Lang ou prefere | 2026-11-14 | machine-drafted, needs native review |
 | `description` | ht | The AI assistant will respond in this language, and translated screens will show it. | Asistan IA a ap reponn nan lang sa a, epi ekran ki tradui yo ap montre l. | 2026-11-14 | machine-drafted, needs native review |
 | `currently` | ht | Currently: {language} | Kounye a: {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | ht | Save | Anrejistre | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | ht | Other language | Lòt lang | 2026-11-14 | machine-drafted, needs native review |
 | `saving` | ht | Saving… | Ap anrejistre… | 2026-11-14 | machine-drafted, needs native review |
 | `saved` | ht | Language saved | Lang lan anrejistre | 2026-11-14 | machine-drafted, needs native review |
 | `savedDevice` | ht | Language saved on this device | Lang lan anrejistre sou aparèy sa a | 2026-11-14 | machine-drafted, needs native review |
@@ -1471,6 +1473,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `heading` | so | Preferred Language | Luqadda aad doorbidayso | 2026-11-14 | machine-drafted, needs native review |
 | `description` | so | The AI assistant will respond in this language, and translated screens will show it. | Kaaliyaha AI-ga wuxuu kugu jawaabi doonaa luqaddan, shaashadaha la turjumayna way ku muujin doonaan. | 2026-11-14 | machine-drafted, needs native review |
 | `currently` | so | Currently: {language} | Hadda: {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | so | Save | Keydi | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | so | Other language | Luqad kale | 2026-11-14 | machine-drafted, needs native review |
 | `saving` | so | Saving… | Waa la keydinayaa… | 2026-11-14 | machine-drafted, needs native review |
 | `saved` | so | Language saved | Luqadda waa la keydiyay | 2026-11-14 | machine-drafted, needs native review |
 | `savedDevice` | so | Language saved on this device | Luqadda waxaa lagu keydiyay qalabkan | 2026-11-14 | machine-drafted, needs native review |
@@ -1479,6 +1483,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `heading` | am | Preferred Language | የሚመርጡት ቋንቋ | 2026-11-14 | machine-drafted, needs native review |
 | `description` | am | The AI assistant will respond in this language, and translated screens will show it. | የAI ረዳቱ በዚህ ቋንቋ ይመልሳል፤ የተተረጎሙ ገጾችም በዚህ ቋንቋ ይታያሉ። | 2026-11-14 | machine-drafted, needs native review |
 | `currently` | am | Currently: {language} | አሁን፦ {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | am | Save | አስቀምጥ | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | am | Other language | ሌላ ቋንቋ | 2026-11-14 | machine-drafted, needs native review |
 | `saving` | am | Saving… | በማስቀመጥ ላይ… | 2026-11-14 | machine-drafted, needs native review |
 | `saved` | am | Language saved | ቋንቋው ተቀምጧል | 2026-11-14 | machine-drafted, needs native review |
 | `savedDevice` | am | Language saved on this device | ቋንቋው በዚህ መሣሪያ ላይ ተቀምጧል | 2026-11-14 | machine-drafted, needs native review |
@@ -1487,6 +1493,8 @@ step in that test, and the test fails until the list below is regenerated.
 | `heading` | hmn | Preferred Language | Hom lus koj nyiam | 2026-11-14 | machine-drafted, needs native review |
 | `description` | hmn | The AI assistant will respond in this language, and translated screens will show it. | Tus pab AI yuav teb ua hom lus no, thiab cov nplooj uas txhais lawm yuav tso tawm ua hom lus no. | 2026-11-14 | machine-drafted, needs native review |
 | `currently` | hmn | Currently: {language} | Tam sim no: {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | hmn | Save | Khaws | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | hmn | Other language | Lwm hom lus | 2026-11-14 | machine-drafted, needs native review |
 | `saving` | hmn | Saving… | Tab tom khaws… | 2026-11-14 | machine-drafted, needs native review |
 | `saved` | hmn | Language saved | Tau khaws hom lus lawm | 2026-11-14 | machine-drafted, needs native review |
 | `savedDevice` | hmn | Language saved on this device | Tau khaws hom lus rau ntawm lub cuab yeej no | 2026-11-14 | machine-drafted, needs native review |

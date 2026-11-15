@@ -13,7 +13,8 @@ const h = vi.hoisted(() => ({ frames: [] as Array<() => void>, focused: [] as st
 import { mount, findAll } from '@/test/mini-react'
 import { ReportDialog } from './report-dialog'
 import { DialogContent } from '@/components/ui/dialog'
-import { Select, SelectTrigger } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { reportReasonLabel } from '@/lib/i18n-feed-card'
 
 type El = { type: unknown; props: Record<string, unknown> }
 const one = (tree: unknown, pred: (e: El) => boolean) => findAll(tree, pred as never)[0] as El
@@ -53,5 +54,13 @@ describe('ReportDialog', () => {
     ;(done.props.ref as { current: unknown }).current = { focus: () => void h.focused.push('report-done') }
     while (h.frames.length) h.frames.shift()!()
     expect(h.focused).toEqual(['report-done'])
+  })
+
+  it('the reasons list (portalled to <body>) carries the dialog\'s language and direction', () => {
+    const c = mount(() => ReportDialog({ postId: 'p1', locale: 'ar', onSubmit: async () => {}, onClose: () => {} }))
+    const list = one(c.tree(), (e) => e.type === SelectContent)
+    expect(list.props).toMatchObject({ lang: 'ar', dir: 'rtl' })
+    const first = findAll(list, (e) => e.type === SelectItem)[0]
+    expect(first.props.children).toBe(reportReasonLabel('spam', 'ar'))
   })
 })

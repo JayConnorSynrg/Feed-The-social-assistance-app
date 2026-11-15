@@ -30,6 +30,19 @@ vi.mock('@/lib/logger', async () => {
 
 import { LanguageSection, SaveStatusLines } from './language-section'
 import { mount, findAll } from '@/test/mini-react'
+
+type Mounted = { tree: () => unknown; rerender: () => unknown }
+const el = (m: Mounted, pred: (e: { type: unknown; props: Record<string, unknown> }) => boolean) => findAll(m.tree(), pred)[0]
+const select = (m: Mounted) => el(m, (e) => e.type === 'select')
+const saveButton = (m: Mounted) => el(m, (e) => e.props['data-testid'] === 'settings-language-save')
+const pick = (m: Mounted, code: string) => {
+  ;(select(m).props.onChange as (e: { target: { value: string } }) => void)({ target: { value: code } })
+  m.rerender()
+}
+const submit = (m: Mounted) => {
+  const form = el(m, (e) => e.type === 'form')
+  ;(form.props.onSubmit as (e: { preventDefault: () => void }) => void)({ preventDefault: () => {} })
+}
 import { accountLanguageIo } from '@/providers/auth-provider'
 import { saveAccountLanguage } from '@/lib/language-save'
 import { resolveProfileLocale } from '@/lib/i18n'
@@ -116,14 +129,14 @@ describe('Settings › Language', () => {
   it('save 한국어, render the section again: the picker and the section are Korean, with no profile re-read', async () => {
     const m = member({ data: [{ id: 'u1' }], error: null })
     const before = render()
-    expect(before).toContain('<option value="en" selected="">')
+    expect(before).toMatch(/<option value="en"[^>]*selected=""/)
     expect(before).toMatch(/<section lang="en" dir="ltr"/)
 
     expect(await (auth.value.saveLanguage as (c: string) => Promise<string>)('ko')).toBe('ok')
     m.sync() // the provider re-renders its consumers with its state
 
     const after = render()
-    expect(after).toContain('<option value="ko" selected="">')
+    expect(after).toMatch(/<option value="ko"[^>]*selected=""/)
     expect(after).toMatch(/<section lang="ko" dir="ltr"/)
     expect(after).toContain('선호 언어')
     expect(after).toContain('현재: <span lang="ko" dir="ltr">한국어</span>')
@@ -143,7 +156,7 @@ describe('Settings › Language', () => {
     const m = member({ data: [], error: null })
     expect(await (auth.value.saveLanguage as (c: string) => Promise<string>)('ko')).toBe('no_row')
     m.sync()
-    expect(render()).toContain('<option value="en" selected="">')
+    expect(render()).toMatch(/<option value="en"[^>]*selected=""/)
     expect(resolveProfileLocale(m.holder.profile)).toBe('en')
     expect(cookieJar.cookie).toBe('')
     const failure = renderToStaticMarkup(createElement(SaveStatusLines, { locale: 'en', saving: false, status: 'failed' }))
@@ -180,7 +193,7 @@ describe('Settings › Language', () => {
     auth.value = { user: { id: 'g1' }, isAnonymous: true, profile: { id: 'g1', preferred_language: null }, saveLanguage: vi.fn() }
     const html = render()
     expect(html).toMatch(/<section lang="vi"/)
-    expect(html).toContain('<option value="vi" selected="">')
+    expect(html).toMatch(/<option value="vi"[^>]*selected=""/)
     expect(html).toContain('Chỉ lưu trên thiết bị này.')
   })
 })
@@ -189,7 +202,7 @@ describe('what the member sees after a choice (the save outcome, mapped to the m
   beforeEach(() => vi.stubGlobal('localStorage', { getItem: () => null }))
   afterEach(() => vi.unstubAllGlobals())
 
-  /** Mount the section, pick 한국어, and return the message lines as rendered. */
+  /** Mount the section, pick 한국어, Save, and return the message lines as rendered. */
   async function choose(outcome: string, profileAfter: Record<string, unknown>) {
     const saveLanguage = vi.fn(async () => {
       // The provider has applied (ok) or taken back (failure) the language by the time it answers.
@@ -200,6 +213,8 @@ describe('what the member sees after a choice (the save outcome, mapped to the m
     const m = mount(() => LanguageSection())
     const select = findAll(m.tree(), (el) => el.type === 'select')[0]
     ;(select.props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'ko' } })
+    m.rerender()
+    submit(m)
     await m.flush()
     m.rerender()
     expect(saveLanguage).toHaveBeenCalledWith('ko')
@@ -219,6 +234,91 @@ describe('what the member sees after a choice (the save outcome, mapped to the m
     const { lines, html } = await choose('ok', { id: 'u1', preferred_language: 'ko' })
     expect(lines).toMatchObject({ status: 'saved', locale: 'ko', saving: false })
     expect(html).toContain('언어가 저장되었습니다')
-    expect(html).not.toContain('role="alert"')
+    // The alert region stays in the tree, empty.
+    expect(html).toMatch(/<p role="alert"[^>]*><\/p>/)
+  })
+})
+
+describe('choosing is not saving (keyboard browsing, focus, a save in flight)', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', { getItem: () => null }))
+  afterEach(() => vi.unstubAllGlobals())
+
+  function setup(saveLanguage = vi.fn(async () => 'ok')) {
+    auth.value = { user: { id: 'u1' }, isAnonymous: false, profile: { id: 'u1', preferred_language: 'en' }, saveLanguage }
+    return { m: mount(() => LanguageSection()), saveLanguage }
+  }
+
+  it('arrowing through the list (one change per language passed) saves nothing; Save commits only the last', async () => {
+    const { m, saveLanguage } = setup()
+    for (const code of ['es', 'ht', 'vi', 'ar', 'zh', 'ko']) pick(m, code)
+    await m.flush()
+    expect(saveLanguage).not.toHaveBeenCalled()
+    expect(select(m).props.value).toBe('ko')
+    expect(saveButton(m).props['aria-disabled']).toBe(false)
+    submit(m)
+    await m.flush()
+    expect(saveLanguage.mock.calls).toEqual([['ko']])
+  })
+
+  it('Save with nothing new is aria-disabled, stays focusable, and does nothing', async () => {
+    const { m, saveLanguage } = setup()
+    const button = saveButton(m)
+    expect(button.props['aria-disabled']).toBe(true)
+    expect(button.props.disabled).toBeUndefined()
+    submit(m)
+    pick(m, 'es')
+    pick(m, 'en') // back to the language in effect
+    expect(saveButton(m).props['aria-disabled']).toBe(true)
+    submit(m)
+    await m.flush()
+    expect(saveLanguage).not.toHaveBeenCalled()
+  })
+
+  it('while a save runs: the list keeps focus (never disabled), Save is aria-disabled, a second submit is ignored', async () => {
+    let answer: (o: string) => void = () => {}
+    const { m, saveLanguage } = setup(vi.fn(() => new Promise<string>((r) => (answer = r))))
+    pick(m, 'ko')
+    submit(m)
+    m.rerender()
+    expect(select(m).props.disabled).toBeUndefined()
+    expect(saveButton(m).props['aria-disabled']).toBe(true)
+    submit(m)
+    expect(saveLanguage).toHaveBeenCalledTimes(1)
+    answer('ok')
+    await m.flush()
+  })
+
+  it('both live regions are in the tree before anything happens', () => {
+    const { m } = setup()
+    const lines = el(m, (e) => e.type === SaveStatusLines)
+    const html = renderToStaticMarkup(createElement(SaveStatusLines, lines.props as Parameters<typeof SaveStatusLines>[0]))
+    expect(html).toMatch(/<p role="status"[^>]*><\/p>/)
+    expect(html).toMatch(/<p role="alert"[^>]*><\/p>/)
+    expect(html).not.toMatch(/hidden/)
+  })
+})
+
+describe('the list of languages', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('each option is one language: its own name, marked with its own lang; "other" in the viewer\'s language', () => {
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    auth.value = { user: { id: 'u1' }, isAnonymous: false, profile: { id: 'u1', preferred_language: 'ko' }, saveLanguage: vi.fn() }
+    const html = render()
+    expect(html).toContain('<option value="ko" lang="ko" dir="ltr" selected="">한국어</option>')
+    expect(html).toContain('<option value="ar" lang="ar" dir="rtl">العربية</option>')
+    expect(html).toContain('<option value="en" lang="en" dir="ltr">English</option>')
+    expect(html).toContain('<option value="other" lang="ko" dir="ltr">기타 언어</option>')
+    expect(html).not.toMatch(/<option[^>]*>[^<]*—/)
+  })
+
+  it('readable: "Currently" at stone-600, the list with a 3:1 border and a chevron', () => {
+    vi.stubGlobal('localStorage', { getItem: () => null })
+    auth.value = { user: { id: 'u1' }, isAnonymous: false, profile: { id: 'u1', preferred_language: 'en' }, saveLanguage: vi.fn() }
+    const html = render()
+    expect(html).toMatch(/<p class="[^"]*text-stone-600[^"]*">Currently: /)
+    expect(html).toMatch(/<select[^>]*class="[^"]*border-stone-500/)
+    const chevron = html.match(/<svg[^>]*lucide-chevron-down[^>]*>/)?.[0] ?? ''
+    expect(chevron).toContain('aria-hidden="true"')
   })
 })

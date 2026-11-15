@@ -104,7 +104,7 @@ export function ReportDialog({
                 <SelectTrigger id={`report-reason-${id}`} data-testid={`report-reason-select-${id}`} aria-required="true">
                   <SelectValue placeholder={cardT(locale, 'reportReasonPlaceholder')} />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent lang={locale} dir={dir(locale)}>
                   {REPORT_REASONS.map((r) => (
                     <SelectItem key={r} value={r}>
                       {reportReasonLabel(r, locale)}
