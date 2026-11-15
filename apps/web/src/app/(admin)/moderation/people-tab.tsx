@@ -8,8 +8,12 @@
 // Language: the admin's (lib/i18n-admin-people.ts; tier names are roleLabel). The shell marks the tab
 // with it; the confirmation dialog, a portal, carries its own lang/dir. A person's name and username
 // keep their own language and direction (lang="" dir="auto").
+// Keyboard and screen reader: the table stays on screen while the list re-reads (the loading line is
+// the first load's only); after a tier change focus returns to that row's select and "Tier updated"
+// is announced in the tab's one always-mounted status region; a refusal shows inside the open
+// dialog in its one always-mounted alert. Apply stays focusable (aria-disabled, guarded handler).
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { UserCog } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -63,12 +67,27 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
   const [people, setPeople] = useState<Person[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  // The first read has finished: later re-reads keep the rows on screen (no loading swap).
+  const [loaded, setLoaded] = useState(false)
+  // The tab's one status line ("Tier updated."), always mounted so each change is announced.
+  const [announcement, setAnnouncement] = useState('')
   // The list read failed (its sentence is chosen at render, in the admin's language).
   const [error, setError] = useState(false)
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [reason, setReason] = useState('')
   const [isActioning, setIsActioning] = useState(false)
-  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null)
+  // A refused or failed tier change: shown in the open dialog's alert.
+  const [dialogError, setDialogError] = useState<string | null>(null)
+  // The confirmation keeps its text while it animates out (pending is already null by then).
+  const lastPending = useRef<PendingAction | null>(null)
+  if (pending) lastPending.current = pending
+  const shownPending = pending ?? lastPending.current
+  // The row whose select opened the dialog: focus goes back to it when the dialog closes.
+  const returnFocusId = useRef<string | null>(null)
+  const selects = useRef(new Map<string, HTMLSelectElement>())
+  const inFlight = useRef(false)
+  const searchId = useId()
+  const reasonId = useId()
 
   const load = useCallback(async (q: string) => {
     setLoading(true)
@@ -83,16 +102,28 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
       setPeople((data as Person[]) ?? [])
     }
     setLoading(false)
+    setLoaded(true)
   }, [])
 
   useEffect(() => {
     load('')
   }, [load])
 
+  const canApply = !!pending && reason.trim() !== '' && !isActioning
+
+  const closeDialog = () => {
+    setPending(null)
+    setReason('')
+    setDialogError(null)
+  }
+
   const applyAction = async () => {
-    if (!pending || !reason.trim()) return
+    // aria-disabled keeps Apply focusable, so the guard lives here (and one call at a time).
+    if (!pending || !reason.trim() || inFlight.current) return
+    inFlight.current = true
     setIsActioning(true)
-    setRowError(null)
+    setDialogError(null)
+    setAnnouncement('')
     const supabase = createClient()
     const targetId = pending.person.id
     try {
@@ -109,24 +140,27 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
       const result = (data ?? {}) as { ok?: boolean; code?: string }
       if (error) {
         logger.warn('admin.denied', { action: 'tier.set', code: error.code ?? 'unknown', request_id: requestId })
-        setRowError({ id: targetId, message: adminPeopleT(locale, 'changeFailed') })
+        setDialogError(adminPeopleT(locale, 'changeFailed'))
       } else if (!result.ok) {
         const code = result.code ?? 'unknown'
         logger.warn('admin.denied', { action: 'tier.set', code, request_id: requestId })
-        setRowError({ id: targetId, message: denialText(code, locale) })
+        setDialogError(denialText(code, locale))
       } else {
         logger.info('admin.tier.set', {
           to: pending.option.value,
           request_id: requestId,
         })
-        setPending(null)
-        setReason('')
+        closeDialog()
+        // The rows stay while the list re-reads; then the result is announced (focus is back on
+        // the row's select: onCloseAutoFocus below).
         await load(search)
+        setAnnouncement(adminPeopleT(locale, 'tierUpdated'))
       }
     } catch {
       logger.warn('admin.denied', { action: 'tier.set', code: 'exception' })
-      setRowError({ id: targetId, message: adminPeopleT(locale, 'changeFailed') })
+      setDialogError(adminPeopleT(locale, 'changeFailed'))
     } finally {
+      inFlight.current = false
       setIsActioning(false)
     }
   }
@@ -138,35 +172,42 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
           <UserCog className="h-4 w-4 text-[#4a5d23]" aria-hidden="true" />
           {adminShellT(locale, 'tabPeople')}
         </h3>
-        <div className="ms-auto flex min-w-0 flex-1 basis-56 items-center gap-2 sm:flex-none">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') load(search) }}
-            aria-label={adminPeopleT(locale, 'searchLabel')}
-            placeholder={`${adminPeopleT(locale, 'searchLabel')}…`}
-            className="min-h-9 min-w-0 flex-1 text-sm border border-stone-300 rounded-lg px-3 py-1.5 bg-white text-stone-900 placeholder:text-stone-600 focus:outline-none focus:ring-2 focus:ring-lime-700 sm:w-64 sm:flex-none"
-          />
-          <button
-            onClick={() => load(search)}
-            className="min-h-9 shrink-0 px-3 py-1.5 rounded-lg bg-lime-700 text-white text-sm font-medium hover:bg-lime-800 transition-colors"
-          >
-            {adminPeopleT(locale, 'search')}
-          </button>
+        <div className="ms-auto flex min-w-0 flex-1 basis-56 flex-col gap-1 sm:flex-none">
+          {/* A visible label: it stays when typing starts (a placeholder would not). */}
+          <label htmlFor={searchId} className="text-xs font-medium text-stone-700">
+            {adminPeopleT(locale, 'searchLabel')}
+          </label>
+          <div className="flex min-w-0 items-center gap-2">
+            <input
+              id={searchId}
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') load(search) }}
+              className="min-h-9 min-w-0 flex-1 text-sm border border-stone-500 rounded-lg px-3 py-1.5 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700 sm:w-64 sm:flex-none"
+            />
+            <button
+              onClick={() => load(search)}
+              className="min-h-9 shrink-0 px-3 py-1.5 rounded-lg bg-lime-700 text-white text-sm font-medium hover:bg-lime-800 transition-colors"
+            >
+              {adminPeopleT(locale, 'search')}
+            </button>
+          </div>
         </div>
       </div>
 
-      {error && (
-        <div role="alert" className="py-3 px-4 text-sm text-red-700 bg-red-50 rounded-xl border border-red-200">{adminPeopleT(locale, 'loadFailed')}</div>
-      )}
+      {/* The tab's one alert and one status line, always mounted: only their text changes. */}
+      <div role="alert" className={error ? 'py-3 px-4 text-sm text-red-700 bg-red-50 rounded-xl border border-red-200' : 'sr-only'}>
+        {error ? adminPeopleT(locale, 'loadFailed') : ''}
+      </div>
+      <p role="status" data-testid="people-status" className={!loaded ? 'py-6 text-stone-600 text-sm' : 'sr-only'}>
+        {!loaded ? adminPeopleT(locale, 'loading') : announcement}
+      </p>
 
-      {loading ? (
-        <div role="status" className="py-6 text-stone-600 text-sm">{adminPeopleT(locale, 'loading')}</div>
-      ) : people.length === 0 ? (
+      {!loaded ? null : people.length === 0 ? (
         <div className="py-6 text-stone-600 text-sm">{adminPeopleT(locale, 'empty')}</div>
       ) : (
-        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+        <div aria-busy={loading || undefined} className="bg-white rounded-xl border border-stone-200 overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="border-b border-stone-100 bg-stone-50/60">
@@ -220,22 +261,29 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
                         <span className="text-xs text-stone-600">{adminPeopleT(locale, 'noActions')}</span>
                       ) : (
                         <select
+                          ref={(node: HTMLSelectElement | null) => {
+                            if (node) selects.current.set(person.id, node)
+                            else selects.current.delete(person.id)
+                          }}
                           aria-label={formatMessage(adminPeopleT(locale, 'setTierFor'), { name: isolate(personName) })}
                           value=""
                           onChange={(e) => {
                             const opt = options.find((o) => String(o.value) === e.target.value)
-                            if (opt) { setPending({ person, option: opt }); setReason(''); setRowError(null) }
+                            if (opt) {
+                              returnFocusId.current = person.id
+                              setPending({ person, option: opt })
+                              setReason('')
+                              setDialogError(null)
+                              setAnnouncement('')
+                            }
                           }}
-                          className="min-h-9 max-w-full text-sm border border-stone-300 rounded-lg px-2 py-1.5 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
+                          className="min-h-9 max-w-full text-sm border border-stone-500 rounded-lg px-2 py-1.5 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-lime-700"
                         >
                           <option value="">{adminPeopleT(locale, 'change')}</option>
                           {options.map((o) => (
                             <option key={String(o.value)} value={String(o.value)}>{grantOptionLabel(o, locale)}</option>
                           ))}
                         </select>
-                      )}
-                      {rowError && rowError.id === person.id && (
-                        <p role="alert" className="mt-1 text-xs text-red-700">{rowError.message}</p>
                       )}
                     </TableCell>
                   </TableRow>
@@ -247,33 +295,54 @@ export function PeopleTab({ viewerTier, isFounder, locale = 'en' }: { viewerTier
       )}
 
       {/* Reason-gated confirmation */}
-      <Dialog open={!!pending} onOpenChange={(open: boolean) => { if (!open) { setPending(null); setReason('') } }}>
-        {/* A portal: it carries the admin's language itself (the dialog primitive defaults to English). */}
-        <DialogContent lang={locale} dir={dir(locale)} closeLabel={adminPeopleT(locale, 'close')}>
+      <Dialog open={!!pending} onOpenChange={(open: boolean) => { if (!open) closeDialog() }}>
+        {/* A portal: it carries the admin's language itself (the dialog primitive defaults to English).
+            Closing (Apply, Cancel, Escape, X) returns focus to the select of the row that opened it. */}
+        <DialogContent
+          lang={locale}
+          dir={dir(locale)}
+          closeLabel={adminPeopleT(locale, 'close')}
+          onCloseAutoFocus={(e: Event) => {
+            const target = returnFocusId.current ? selects.current.get(returnFocusId.current) : undefined
+            if (target) {
+              e.preventDefault()
+              target.focus()
+            }
+          }}
+        >
           <DialogHeader>
-            <DialogTitle>{pending ? grantOptionLabel(pending.option, locale) : null}</DialogTitle>
-            <DialogDescription>{pending && <PendingDescription pending={pending} locale={locale} />}</DialogDescription>
+            <DialogTitle>{shownPending ? grantOptionLabel(shownPending.option, locale) : null}</DialogTitle>
+            <DialogDescription>{shownPending && <PendingDescription pending={shownPending} locale={locale} />}</DialogDescription>
           </DialogHeader>
+          <label htmlFor={reasonId} className="text-sm font-medium text-stone-700">
+            {adminPeopleT(locale, 'reasonLabel')}
+          </label>
           <textarea
-            className="w-full text-sm rounded-lg border border-stone-300 px-3 py-2 text-stone-900 placeholder:text-stone-600 resize-none focus:outline-none focus:ring-2 focus:ring-lime-700"
+            id={reasonId}
+            className="w-full text-sm rounded-lg border border-stone-500 px-3 py-2 text-stone-900 resize-none focus:outline-none focus:ring-2 focus:ring-lime-700"
             rows={3}
-            aria-label={adminPeopleT(locale, 'reasonLabel')}
-            placeholder={`${adminPeopleT(locale, 'reasonLabel')}…`}
+            required
+            aria-required="true"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             maxLength={500}
           />
+          {/* The dialog's one alert, always mounted: a refusal or failure while it is open. */}
+          <p role="alert" data-testid="people-dialog-alert" className={dialogError ? 'text-sm text-red-700' : 'sr-only'}>
+            {dialogError ?? ''}
+          </p>
           <DialogFooter>
             <button
-              onClick={() => { setPending(null); setReason('') }}
+              onClick={closeDialog}
               className="px-4 py-2 rounded-lg border border-stone-300 text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors"
             >
               {adminPeopleT(locale, 'cancel')}
             </button>
             <button
-              onClick={applyAction}
-              disabled={!reason.trim() || isActioning}
-              className="px-4 py-2 rounded-lg bg-lime-700 hover:bg-lime-800 text-white text-sm font-medium disabled:opacity-40 transition-colors"
+              onClick={() => void applyAction()}
+              aria-disabled={!canApply || undefined}
+              data-testid="people-apply"
+              className="px-4 py-2 rounded-lg bg-lime-700 hover:bg-lime-800 text-white text-sm font-medium aria-disabled:cursor-not-allowed aria-disabled:opacity-60 transition-colors"
             >
               {isActioning ? adminPeopleT(locale, 'applying') : adminPeopleT(locale, 'apply')}
             </button>

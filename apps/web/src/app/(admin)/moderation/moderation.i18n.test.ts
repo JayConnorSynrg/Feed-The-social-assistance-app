@@ -36,6 +36,11 @@ const h = vi.hoisted(() => ({
   metric: [] as Array<{ op: string; attrs: Record<string, unknown>; ok: boolean; error?: string }>,
   language: 'ko' as string | null,
   people: [{ id: 'p1', first_name: 'أمينة', username: 'amina', avatar_url: null, admin_tier: null, joined_at: null }],
+  emptyQueue: false,
+  // Hold the next admin_list_people answer until release() (a re-read in flight).
+  holdList: false,
+  release: null as null | (() => void),
+  frames: [] as Array<() => void>,
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -75,7 +80,13 @@ function rpcBuilder(fn: string, args: unknown) {
       return b
     },
     then(res: (v: Reply) => unknown, rej?: (e: unknown) => unknown) {
-      if (fn === 'admin_list_people') return Promise.resolve({ data: h.people, error: null }).then(res, rej)
+      if (fn === 'admin_list_people') {
+        if (h.holdList) {
+          h.holdList = false
+          return new Promise<Reply>((r) => (h.release = () => r({ data: h.people, error: null }))).then(res, rej)
+        }
+        return Promise.resolve({ data: h.people, error: null }).then(res, rej)
+      }
       if (h.rpcThrow) return Promise.reject(new TypeError('Failed to fetch')).then(res, rej)
       return Promise.resolve(h.rpcReply).then(res, rej)
     },
@@ -91,6 +102,7 @@ const client = {
     chain.eq = (c: string, v: unknown) => ((filters[c] = v), chain)
     chain.then = (res: (v: Reply) => unknown, rej?: (e: unknown) => unknown) => {
       if (table === 'content_reports') {
+        if (h.emptyQueue) return Promise.resolve({ data: [], error: null }).then(res, rej)
         if (h.reportsThrow) return Promise.reject(new TypeError('Failed to fetch "Amina"')).then(res, rej)
         if (h.reportsError) return Promise.resolve({ data: null, error: h.reportsError }).then(res, rej)
         return Promise.resolve({
@@ -101,6 +113,7 @@ const client = {
           error: null,
         }).then(res, rej)
       }
+      if (table === 'posts' && filters.is_hidden === true && h.emptyQueue) return Promise.resolve({ data: [], error: null }).then(res, rej)
       if (table === 'posts' && filters.is_hidden === true)
         return Promise.resolve({
           data: [{ id: HELD, is_hidden: true, content: 'Held text by a member', created_at: '2026-09-30T12:00:00Z', hidden_at: '2026-10-03T12:00:00Z', hidden_reason: 'hold_for_review', user_id: 'b', version: 2 }],
@@ -125,11 +138,11 @@ import { browserTimeZone } from '@/lib/event-time'
 import { reportReasonLabel } from '@/lib/i18n-feed-card'
 import { adminShellT } from '@/lib/i18n-admin-shell'
 import { POSTS_WITH_REPORTS, REPORT_COUNT, THEME_POSTS, adminModerationT, moderationActionLabel, moderationCount } from '@/lib/i18n-admin-moderation'
-import { adminPeopleT } from '@/lib/i18n-admin-people'
+import { adminPeopleT, denialText, grantOptionLabel } from '@/lib/i18n-admin-people'
 import { markupText } from '@/test/markup-text'
 import { TabsContent, TabsList, TabsTrigger, Tabs } from '@/components/ui/tabs'
-import { DialogContent, DialogDescription } from '@/components/ui/dialog'
-import { ReportsQueue } from './reports-queue'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { ReportsQueue, focusAfterRemoval } from './reports-queue'
 import { FocusedPostView, type FocusedPostRow } from './focused-post'
 import { moderatePost, type PostModerationAction } from './post-moderation-actions'
 import { ModerationTab } from './moderation-tab'
@@ -153,10 +166,14 @@ beforeEach(() => {
   h.postsError = null
   h.fetchMode = 'ok'
   h.language = 'ko'
+  h.emptyQueue = false
+  h.holdList = false
+  h.release = null
+  h.frames.length = 0
   vi.mocked(logger.warn).mockClear()
   vi.mocked(logger.info).mockClear()
   vi.stubGlobal('window', { location: { search: '' } })
-  vi.stubGlobal('requestAnimationFrame', (f: () => void) => (f(), 0))
+  vi.stubGlobal('requestAnimationFrame', (f: () => void) => (h.frames.push(f), 0))
   vi.stubGlobal('fetch', async () => {
     if (h.fetchMode === 'throw') throw new TypeError('Failed to fetch')
     if (h.fetchMode === 'http500') return { ok: false, status: 500, json: async () => ({ error: 'AI service unavailable for Amina' }) }
@@ -250,12 +267,14 @@ describe('the reports queue in Korean', () => {
     expect(out).not.toMatch(/lang="ko"[^>]*>Buy now cheap/)
   })
 
-  it('the chevron is named and says whether it is expanded', async () => {
+  it('the chevron keeps one name, says whether it is expanded, and names the region it controls', async () => {
     const { tree, closed } = await openQueue('ko')
-    expect(closed).toEqual({ expanded: false, name: adminModerationT('ko', 'showReports') })
+    expect(closed).toEqual({ expanded: false, name: adminModerationT('ko', 'reportDetails') })
     const open = findAll(tree, (e) => e.props.variant === 'ghost')[0]
     expect(open.props['aria-expanded']).toBe(true)
-    expect(open.props['aria-label']).toBe(adminModerationT('ko', 'hideReports'))
+    expect(open.props['aria-label']).toBe(adminModerationT('ko', 'reportDetails'))
+    expect(open.props['aria-controls']).toBe(`reports-${POST}`)
+    expect(findAll(tree, (e) => e.props.id === `reports-${POST}`)).toHaveLength(1)
   })
 
   it('English stays as before', async () => {
@@ -421,13 +440,18 @@ describe('Label in Name', () => {
     expect(out).toContain(`aria-label="${adminModerationT(l, 'focusClose')}"`)
   })
 
-  it.each(LOCALES)('%s: People — the search and reason boxes are named by their placeholder text; the select by its column', async (l) => {
+  it.each(LOCALES)('%s: People — the search and reason boxes are named by their visible labels; the select by its column', async (l) => {
     const c = mount(() => PeopleTab({ viewerTier: 'platform_admin', isFounder: true, locale: l }))
     const tree = await c.flush()
-    const search = findAll(tree, (e) => e.type === 'input')[0]
-    expect(String(search.props.placeholder).startsWith(String(search.props['aria-label']))).toBe(true)
-    const reason = findAll(tree, (e) => e.type === 'textarea')[0]
-    expect(String(reason.props.placeholder).startsWith(String(reason.props['aria-label']))).toBe(true)
+    // A visible <label for> each box (it stays when typing starts); no placeholder stands in for it.
+    for (const [type, key] of [['input', 'searchLabel'], ['textarea', 'reasonLabel']] as const) {
+      const box = findAll(tree, (e) => e.type === type)[0]
+      const label = findAll(tree, (e) => e.type === 'label' && e.props.htmlFor === box.props.id)
+      expect(label, type).toHaveLength(1)
+      expect(label[0].props.children).toBe(adminPeopleT(l, key))
+      expect(box.props.placeholder).toBeUndefined()
+      expect(box.props['aria-label']).toBeUndefined()
+    }
     const header = markupText(html(findAll(tree, (e) => e.props.children === adminPeopleT(l, 'colSetTier'))[0]))
     const select = findAll(tree, (e) => e.type === 'select')[0]
     expect(String(select.props['aria-label']).startsWith(header)).toBe(true)
@@ -505,7 +529,7 @@ describe('the moderation calls are the same in every language', () => {
       ;(findAll(tree, (e) => e.type === 'textarea')[0].props.onChange as (e: unknown) => void)({ target: { value: 'Trusted helper' } })
       tree = c.rerender()
       resetCalls()
-      const apply = findAll(tree, (e) => e.type === 'button' && 'disabled' in e.props)[0]
+      const apply = findAll(tree, (e) => e.props['data-testid'] === 'people-apply')[0]
       ;(apply.props.onClick as () => void)()
       await c.flush()
       runs.push(record())
@@ -582,5 +606,227 @@ describe('each failure that shows a translated line writes exactly one row with 
     h.fetchMode = 'throw'
     await insights()
     expect(warn()).toEqual([['admin.community.insights_failed', { code: 'TypeError' }]])
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// Keyboard and screen reader: never lose your place, always hear the result (PR #254 fix round)
+// ---------------------------------------------------------------------------------------------
+
+const runFrames = () => {
+  const frames = h.frames.splice(0)
+  for (const f of frames) f()
+}
+const byTestId = (tree: unknown, id: string) => findAll(tree, (e) => e.props['data-testid'] === id)
+const textOf = (tree: unknown, id: string) => byTestId(tree, id)[0]?.props.children
+
+describe('the People tab keeps the admin’s place (B1, B2, H2)', () => {
+  async function openDialog(locale: Locale = 'ko') {
+    const c = mount(() => PeopleTab({ viewerTier: 'platform_admin', isFounder: true, locale }))
+    let tree = await c.flush()
+    ;(findAll(tree, (e) => e.type === 'select')[0].props.onChange as (e: unknown) => void)({ target: { value: 'community_moderator' } })
+    tree = c.rerender()
+    return { c, tree }
+  }
+  const type = (c: ReturnType<typeof mount>, text: string) => {
+    ;(findAll(c.tree(), (e) => e.type === 'textarea')[0].props.onChange as (e: unknown) => void)({ target: { value: text } })
+    return c.rerender()
+  }
+  const apply = (tree: unknown) => (byTestId(tree, 'people-apply')[0].props.onClick as () => void)()
+
+  it('the loading line is the first load’s only: during the re-read after a change the rows stay', async () => {
+    const first = mount(() => PeopleTab({ viewerTier: 'platform_admin', isFounder: true, locale: 'ko' }))
+    expect(textOf(first.tree(), 'people-status')).toBe(adminPeopleT('ko', 'loading'))
+    h.rpcReply = { data: { ok: true }, error: null }
+    const { c } = await openDialog()
+    let tree = type(c, 'Trusted helper')
+    h.holdList = true
+    apply(tree)
+    tree = await c.flush()
+    expect(h.release).not.toBeNull() // the re-read is in flight…
+    expect(findAll(tree, (e) => e.type === 'select')).toHaveLength(1) // …and the row is still there
+    expect(textOf(tree, 'people-status')).not.toBe(adminPeopleT('ko', 'loading'))
+    h.release!()
+    tree = await c.flush()
+    expect(findAll(tree, (e) => e.type === 'select')).toHaveLength(1)
+  })
+
+  it('a successful change announces "Tier updated" in the always-mounted status, and focus returns to the row’s select', async () => {
+    h.rpcReply = { data: { ok: true }, error: null }
+    const { c } = await openDialog()
+    let tree = type(c, 'Trusted helper')
+    const status = byTestId(tree, 'people-status')
+    expect(status).toHaveLength(1)
+    expect(status[0].props.role).toBe('status')
+    const select = { focus: vi.fn() }
+    ;(findAll(tree, (e) => e.type === 'select')[0].props.ref as (n: unknown) => void)(select)
+    apply(tree)
+    tree = await c.flush()
+    expect(textOf(tree, 'people-status')).toBe(adminPeopleT('ko', 'tierUpdated'))
+    const content = findAll(tree, (e) => e.type === DialogContent)[0]
+    const preventDefault = vi.fn()
+    ;(content.props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault })
+    expect(select.focus).toHaveBeenCalledTimes(1)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+  })
+
+  it('Cancel also returns focus to the row’s select', async () => {
+    const { c, tree } = await openDialog()
+    const select = { focus: vi.fn() }
+    ;(findAll(tree, (e) => e.type === 'select')[0].props.ref as (n: unknown) => void)(select)
+    ;(findAll(tree, (e) => e.type === 'button' && e.props.children === adminPeopleT('ko', 'cancel'))[0].props.onClick as () => void)()
+    const after = c.rerender()
+    ;(findAll(after, (e) => e.type === DialogContent)[0].props.onCloseAutoFocus as (e: unknown) => void)({ preventDefault: () => {} })
+    expect(select.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('a refusal shows inside the open dialog, in its always-mounted alert; the dialog stays open', async () => {
+    h.rpcReply = { data: { ok: false, code: 'self' }, error: null }
+    const { c } = await openDialog()
+    let tree = type(c, 'Trusted helper')
+    const before = byTestId(tree, 'people-dialog-alert')
+    expect(before).toHaveLength(1)
+    expect([before[0].props.role, before[0].props.children]).toEqual(['alert', ''])
+    apply(tree)
+    tree = await c.flush()
+    expect(findAll(tree, (e) => e.type === Dialog)[0].props.open).toBe(true)
+    const content = findAll(tree, (e) => e.type === DialogContent)[0]
+    const alert = byTestId(content, 'people-dialog-alert')
+    expect(alert).toHaveLength(1)
+    expect(alert[0].props.children).toBe(denialText('self', 'ko'))
+    // No other alert on the tab carries it.
+    expect(findAll(tree, (e) => e.props.role === 'alert' && e.props['data-testid'] !== 'people-dialog-alert' && e.props.children !== '')).toHaveLength(0)
+  })
+
+  it('a failed call shows its line in the same alert', async () => {
+    h.rpcReply = { data: null, error: { code: '500', message: 'boom' } }
+    const { c } = await openDialog()
+    const tree = type(c, 'x')
+    apply(tree)
+    expect(textOf(await c.flush(), 'people-dialog-alert')).toBe(adminPeopleT('ko', 'changeFailed'))
+  })
+
+  it('the reason is required (required + aria-required) and Apply stays focusable (aria-disabled, no disabled)', async () => {
+    const { tree } = await openDialog()
+    const reason = findAll(tree, (e) => e.type === 'textarea')[0]
+    expect([reason.props.required, reason.props['aria-required']]).toEqual([true, 'true'])
+    const button = byTestId(tree, 'people-apply')[0]
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(true)
+  })
+
+  it('the search box, tier select and reason box have 3:1 borders (stone-500)', async () => {
+    const { tree } = await openDialog()
+    for (const type of ['input', 'select', 'textarea']) {
+      expect(String(findAll(tree, (e) => e.type === type)[0].props.className), type).toMatch(/\bborder-stone-500\b/)
+    }
+  })
+
+  it('a whitespace reason keeps Apply inactive and makes no RPC', async () => {
+    const { c } = await openDialog()
+    const tree = type(c, '   \n ')
+    expect(byTestId(tree, 'people-apply')[0].props['aria-disabled']).toBe(true)
+    resetCalls()
+    apply(tree)
+    await c.flush()
+    expect(h.rpcCalls.filter((r) => r.fn === 'admin_set_tier')).toHaveLength(0)
+  })
+
+  it('two quick presses of Apply send one admin_set_tier', async () => {
+    h.rpcReply = { data: { ok: true }, error: null }
+    const { c } = await openDialog()
+    const tree = type(c, 'Trusted helper')
+    resetCalls()
+    apply(tree)
+    apply(tree)
+    await c.flush()
+    expect(h.rpcCalls.filter((r) => r.fn === 'admin_set_tier')).toHaveLength(1)
+  })
+
+  it('the dialog keeps its text while it closes (the last pending action)', async () => {
+    h.rpcReply = { data: { ok: true }, error: null }
+    const { c } = await openDialog()
+    let tree = type(c, 'Trusted helper')
+    apply(tree)
+    tree = await c.flush()
+    expect(findAll(tree, (e) => e.type === Dialog)[0].props.open).toBe(false)
+    expect(findAll(tree, (e) => e.type === DialogTitle)[0].props.children).toBe(grantOptionLabel({ value: 'community_moderator', label: '' }, 'ko'))
+  })
+})
+
+describe('the reports queue keeps the admin’s place (B3, H1)', () => {
+  it('next place to stand: the card stays, the next card, the Removed & Held heading, or the empty heading', () => {
+    const g = (id: string, ...reports: string[]) => ({ content_id: id, reports: reports.map((r) => ({ id: r })) })
+    expect(focusAfterRemoval([g('a', 'r1', 'r2')], [], { report: 'r1', group: 'a' })).toEqual({ kind: 'toggle', id: 'a' })
+    expect(focusAfterRemoval([g('a', 'r1'), g('b', 'r2')], [], { report: 'r1', group: 'a' })).toEqual({ kind: 'toggle', id: 'b' })
+    expect(focusAfterRemoval([g('a', 'r1'), g('b', 'r2')], [], { group: 'a' })).toEqual({ kind: 'toggle', id: 'b' })
+    expect(focusAfterRemoval([g('a', 'r1'), g('b', 'r2')], [], { group: 'b' })).toEqual({ kind: 'held' })
+    expect(focusAfterRemoval([g('a', 'r1')], ['h1'], { group: 'a' })).toEqual({ kind: 'held' })
+    expect(focusAfterRemoval([g('a', 'r1')], [], { group: 'a' })).toEqual({ kind: 'empty' })
+    expect(focusAfterRemoval([], ['h1', 'h2'], { held: 'h1' })).toEqual({ kind: 'held' })
+    expect(focusAfterRemoval([], ['h1'], { held: 'h1' })).toEqual({ kind: 'empty' })
+  })
+
+  it('Dismiss → the card’s toggle; Remove → Removed & Held heading; Authorize the last → empty heading; each result announced', async () => {
+    const { c, tree: t0 } = await openQueue('ko')
+    const status0 = byTestId(t0, 'reports-queue-status')
+    expect(status0).toHaveLength(1)
+    expect(status0[0].props.role).toBe('status')
+    const toggle = { focus: vi.fn() }
+    ;(byTestId(t0, `toggle-reports-${POST}`)[0].props.ref as (n: unknown) => void)(toggle)
+
+    ;(byTestId(t0, 'dismiss-report-r1')[0].props.onClick as () => void)()
+    let tree = await c.flush()
+    runFrames()
+    expect(toggle.focus).toHaveBeenCalledTimes(1)
+    expect(textOf(tree, 'reports-queue-status')).toBe(adminModerationT('ko', 'doneDismiss'))
+
+    const held = { focus: vi.fn() }
+    ;(byTestId(tree, 'reports-queue-held-heading')[0].props.ref as { current: unknown }).current = held
+    ;(byTestId(tree, `remove-post-${POST}`)[0].props.onClick as () => void)()
+    tree = await c.flush()
+    runFrames()
+    expect(held.focus).toHaveBeenCalledTimes(1)
+    expect(textOf(tree, 'reports-queue-status')).toBe(adminModerationT('ko', 'doneRemove'))
+
+    ;(byTestId(tree, `authorize-post-${HELD}`)[0].props.onClick as () => void)()
+    tree = await c.flush()
+    const empty = { focus: vi.fn() }
+    ;(byTestId(tree, 'reports-queue-empty-heading')[0].props.ref as { current: unknown }).current = empty
+    runFrames()
+    expect(empty.focus).toHaveBeenCalledTimes(1)
+    expect(byTestId(tree, 'reports-queue-empty-heading')[0].props.tabIndex).toBe(-1)
+    // The same status region, still mounted in the empty state, carries the last result.
+    expect(textOf(tree, 'reports-queue-status')).toBe(adminModerationT('ko', 'doneAuthorize'))
+  })
+
+  it('one status and one alert in every state', async () => {
+    const loading = mount(() => ReportsQueue({ locale: 'ko' })).tree()
+    const full = (await openQueue('ko')).tree
+    h.emptyQueue = true
+    const empty = await mount(() => ReportsQueue({ locale: 'ko' })).flush()
+    for (const tree of [loading, full, empty]) {
+      expect(findAll(tree, (e) => e.props.role === 'status')).toHaveLength(1)
+      expect(findAll(tree, (e) => e.props.role === 'alert')).toHaveLength(1)
+    }
+    expect(textOf(loading, 'reports-queue-status')).toBe(adminModerationT('ko', 'loadingReports'))
+  })
+
+  it('an empty, successful read shows the empty heading and an empty alert', async () => {
+    h.emptyQueue = true
+    const tree = await mount(() => ReportsQueue({ locale: 'ko' })).flush()
+    expect(markupText(html(tree))).toContain(adminModerationT('ko', 'emptyTitle'))
+    expect(textOf(tree, 'reports-queue-error')).toBe('')
+  })
+
+  it('a refused action keeps the row and says why in the alert; nothing is announced as done', async () => {
+    h.rpcReply = { data: null, error: { code: '42501', message: 'denied' } }
+    const { c, tree: t0 } = await openQueue('ko')
+    ;(byTestId(t0, `remove-post-${POST}`)[0].props.onClick as () => void)()
+    const tree = await c.flush()
+    runFrames()
+    expect(textOf(tree, 'reports-queue-error')).toBe(adminModerationT('ko', 'errorGeneric'))
+    expect(textOf(tree, 'reports-queue-status')).toBe('')
+    expect(byTestId(tree, `remove-post-${POST}`)).toHaveLength(1)
   })
 })

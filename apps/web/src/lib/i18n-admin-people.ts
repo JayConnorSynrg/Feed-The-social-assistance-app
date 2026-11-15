@@ -18,6 +18,8 @@ import type { GrantOption } from './admin-tier'
 export interface AdminPeopleMessages {
   /** admin_list_people failed (logged as admin.people.list_failed with its code). */
   loadFailed: string
+  /** Announced (role="status") after a tier change succeeded. */
+  tierUpdated: string
   changeFailed: string
   /** An admin_set_tier refusal code this dictionary has no sentence for; {code} is that code. */
   deniedCode: string
@@ -27,7 +29,7 @@ export interface AdminPeopleMessages {
   denyNoChange: string
   denyTargetInvalid: string
   denyAuth: string
-  /** The search box: its accessible name; the placeholder is this text and "…". */
+  /** The search box: its visible label and accessible name. */
   searchLabel: string
   search: string
   loading: string
@@ -50,7 +52,7 @@ export interface AdminPeopleMessages {
   reasonRequired: string
   /** Stands in for {name} when the person has neither a first name nor a username. */
   thisPerson: string
-  /** The reason box: its accessible name; the placeholder is this text and "…". */
+  /** The reason box: its visible label and accessible name. */
   reasonLabel: string
   cancel: string
   apply: string
@@ -62,6 +64,7 @@ export interface AdminPeopleMessages {
 export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   en: {
     loadFailed: "Couldn't load people — please retry.",
+    tierUpdated: 'Tier updated.',
     changeFailed: 'The tier change failed — please retry.',
     deniedCode: 'Denied ({code}).',
     denySelf: 'You cannot change your own tier.',
@@ -95,6 +98,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   es: {
     loadFailed: 'No se pudo cargar a las personas; inténtalo de nuevo.',
+    tierUpdated: 'Nivel actualizado.',
     changeFailed: 'El cambio de nivel falló; inténtalo de nuevo.',
     deniedCode: 'Denegado ({code}).',
     denySelf: 'No puedes cambiar tu propio nivel.',
@@ -129,6 +133,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   // machine-drafted, needs native review
   ht: {
     loadFailed: 'Nou pa t ka chaje moun yo — tanpri eseye ankò.',
+    tierUpdated: 'Nivo a mete ajou.',
     changeFailed: 'Chanjman nivo a echwe — tanpri eseye ankò.',
     deniedCode: 'Refize ({code}).',
     denySelf: 'Ou pa ka chanje pwòp nivo pa w.',
@@ -162,6 +167,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   vi: {
     loadFailed: 'Không thể tải danh sách người dùng — vui lòng thử lại.',
+    tierUpdated: 'Đã cập nhật cấp bậc.',
     changeFailed: 'Thay đổi cấp bậc thất bại — vui lòng thử lại.',
     deniedCode: 'Bị từ chối ({code}).',
     denySelf: 'Bạn không thể thay đổi cấp bậc của chính mình.',
@@ -195,6 +201,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   ar: {
     loadFailed: 'تعذّر تحميل الأشخاص — يُرجى المحاولة مرة أخرى.',
+    tierUpdated: 'تم تحديث المستوى.',
     changeFailed: 'فشل تغيير المستوى — يُرجى المحاولة مرة أخرى.',
     deniedCode: 'مرفوض ({code}).',
     denySelf: 'لا يمكنك تغيير مستواك.',
@@ -228,6 +235,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   zh: {
     loadFailed: '无法加载人员——请重试。',
+    tierUpdated: '级别已更新。',
     changeFailed: '更改级别失败——请重试。',
     deniedCode: '已拒绝（{code}）。',
     denySelf: '你不能更改自己的级别。',
@@ -262,6 +270,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   // machine-drafted, needs native review
   so: {
     loadFailed: 'Dadka lama soo rari karin — fadlan mar kale isku day.',
+    tierUpdated: 'Heerka waa la cusboonaysiiyay.',
     changeFailed: 'Beddelka heerka wuu fashilmay — fadlan mar kale isku day.',
     deniedCode: 'Waa la diiday ({code}).',
     denySelf: 'Ma beddeli kartid heerkaaga.',
@@ -295,6 +304,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   fr: {
     loadFailed: 'Impossible de charger les personnes — veuillez réessayer.',
+    tierUpdated: 'Niveau mis à jour.',
     changeFailed: 'Le changement de niveau a échoué — veuillez réessayer.',
     deniedCode: 'Refusé ({code}).',
     denySelf: 'Vous ne pouvez pas modifier votre propre niveau.',
@@ -328,6 +338,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   pt: {
     loadFailed: 'Não foi possível carregar as pessoas — tente novamente.',
+    tierUpdated: 'Nível atualizado.',
     changeFailed: 'A alteração de nível falhou — tente novamente.',
     deniedCode: 'Negado ({code}).',
     denySelf: 'Você não pode alterar o seu próprio nível.',
@@ -361,6 +372,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   ru: {
     loadFailed: 'Не удалось загрузить людей — попробуйте ещё раз.',
+    tierUpdated: 'Уровень обновлён.',
     changeFailed: 'Не удалось изменить уровень — попробуйте ещё раз.',
     deniedCode: 'Отказано ({code}).',
     denySelf: 'Вы не можете изменить собственный уровень.',
@@ -394,6 +406,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   ko: {
     loadFailed: '사람 목록을 불러올 수 없습니다 — 다시 시도해 주세요.',
+    tierUpdated: '등급이 업데이트되었습니다.',
     changeFailed: '등급 변경에 실패했습니다 — 다시 시도해 주세요.',
     deniedCode: '거부됨({code}).',
     denySelf: '자신의 등급은 변경할 수 없습니다.',
@@ -427,6 +440,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   },
   tl: {
     loadFailed: 'Hindi ma-load ang mga tao — pakisubukang muli.',
+    tierUpdated: 'Na-update ang tier.',
     changeFailed: 'Nabigo ang pagbabago ng tier — pakisubukang muli.',
     deniedCode: 'Tinanggihan ({code}).',
     denySelf: 'Hindi mo mababago ang sarili mong tier.',
@@ -461,6 +475,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   // machine-drafted, needs native review
   am: {
     loadFailed: 'ሰዎችን መጫን አልተቻለም — እባክዎ እንደገና ይሞክሩ።',
+    tierUpdated: 'ደረጃው ተዘምኗል።',
     changeFailed: 'የደረጃ ለውጡ አልተሳካም — እባክዎ እንደገና ይሞክሩ።',
     deniedCode: 'ተከልክሏል ({code})።',
     denySelf: 'የራስዎን ደረጃ መቀየር አይችሉም።',
@@ -495,6 +510,7 @@ export const adminPeopleMessages: Record<Locale, AdminPeopleMessages> = {
   // machine-drafted, needs native review
   hmn: {
     loadFailed: 'Thauj tsis tau cov neeg — thov sim dua.',
+    tierUpdated: 'Hloov qib lawm.',
     changeFailed: 'Hloov qib tsis tau — thov sim dua.',
     deniedCode: 'Raug tsis kam ({code}).',
     denySelf: 'Koj hloov tsis tau koj tus kheej qib.',

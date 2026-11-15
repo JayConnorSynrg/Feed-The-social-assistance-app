@@ -979,7 +979,8 @@
       "base": "origin/develop dd01a47",
       "migration": null,
       "note": "P6 translations wave 3: the admin Moderation tab (Reports / Safety Alerts sub-tabs, reports queue, Removed & Held list, the linked post, every Remove / Hold / Authorize / Dismiss label and result line), the People tab (search, table, tier options via roleLabel, reason-gated dialog with its own lang/dir, every admin_set_tier refusal), Community insights and the admin error / not-found screens in the admin's language, dates through Intl (FEED words for ht/hmn/so). Member text (posts, report details, names) lang=\"\" dir=\"auto\"; Safety Alerts panel and model-written insight themes stay lang=\"en\". Moderation RPCs, arguments, headers, admin_actions and log rows unchanged in every locale (test). Raw error text replaced by translated lines; new code-only rows admin.reports.load_failed {code} and admin.community.insights_failed {code, status}; moderatePost's pre-request throw writes admin.denied {code: error class}. Accessible names for the queue chevron (+aria-expanded), People search, tier select, reason box; 4.5:1 colours on touched lines; flex-wrap/min-w-0/break-words for 360px. Dictionaries lib/i18n-admin-moderation.ts (47 keys + 3 count tables), lib/i18n-admin-people.ts (31 keys); 327 native-review rows. 20 mutants red.",
-      "pr": 254
+      "pr": 254,
+      "reviewFixRound": "On f47ac3a: People keeps the table during re-reads, returns focus to the row select, announces Tier updated in one always-mounted status, shows refusals in an always-mounted alert inside the dialog, required reason, aria-disabled single-flight Apply, visible labels, stone-500 borders; reports queue has one always-mounted status and alert in every state and moves focus to the next card toggle / Removed & Held heading / empty heading after a row leaves (focusAfterRemoval); chevron fixed name + aria-expanded + aria-controls. 19 mutants red."
     }
   }
 }

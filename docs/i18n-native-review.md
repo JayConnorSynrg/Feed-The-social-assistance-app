@@ -108,8 +108,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errorGeneric` | ht | An error occurred | Gen yon erè ki fèt | 2026-11-15 | machine-drafted, needs native review |
 | `emptyTitle` | ht | No open reports | Pa gen rapò ki louvri | 2026-11-15 | machine-drafted, needs native review |
 | `emptyBody` | ht | There are no content reports awaiting review. | Pa gen okenn rapò sou kontni k ap tann revizyon. | 2026-11-15 | machine-drafted, needs native review |
-| `showReports` | ht | Show reports | Montre rapò yo | 2026-11-15 | machine-drafted, needs native review |
-| `hideReports` | ht | Hide reports | Kache rapò yo | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | ht | Report details | Detay rapò yo | 2026-11-15 | machine-drafted, needs native review |
 | `authorLabel` | ht | Author: | Otè: | 2026-11-15 | machine-drafted, needs native review |
 | `viewPost` | ht | View post | Gade piblikasyon an | 2026-11-15 | machine-drafted, needs native review |
 | `actionRemove` | ht | Remove Post | Retire piblikasyon an | 2026-11-15 | machine-drafted, needs native review |
@@ -127,6 +126,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `doneRemove` | ht | Post removed. | Piblikasyon an retire. | 2026-11-15 | machine-drafted, needs native review |
 | `doneHold` | ht | Post held for review. | Piblikasyon an kenbe pou revizyon. | 2026-11-15 | machine-drafted, needs native review |
 | `doneAuthorize` | ht | Post authorized. | Piblikasyon an otorize. | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | ht | Report dismissed. | Rapò a ignore. | 2026-11-15 | machine-drafted, needs native review |
 | `focusTitle` | ht | Linked post | Piblikasyon ki lye a | 2026-11-15 | machine-drafted, needs native review |
 | `focusClose` | ht | Close linked post | Fèmen piblikasyon ki lye a | 2026-11-15 | machine-drafted, needs native review |
 | `focusLoading` | ht | Loading the linked post… | N ap chaje piblikasyon ki lye a… | 2026-11-15 | machine-drafted, needs native review |
@@ -155,8 +155,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errorGeneric` | so | An error occurred | Khalad ayaa dhacay | 2026-11-15 | machine-drafted, needs native review |
 | `emptyTitle` | so | No open reports | Ma jiraan warbixino furan | 2026-11-15 | machine-drafted, needs native review |
 | `emptyBody` | so | There are no content reports awaiting review. | Ma jiraan warbixino ku saabsan nuxur oo sugaya dib-u-eegis. | 2026-11-15 | machine-drafted, needs native review |
-| `showReports` | so | Show reports | Tus warbixinnada | 2026-11-15 | machine-drafted, needs native review |
-| `hideReports` | so | Hide reports | Qari warbixinnada | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | so | Report details | Faahfaahinta warbixinnada | 2026-11-15 | machine-drafted, needs native review |
 | `authorLabel` | so | Author: | Qoraaga: | 2026-11-15 | machine-drafted, needs native review |
 | `viewPost` | so | View post | Eeg qoraalka | 2026-11-15 | machine-drafted, needs native review |
 | `actionRemove` | so | Remove Post | Ka saar qoraalka | 2026-11-15 | machine-drafted, needs native review |
@@ -174,6 +173,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `doneRemove` | so | Post removed. | Qoraalka waa la saaray. | 2026-11-15 | machine-drafted, needs native review |
 | `doneHold` | so | Post held for review. | Qoraalka waa la hayaa si dib loo eego. | 2026-11-15 | machine-drafted, needs native review |
 | `doneAuthorize` | so | Post authorized. | Qoraalka waa la oggolaaday. | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | so | Report dismissed. | Warbixinta waa la iska dhaafay. | 2026-11-15 | machine-drafted, needs native review |
 | `focusTitle` | so | Linked post | Qoraalka la xiriiriyay | 2026-11-15 | machine-drafted, needs native review |
 | `focusClose` | so | Close linked post | Xir qoraalka la xiriiriyay | 2026-11-15 | machine-drafted, needs native review |
 | `focusLoading` | so | Loading the linked post… | Qoraalka la xiriiriyay waa la soo rarayaa… | 2026-11-15 | machine-drafted, needs native review |
@@ -202,8 +202,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errorGeneric` | am | An error occurred | ስህተት ተከስቷል | 2026-11-15 | machine-drafted, needs native review |
 | `emptyTitle` | am | No open reports | ክፍት ሪፖርቶች የሉም | 2026-11-15 | machine-drafted, needs native review |
 | `emptyBody` | am | There are no content reports awaiting review. | ግምገማ የሚጠብቁ የይዘት ሪፖርቶች የሉም። | 2026-11-15 | machine-drafted, needs native review |
-| `showReports` | am | Show reports | ሪፖርቶችን አሳይ | 2026-11-15 | machine-drafted, needs native review |
-| `hideReports` | am | Hide reports | ሪፖርቶችን ደብቅ | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | am | Report details | የሪፖርት ዝርዝሮች | 2026-11-15 | machine-drafted, needs native review |
 | `authorLabel` | am | Author: | ጸሐፊ፦ | 2026-11-15 | machine-drafted, needs native review |
 | `viewPost` | am | View post | ልጥፉን ይመልከቱ | 2026-11-15 | machine-drafted, needs native review |
 | `actionRemove` | am | Remove Post | ልጥፉን አስወግድ | 2026-11-15 | machine-drafted, needs native review |
@@ -221,6 +220,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `doneRemove` | am | Post removed. | ልጥፉ ተወግዷል። | 2026-11-15 | machine-drafted, needs native review |
 | `doneHold` | am | Post held for review. | ልጥፉ ለግምገማ ተይዟል። | 2026-11-15 | machine-drafted, needs native review |
 | `doneAuthorize` | am | Post authorized. | ልጥፉ ተፈቅዷል። | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | am | Report dismissed. | ሪፖርቱ ተሰናብቷል። | 2026-11-15 | machine-drafted, needs native review |
 | `focusTitle` | am | Linked post | የተገናኘ ልጥፍ | 2026-11-15 | machine-drafted, needs native review |
 | `focusClose` | am | Close linked post | የተገናኘውን ልጥፍ ዝጋ | 2026-11-15 | machine-drafted, needs native review |
 | `focusLoading` | am | Loading the linked post… | የተገናኘው ልጥፍ በመጫን ላይ… | 2026-11-15 | machine-drafted, needs native review |
@@ -249,8 +249,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `errorGeneric` | hmn | An error occurred | Muaj ib qho yuam kev tshwm sim | 2026-11-15 | machine-drafted, needs native review |
 | `emptyTitle` | hmn | No open reports | Tsis muaj kev tshaj qhia qhib | 2026-11-15 | machine-drafted, needs native review |
 | `emptyBody` | hmn | There are no content reports awaiting review. | Tsis muaj kev tshaj qhia txog cov ntsiab lus tos kev tshuaj xyuas. | 2026-11-15 | machine-drafted, needs native review |
-| `showReports` | hmn | Show reports | Qhia cov kev tshaj qhia | 2026-11-15 | machine-drafted, needs native review |
-| `hideReports` | hmn | Hide reports | Zais cov kev tshaj qhia | 2026-11-15 | machine-drafted, needs native review |
+| `reportDetails` | hmn | Report details | Cov ntsiab lus ntawm kev tshaj qhia | 2026-11-15 | machine-drafted, needs native review |
 | `authorLabel` | hmn | Author: | Tus sau: | 2026-11-15 | machine-drafted, needs native review |
 | `viewPost` | hmn | View post | Saib qhov tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
 | `actionRemove` | hmn | Remove Post | Tshem qhov tshaj tawm | 2026-11-15 | machine-drafted, needs native review |
@@ -268,6 +267,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `doneRemove` | hmn | Post removed. | Tshem qhov tshaj tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
 | `doneHold` | hmn | Post held for review. | Tuav qhov tshaj tawm cia tos tshuaj xyuas lawm. | 2026-11-15 | machine-drafted, needs native review |
 | `doneAuthorize` | hmn | Post authorized. | Tso cai rau qhov tshaj tawm lawm. | 2026-11-15 | machine-drafted, needs native review |
+| `doneDismiss` | hmn | Report dismissed. | Tsis quav ntsej qhov kev tshaj qhia lawm. | 2026-11-15 | machine-drafted, needs native review |
 | `focusTitle` | hmn | Linked post | Qhov tshaj tawm uas txuas los | 2026-11-15 | machine-drafted, needs native review |
 | `focusClose` | hmn | Close linked post | Kaw qhov tshaj tawm uas txuas los | 2026-11-15 | machine-drafted, needs native review |
 | `focusLoading` | hmn | Loading the linked post… | Tab tom thauj qhov tshaj tawm uas txuas los… | 2026-11-15 | machine-drafted, needs native review |
@@ -310,6 +310,7 @@ step in that test, and the test fails until the list below is regenerated.
 | Key | Locale | English | Text | Added | Status |
 |---|---|---|---|---|---|
 | `loadFailed` | ht | Couldn't load people — please retry. | Nou pa t ka chaje moun yo — tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | ht | Tier updated. | Nivo a mete ajou. | 2026-11-15 | machine-drafted, needs native review |
 | `changeFailed` | ht | The tier change failed — please retry. | Chanjman nivo a echwe — tanpri eseye ankò. | 2026-11-15 | machine-drafted, needs native review |
 | `deniedCode` | ht | Denied ({code}). | Refize ({code}). | 2026-11-15 | machine-drafted, needs native review |
 | `denySelf` | ht | You cannot change your own tier. | Ou pa ka chanje pwòp nivo pa w. | 2026-11-15 | machine-drafted, needs native review |
@@ -341,6 +342,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `applying` | ht | Applying… | N ap aplike… | 2026-11-15 | machine-drafted, needs native review |
 | `close` | ht | Close | Fèmen | 2026-11-15 | machine-drafted, needs native review |
 | `loadFailed` | so | Couldn't load people — please retry. | Dadka lama soo rari karin — fadlan mar kale isku day. | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | so | Tier updated. | Heerka waa la cusboonaysiiyay. | 2026-11-15 | machine-drafted, needs native review |
 | `changeFailed` | so | The tier change failed — please retry. | Beddelka heerka wuu fashilmay — fadlan mar kale isku day. | 2026-11-15 | machine-drafted, needs native review |
 | `deniedCode` | so | Denied ({code}). | Waa la diiday ({code}). | 2026-11-15 | machine-drafted, needs native review |
 | `denySelf` | so | You cannot change your own tier. | Ma beddeli kartid heerkaaga. | 2026-11-15 | machine-drafted, needs native review |
@@ -372,6 +374,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `applying` | so | Applying… | Waa la codsanayaa… | 2026-11-15 | machine-drafted, needs native review |
 | `close` | so | Close | Xir | 2026-11-15 | machine-drafted, needs native review |
 | `loadFailed` | am | Couldn't load people — please retry. | ሰዎችን መጫን አልተቻለም — እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | am | Tier updated. | ደረጃው ተዘምኗል። | 2026-11-15 | machine-drafted, needs native review |
 | `changeFailed` | am | The tier change failed — please retry. | የደረጃ ለውጡ አልተሳካም — እባክዎ እንደገና ይሞክሩ። | 2026-11-15 | machine-drafted, needs native review |
 | `deniedCode` | am | Denied ({code}). | ተከልክሏል ({code})። | 2026-11-15 | machine-drafted, needs native review |
 | `denySelf` | am | You cannot change your own tier. | የራስዎን ደረጃ መቀየር አይችሉም። | 2026-11-15 | machine-drafted, needs native review |
@@ -403,6 +406,7 @@ step in that test, and the test fails until the list below is regenerated.
 | `applying` | am | Applying… | በመተግበር ላይ… | 2026-11-15 | machine-drafted, needs native review |
 | `close` | am | Close | ዝጋ | 2026-11-15 | machine-drafted, needs native review |
 | `loadFailed` | hmn | Couldn't load people — please retry. | Thauj tsis tau cov neeg — thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
+| `tierUpdated` | hmn | Tier updated. | Hloov qib lawm. | 2026-11-15 | machine-drafted, needs native review |
 | `changeFailed` | hmn | The tier change failed — please retry. | Hloov qib tsis tau — thov sim dua. | 2026-11-15 | machine-drafted, needs native review |
 | `deniedCode` | hmn | Denied ({code}). | Raug tsis kam ({code}). | 2026-11-15 | machine-drafted, needs native review |
 | `denySelf` | hmn | You cannot change your own tier. | Koj hloov tsis tau koj tus kheej qib. | 2026-11-15 | machine-drafted, needs native review |
