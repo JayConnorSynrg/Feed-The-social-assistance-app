@@ -38,6 +38,7 @@ import { resolveFeedSubtab } from '@/components/feed/feed-subtab'
 import { ImpactOverviewCard } from '@/components/layout/impact-overview-card'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { formatDate } from '@/lib/i18n-intl'
+import { dir } from '@/lib/i18n'
 
 // ============================================
 // USER ROLES & CONTEXT
@@ -383,7 +384,7 @@ interface WelcomeCardProps {
   userRole: UserRole
 }
 
-function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
+export function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
   const locale = useProfileLocale()
   const today = formatDate(new Date().toISOString(), locale, Intl.DateTimeFormat().resolvedOptions().timeZone)
 
@@ -406,7 +407,10 @@ function WelcomeCard({ userName = 'User', userRole }: WelcomeCardProps) {
         <h3 className="text-lg font-semibold text-stone-800">Welcome back, {userName}!</h3>
         <Leaf className="w-4 h-4 text-[#4a5d23]" />
       </div>
-      <p className="text-xs text-stone-600 mb-6">{today}</p>
+      {/* The card's words are English (#app-content lang="en"); the date is in the member's locale. */}
+      <p className="text-xs text-stone-600 mb-6">
+        <span lang={locale} dir={dir(locale)}>{today}</span>
+      </p>
 
       <div className="flex-1 flex flex-col justify-center">
         <p className="text-base text-stone-700 leading-relaxed">{tagline}</p>
