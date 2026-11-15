@@ -1,127 +1,106 @@
 // apps/web/src/lib/ai/resource-wizard-config.ts
-// Static configuration for the Resource Category Wizard
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// The Get Help wizard's categories and steps. Every option has a value and a label: the value is
+// what the member's answer IS — English, the same in every language, handed to the Assistant
+// (lib/ai/wizard-prompt.ts) and logged by category id; the label is only how the option reads, in the
+// member's language (lib/i18n-get-help.ts wizardLabelText). Questions and card descriptions are keys
+// of the same dictionary; a category's name is wizardCategoryLabel(id). The values are pinned by
+// resource-wizard-config.test.ts.
+
+import type { AssistantKey } from '@/lib/i18n-assistant'
+import type { GetHelpKey, WizardLabel } from '@/lib/i18n-get-help'
+
+export interface WizardOption {
+  label: WizardLabel
+  value: string
+}
 
 export interface WizardStepConfig {
   id: string
-  question: string
-  type: 'single-select' | 'multi-select' | 'text'
-  options?: { label: string; value: string }[]
-  placeholder?: string
+  /** The question, a getHelp key. */
+  question: GetHelpKey
+  type: 'single-select' | 'multi-select'
+  options: WizardOption[]
 }
 
 export interface CategoryWizardConfig {
   id: string
-  label: string
   icon: string
-  description: string
+  /** The card's description, a getHelp key. */
+  description: GetHelpKey
   steps: WizardStepConfig[]
 }
 
+const option = (key: GetHelpKey, value: string): WizardOption => ({ label: { kind: 'getHelp', key }, value })
+const assistant = (key: AssistantKey, value: string, lang?: 'en'): WizardOption => ({ label: lang ? { kind: 'assistant', key, lang } : { kind: 'assistant', key }, value })
+const usd = (label: WizardLabel, value: string): WizardOption => ({ label, value })
+
+/** The states the wizard offers, by English name: each name is its option's value. */
+const STATE_NAMES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado',
+  'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Hawaii',
+  'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky',
+  'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota',
+  'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+  'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio',
+  'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota',
+  'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+  'West Virginia', 'Wisconsin', 'Wyoming',
+]
+
 const STATE_STEP: WizardStepConfig = {
   id: 'state',
-  question: 'What state are you located in?',
+  question: 'qStateLocated',
   type: 'single-select',
-  options: [
-    { label: 'Alabama', value: 'Alabama' },
-    { label: 'Alaska', value: 'Alaska' },
-    { label: 'Arizona', value: 'Arizona' },
-    { label: 'Arkansas', value: 'Arkansas' },
-    { label: 'California', value: 'California' },
-    { label: 'Colorado', value: 'Colorado' },
-    { label: 'Connecticut', value: 'Connecticut' },
-    { label: 'Delaware', value: 'Delaware' },
-    { label: 'District of Columbia', value: 'District of Columbia' },
-    { label: 'Florida', value: 'Florida' },
-    { label: 'Georgia', value: 'Georgia' },
-    { label: 'Hawaii', value: 'Hawaii' },
-    { label: 'Idaho', value: 'Idaho' },
-    { label: 'Illinois', value: 'Illinois' },
-    { label: 'Indiana', value: 'Indiana' },
-    { label: 'Iowa', value: 'Iowa' },
-    { label: 'Kansas', value: 'Kansas' },
-    { label: 'Kentucky', value: 'Kentucky' },
-    { label: 'Louisiana', value: 'Louisiana' },
-    { label: 'Maine', value: 'Maine' },
-    { label: 'Maryland', value: 'Maryland' },
-    { label: 'Massachusetts', value: 'Massachusetts' },
-    { label: 'Michigan', value: 'Michigan' },
-    { label: 'Minnesota', value: 'Minnesota' },
-    { label: 'Mississippi', value: 'Mississippi' },
-    { label: 'Missouri', value: 'Missouri' },
-    { label: 'Montana', value: 'Montana' },
-    { label: 'Nebraska', value: 'Nebraska' },
-    { label: 'Nevada', value: 'Nevada' },
-    { label: 'New Hampshire', value: 'New Hampshire' },
-    { label: 'New Jersey', value: 'New Jersey' },
-    { label: 'New Mexico', value: 'New Mexico' },
-    { label: 'New York', value: 'New York' },
-    { label: 'North Carolina', value: 'North Carolina' },
-    { label: 'North Dakota', value: 'North Dakota' },
-    { label: 'Ohio', value: 'Ohio' },
-    { label: 'Oklahoma', value: 'Oklahoma' },
-    { label: 'Oregon', value: 'Oregon' },
-    { label: 'Pennsylvania', value: 'Pennsylvania' },
-    { label: 'Rhode Island', value: 'Rhode Island' },
-    { label: 'South Carolina', value: 'South Carolina' },
-    { label: 'South Dakota', value: 'South Dakota' },
-    { label: 'Tennessee', value: 'Tennessee' },
-    { label: 'Texas', value: 'Texas' },
-    { label: 'Utah', value: 'Utah' },
-    { label: 'Vermont', value: 'Vermont' },
-    { label: 'Virginia', value: 'Virginia' },
-    { label: 'Washington', value: 'Washington' },
-    { label: 'West Virginia', value: 'West Virginia' },
-    { label: 'Wisconsin', value: 'Wisconsin' },
-    { label: 'Wyoming', value: 'Wyoming' },
-  ],
+  options: STATE_NAMES.map((name) => ({ label: { kind: 'state', name }, value: name })),
 }
 
 const CONTACT_STEP: WizardStepConfig = {
   id: 'contact',
-  question: 'How would you prefer to be contacted?',
+  question: 'qWouldPreferBeContacted',
   type: 'single-select',
   options: [
-    { label: 'Phone call', value: 'phone call' },
-    { label: 'Text message', value: 'text message' },
-    { label: 'Email', value: 'email' },
-    { label: 'In-person visit', value: 'in-person visit' },
-    { label: 'No preference', value: 'no preference' },
+    option('oPhoneCall', 'phone call'),
+    option('oTextMessage', 'text message'),
+    option('oEmail', 'email'),
+    option('oPersonVisit', 'in-person visit'),
+    option('oNoPreference', 'no preference'),
   ],
 }
 
 export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   {
     id: 'food',
-    label: 'Food',
     icon: 'Apple',
-    description: 'SNAP, food pantries, free meals, and more',
+    description: 'descFood',
     steps: [
       {
         id: 'assistance-type',
-        question: 'What type of food assistance are you looking for?',
+        question: 'qTypeFoodAssistance',
         type: 'multi-select',
         options: [
-          { label: 'SNAP / EBT benefits', value: 'SNAP/EBT benefits' },
-          { label: 'Food pantries', value: 'food pantries' },
-          { label: 'Free meals', value: 'free meals' },
-          { label: 'WIC program', value: 'WIC program' },
-          { label: 'School meals', value: 'school meals' },
-          { label: 'Community gardens', value: 'community gardens' },
+          option('oSnapEbtBenefits', 'SNAP/EBT benefits'),
+          option('oFoodPantries', 'food pantries'),
+          option('oFreeMeals', 'free meals'),
+          option('oWicProgram', 'WIC program'),
+          option('oSchoolMeals', 'school meals'),
+          option('oCommunityGardens', 'community gardens'),
         ],
       },
       {
         id: 'household-size',
-        question: 'How many people are in your household?',
+        question: 'qManyPeopleHousehold',
         type: 'single-select',
         options: [
-          { label: '1 person', value: '1 person' },
-          { label: '2 people', value: '2 people' },
-          { label: '3 people', value: '3 people' },
-          { label: '4 people', value: '4 people' },
-          { label: '5 people', value: '5 people' },
-          { label: '6 people', value: '6 people' },
-          { label: '7 people', value: '7 people' },
-          { label: '8 or more people', value: '8 or more people' },
+          option('o1Person', '1 person'),
+          option('o2People', '2 people'),
+          option('o3People', '3 people'),
+          option('o4People', '4 people'),
+          option('o5People', '5 people'),
+          option('o6People', '6 people'),
+          option('o7People', '7 people'),
+          option('o8MorePeople', '8 or more people'),
         ],
       },
       STATE_STEP,
@@ -130,32 +109,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'housing',
-    label: 'Housing',
     icon: 'Home',
-    description: 'Emergency shelter, rent help, and housing vouchers',
+    description: 'descHousing',
     steps: [
       {
         id: 'assistance-type',
-        question: 'What type of housing help are you looking for?',
+        question: 'qTypeHousing',
         type: 'multi-select',
         options: [
-          { label: 'Emergency shelter', value: 'emergency shelter' },
-          { label: 'Rent assistance', value: 'rent assistance' },
-          { label: 'Section 8 / housing vouchers', value: 'Section 8/housing vouchers' },
-          { label: 'Utility bill help', value: 'utility bill help' },
-          { label: 'Home repair assistance', value: 'home repair assistance' },
-          { label: 'Transitional housing', value: 'transitional housing' },
+          option('oEmergencyShelter', 'emergency shelter'),
+          option('oRentAssistance', 'rent assistance'),
+          option('oSection8HousingVouchers', 'Section 8/housing vouchers'),
+          option('oUtilityBill', 'utility bill help'),
+          option('oHomeRepairAssistance', 'home repair assistance'),
+          option('oTransitionalHousing', 'transitional housing'),
         ],
       },
       {
         id: 'situation',
-        question: 'Which best describes your current situation?',
+        question: 'qDescribesCurrentSituation',
         type: 'single-select',
         options: [
-          { label: 'Currently homeless', value: 'currently homeless' },
-          { label: 'About to lose housing', value: 'about to lose housing' },
-          { label: 'Need more affordable housing', value: 'needing more affordable housing' },
-          { label: 'Need repairs on current home', value: 'needing repairs on current home' },
+          option('oCurrentlyHomeless', 'currently homeless'),
+          option('oAboutLoseHousing', 'about to lose housing'),
+          option('oNeedMoreAffordableHousing', 'needing more affordable housing'),
+          option('oNeedRepairsCurrentHome', 'needing repairs on current home'),
         ],
       },
       STATE_STEP,
@@ -164,32 +142,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'jobs',
-    label: 'Jobs',
     icon: 'Briefcase',
-    description: 'Job search, training programs, and career support',
+    description: 'descJobs',
     steps: [
       {
         id: 'assistance-type',
-        question: 'What type of career help are you looking for?',
+        question: 'qTypeCareer',
         type: 'multi-select',
         options: [
-          { label: 'Job search help', value: 'job search help' },
-          { label: 'Resume and interview coaching', value: 'resume and interview coaching' },
-          { label: 'Job training programs', value: 'job training programs' },
-          { label: 'Unemployment benefits', value: 'unemployment benefits' },
-          { label: 'Career counseling', value: 'career counseling' },
-          { label: 'Youth employment programs', value: 'youth employment programs' },
+          option('oJobSearch', 'job search help'),
+          option('oResumeInterviewCoaching', 'resume and interview coaching'),
+          option('oJobTrainingPrograms', 'job training programs'),
+          option('oUnemploymentBenefits', 'unemployment benefits'),
+          option('oCareerCounseling', 'career counseling'),
+          option('oYouthEmploymentPrograms', 'youth employment programs'),
         ],
       },
       {
         id: 'experience',
-        question: 'How would you describe your work experience?',
+        question: 'qWouldDescribeWorkExperience',
         type: 'single-select',
         options: [
-          { label: 'No work experience yet', value: 'no work experience' },
-          { label: 'Some experience', value: 'some work experience' },
-          { label: 'Experienced worker', value: 'an experienced worker' },
-          { label: 'Looking for a career change', value: 'looking for a career change' },
+          option('oNoWorkExperienceYet', 'no work experience'),
+          option('oSomeExperience', 'some work experience'),
+          option('oExperiencedWorker', 'an experienced worker'),
+          option('oCareerChange', 'looking for a career change'),
         ],
       },
       STATE_STEP,
@@ -198,32 +175,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'transportation',
-    label: 'Transportation',
     icon: 'Car',
-    description: 'Bus passes, ride programs, and gas assistance',
+    description: 'descTransportation',
     steps: [
       {
         id: 'assistance-type',
-        question: 'What type of transportation help are you looking for?',
+        question: 'qTypeTransportation',
         type: 'multi-select',
         options: [
-          { label: 'Bus / transit passes', value: 'bus/transit passes' },
-          { label: 'Car repair assistance', value: 'car repair assistance' },
-          { label: 'Ride programs', value: 'ride programs' },
-          { label: 'Gas vouchers', value: 'gas vouchers' },
-          { label: 'Vehicle donation program', value: 'vehicle donation program' },
-          { label: 'Disabled transportation', value: 'disabled transportation services' },
+          option('oBusTransitPasses', 'bus/transit passes'),
+          option('oCarRepairAssistance', 'car repair assistance'),
+          option('oRidePrograms', 'ride programs'),
+          option('oGasVouchers', 'gas vouchers'),
+          option('oVehicleDonationProgram', 'vehicle donation program'),
+          option('oDisabledTransportation', 'disabled transportation services'),
         ],
       },
       {
         id: 'frequency',
-        question: 'How often do you need transportation support?',
+        question: 'qOftenNeedTransportationSupport',
         type: 'single-select',
         options: [
-          { label: 'Daily (work / school)', value: 'daily for work or school' },
-          { label: 'Several times a week', value: 'several times a week' },
-          { label: 'Occasional trips', value: 'occasionally' },
-          { label: 'One-time need', value: 'a one-time need' },
+          option('oDailyWorkSchool', 'daily for work or school'),
+          option('oSeveralTimesWeek', 'several times a week'),
+          option('oOccasionalTrips', 'occasionally'),
+          option('oOneTimeNeed', 'a one-time need'),
         ],
       },
       STATE_STEP,
@@ -232,32 +208,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'legal',
-    label: 'Legal',
     icon: 'Scale',
-    description: 'Free legal aid for housing, family, and benefits',
+    description: 'descLegal',
     steps: [
       {
         id: 'assistance-type',
-        question: 'What type of legal help are you looking for?',
+        question: 'qTypeLegal',
         type: 'multi-select',
         options: [
-          { label: 'Tenant rights / eviction', value: 'tenant rights and eviction help' },
-          { label: 'Family law', value: 'family law assistance' },
-          { label: 'Immigration', value: 'immigration legal help' },
-          { label: 'Criminal record expungement', value: 'criminal record expungement' },
-          { label: 'Benefits appeals', value: 'benefits appeals assistance' },
-          { label: 'Consumer protection', value: 'consumer protection help' },
+          option('oTenantRightsEviction', 'tenant rights and eviction help'),
+          option('oFamilyLaw', 'family law assistance'),
+          option('oImmigration', 'immigration legal help'),
+          option('oCriminalRecordExpungement', 'criminal record expungement'),
+          option('oBenefitsAppeals', 'benefits appeals assistance'),
+          option('oConsumerProtection', 'consumer protection help'),
         ],
       },
       {
         id: 'urgency',
-        question: 'How urgent is your legal situation?',
+        question: 'qUrgentLegalSituation',
         type: 'single-select',
         options: [
-          { label: 'Immediate (court date / deadline this week)', value: 'immediate — I have a court date or deadline this week' },
-          { label: 'Urgent (within the next month)', value: 'urgent — within the next month' },
-          { label: 'Not urgent, just need guidance', value: 'not urgent, just looking for guidance' },
-          { label: 'Just exploring my options', value: 'just exploring my options' },
+          option('oImmediateCourtDateDeadlineThis', 'immediate — I have a court date or deadline this week'),
+          option('oUrgentWithinNextMonth', 'urgent — within the next month'),
+          option('oNotUrgentJustNeedGuidance', 'not urgent, just looking for guidance'),
+          option('oJustExploringMyOptions', 'just exploring my options'),
         ],
       },
       STATE_STEP,
@@ -266,33 +241,32 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'healthcare',
-    label: 'Healthcare',
     icon: 'Heart',
-    description: 'Free clinics, Medicaid, prescriptions, and mental health',
+    description: 'descHealthcare',
     steps: [
       {
         id: 'assistance-type',
-        question: 'What type of healthcare help are you looking for?',
+        question: 'qTypeHealthcare',
         type: 'multi-select',
         options: [
-          { label: 'Medicaid / Medicare enrollment', value: 'Medicaid/Medicare enrollment help' },
-          { label: 'Free or low-cost clinics', value: 'free or low-cost clinic access' },
-          { label: 'Prescription assistance', value: 'prescription assistance' },
-          { label: 'Mental health services', value: 'mental health services' },
-          { label: 'Dental care', value: 'dental care' },
-          { label: 'Vision care', value: 'vision care' },
+          option('oMedicaidMedicareEnrollment', 'Medicaid/Medicare enrollment help'),
+          option('oFreeLowCostClinics', 'free or low-cost clinic access'),
+          option('oPrescriptionAssistance', 'prescription assistance'),
+          option('oMentalHealthServices', 'mental health services'),
+          option('oDentalCare', 'dental care'),
+          option('oVisionCare', 'vision care'),
         ],
       },
       {
         id: 'insurance',
-        question: 'What is your current insurance status?',
+        question: 'qCurrentInsuranceStatus',
         type: 'single-select',
         options: [
-          { label: 'No insurance', value: 'no insurance' },
-          { label: 'Medicaid', value: 'Medicaid' },
-          { label: 'Medicare', value: 'Medicare' },
-          { label: 'Private insurance', value: 'private insurance' },
-          { label: 'Employer insurance', value: 'employer insurance' },
+          option('oNoInsurance', 'no insurance'),
+          assistant('ecMedicaid', 'Medicaid', 'en'),
+          assistant('ecMedicare', 'Medicare', 'en'),
+          option('oPrivateInsurance', 'private insurance'),
+          option('oEmployerInsurance', 'employer insurance'),
         ],
       },
       STATE_STEP,
@@ -301,43 +275,42 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'eitc_tax_filing',
-    label: 'Tax Filing & EITC',
     icon: 'Receipt',
-    description: 'Free tax prep, EITC refunds, and filing assistance',
+    description: 'descEitcTaxFiling',
     steps: [
       {
         id: 'filing-status',
-        question: 'What is your tax filing status?',
+        question: 'qTaxFilingStatus',
         type: 'single-select',
         options: [
-          { label: 'Single', value: 'single' },
-          { label: 'Married filing jointly', value: 'married filing jointly' },
-          { label: 'Married filing separately', value: 'married filing separately' },
-          { label: 'Head of household', value: 'head of household' },
-          { label: 'Qualifying surviving spouse', value: 'qualifying surviving spouse' },
+          option('oSingle', 'single'),
+          option('oMarriedFilingJointly', 'married filing jointly'),
+          option('oMarriedFilingSeparately', 'married filing separately'),
+          option('oHeadHousehold', 'head of household'),
+          option('oQualifyingSurvivingSpouse', 'qualifying surviving spouse'),
         ],
       },
       {
         id: 'income-range',
-        question: 'What is your approximate annual household income?',
+        question: 'qApproximateAnnualHouseholdIncome',
         type: 'single-select',
         options: [
-          { label: 'Under $17,000', value: 'under $17,000' },
-          { label: '$17,000 – $25,000', value: '$17,000–$25,000' },
-          { label: '$25,000 – $40,000', value: '$25,000–$40,000' },
-          { label: '$40,000 – $57,000', value: '$40,000–$57,000' },
-          { label: 'Over $57,000', value: 'over $57,000' },
+          usd({ kind: 'usdUnder', amount: 17000 }, 'under $17,000'),
+          usd({ kind: 'usdRange', from: 17000, to: 25000 }, '$17,000–$25,000'),
+          usd({ kind: 'usdRange', from: 25000, to: 40000 }, '$25,000–$40,000'),
+          usd({ kind: 'usdRange', from: 40000, to: 57000 }, '$40,000–$57,000'),
+          usd({ kind: 'usdOver', amount: 57000 }, 'over $57,000'),
         ],
       },
       {
         id: 'dependents',
-        question: 'How many qualifying children or dependents do you have?',
+        question: 'qManyQualifyingChildrenDependentsHave',
         type: 'single-select',
         options: [
-          { label: 'None', value: 'no qualifying children' },
-          { label: '1 child', value: '1 qualifying child' },
-          { label: '2 children', value: '2 qualifying children' },
-          { label: '3 or more children', value: '3 or more qualifying children' },
+          option('oNone', 'no qualifying children'),
+          option('o1Child', '1 qualifying child'),
+          option('o2Children', '2 qualifying children'),
+          option('o3MoreChildren', '3 or more qualifying children'),
         ],
       },
       CONTACT_STEP,
@@ -345,32 +318,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'free_legal',
-    label: 'Free Legal Help',
     icon: 'Gavel',
-    description: 'Legal aid clinics, pro bono attorneys, and self-help resources',
+    description: 'descFreeLegal',
     steps: [
       {
         id: 'legal-issue',
-        question: 'What type of legal issue do you need help with?',
+        question: 'qTypeLegalIssueNeedWith',
         type: 'multi-select',
         options: [
-          { label: 'Eviction or housing court', value: 'eviction or housing court' },
-          { label: 'Domestic violence protection order', value: 'domestic violence protection order' },
-          { label: 'Child custody or support', value: 'child custody or support' },
-          { label: 'Immigration or DACA', value: 'immigration or DACA' },
-          { label: 'Criminal record expungement', value: 'criminal record expungement' },
-          { label: 'Benefits denial or appeal', value: 'benefits denial or appeal' },
+          option('oEvictionHousingCourt', 'eviction or housing court'),
+          option('oDomesticViolenceProtectionOrder', 'domestic violence protection order'),
+          option('oChildCustodySupport', 'child custody or support'),
+          option('oImmigrationDaca', 'immigration or DACA'),
+          option('oCriminalRecordExpungement', 'criminal record expungement'),
+          option('oBenefitsDenialAppeal', 'benefits denial or appeal'),
         ],
       },
       {
         id: 'urgency',
-        question: 'How urgent is your legal situation?',
+        question: 'qUrgentLegalSituation',
         type: 'single-select',
         options: [
-          { label: 'Immediate (court date or deadline this week)', value: 'immediate — court date or deadline this week' },
-          { label: 'Urgent (within the next 30 days)', value: 'urgent — within the next 30 days' },
-          { label: 'Not urgent, need general guidance', value: 'not urgent, need general guidance' },
-          { label: 'Just exploring options', value: 'just exploring options' },
+          option('oImmediateCourtDateOrDeadline', 'immediate — court date or deadline this week'),
+          option('oUrgentWithinNext30Days', 'urgent — within the next 30 days'),
+          option('oNotUrgentNeedGeneralGuidance', 'not urgent, need general guidance'),
+          assistant('rfExploring', 'just exploring options'),
         ],
       },
       STATE_STEP,
@@ -379,33 +351,32 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'prenatal_natal_care',
-    label: 'Prenatal & Newborn Care',
     icon: 'Baby',
-    description: 'Prenatal visits, WIC, newborn support, and postpartum care',
+    description: 'descPrenatalNatalCare',
     steps: [
       {
         id: 'care-type',
-        question: 'What type of support are you looking for?',
+        question: 'qTypeSupport',
         type: 'multi-select',
         options: [
-          { label: 'Prenatal checkups and ultrasounds', value: 'prenatal checkups and ultrasounds' },
-          { label: 'WIC nutrition program', value: 'WIC nutrition program' },
-          { label: 'Birthing center or hospital financial help', value: 'birthing center or hospital financial help' },
-          { label: 'Postpartum mental health support', value: 'postpartum mental health support' },
-          { label: 'Newborn care and supplies', value: 'newborn care and supplies' },
-          { label: 'Lactation / breastfeeding support', value: 'lactation and breastfeeding support' },
+          option('oPrenatalCheckupsUltrasounds', 'prenatal checkups and ultrasounds'),
+          option('oWicNutritionProgram', 'WIC nutrition program'),
+          option('oBirthingCenterHospitalFinancial', 'birthing center or hospital financial help'),
+          option('oPostpartumMentalHealthSupport', 'postpartum mental health support'),
+          option('oNewbornCareSupplies', 'newborn care and supplies'),
+          option('oLactationBreastfeedingSupport', 'lactation and breastfeeding support'),
         ],
       },
       {
         id: 'stage',
-        question: 'What stage best describes your current situation?',
+        question: 'qStageDescribesCurrentSituation',
         type: 'single-select',
         options: [
-          { label: 'Currently pregnant (1st trimester)', value: 'currently pregnant — 1st trimester' },
-          { label: 'Currently pregnant (2nd trimester)', value: 'currently pregnant — 2nd trimester' },
-          { label: 'Currently pregnant (3rd trimester)', value: 'currently pregnant — 3rd trimester' },
-          { label: 'Recently gave birth (within 3 months)', value: 'recently gave birth within the last 3 months' },
-          { label: 'Planning a pregnancy', value: 'planning a pregnancy' },
+          option('oCurrentlyPregnant1stTrimester', 'currently pregnant — 1st trimester'),
+          option('oCurrentlyPregnant2ndTrimester', 'currently pregnant — 2nd trimester'),
+          option('oCurrentlyPregnant3rdTrimester', 'currently pregnant — 3rd trimester'),
+          option('oRecentlyGaveBirthWithin3', 'recently gave birth within the last 3 months'),
+          option('oPlanningPregnancy', 'planning a pregnancy'),
         ],
       },
       STATE_STEP,
@@ -414,32 +385,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'waste_disposal',
-    label: 'Waste & Disposal',
     icon: 'Trash2',
-    description: 'Bulk trash pickup, hazardous waste drop-off, and recycling help',
+    description: 'descWasteDisposal',
     steps: [
       {
         id: 'waste-type',
-        question: 'What type of waste or disposal help do you need?',
+        question: 'qTypeWasteDisposalNeed',
         type: 'multi-select',
         options: [
-          { label: 'Bulk item or furniture removal', value: 'bulk item or furniture removal' },
-          { label: 'Household hazardous waste (paint, chemicals)', value: 'household hazardous waste disposal' },
-          { label: 'Electronics recycling (e-waste)', value: 'electronics recycling (e-waste)' },
-          { label: 'Medical sharps or medication disposal', value: 'medical sharps or medication disposal' },
-          { label: 'Yard waste or compost', value: 'yard waste or compost' },
-          { label: 'General recycling access', value: 'general recycling access' },
+          option('oBulkItemFurnitureRemoval', 'bulk item or furniture removal'),
+          option('oHouseholdHazardousWastePaintChemicals', 'household hazardous waste disposal'),
+          option('oElectronicsRecyclingEWaste', 'electronics recycling (e-waste)'),
+          option('oMedicalSharpsMedicationDisposal', 'medical sharps or medication disposal'),
+          option('oYardWasteCompost', 'yard waste or compost'),
+          option('oGeneralRecyclingAccess', 'general recycling access'),
         ],
       },
       {
         id: 'situation',
-        question: 'Which best describes your situation?',
+        question: 'qDescribesSituation',
         type: 'single-select',
         options: [
-          { label: 'One-time large cleanout', value: 'one-time large cleanout' },
-          { label: 'Ongoing disposal need', value: 'ongoing disposal need' },
-          { label: 'Responding to a natural disaster or emergency', value: 'responding to a natural disaster or emergency' },
-          { label: 'Moving or eviction cleanup', value: 'moving or eviction cleanup' },
+          option('oOneTimeLargeCleanout', 'one-time large cleanout'),
+          option('oOngoingDisposalNeed', 'ongoing disposal need'),
+          option('oRespondingNaturalDisasterEmergency', 'responding to a natural disaster or emergency'),
+          option('oMovingEvictionCleanup', 'moving or eviction cleanup'),
         ],
       },
       STATE_STEP,
@@ -448,31 +418,30 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'free_camping',
-    label: 'Free Camping',
     icon: 'Tent',
-    description: 'Free campsites, dispersed camping, and overnight shelters',
+    description: 'descFreeCamping',
     steps: [
       {
         id: 'camping-type',
-        question: 'What type of camping or overnight shelter are you looking for?',
+        question: 'qTypeCampingOvernightShelter',
         type: 'multi-select',
         options: [
-          { label: 'Free dispersed (primitive) camping on public land', value: 'free dispersed camping on public land' },
-          { label: 'Free designated campsites (national forest, BLM)', value: 'free designated campsites on federal land' },
-          { label: 'Safe overnight parking for a vehicle', value: 'safe overnight parking for a vehicle' },
-          { label: 'Emergency overnight shelter', value: 'emergency overnight shelter' },
-          { label: 'Long-term camping while awaiting housing', value: 'long-term camping while awaiting housing' },
+          option('oFreeDispersedPrimitiveCampingPublic', 'free dispersed camping on public land'),
+          option('oFreeDesignatedCampsitesNationalForest', 'free designated campsites on federal land'),
+          option('oSafeOvernightParkingVehicle', 'safe overnight parking for a vehicle'),
+          option('oEmergencyOvernightShelter', 'emergency overnight shelter'),
+          option('oLongTermCampingWhileAwaiting', 'long-term camping while awaiting housing'),
         ],
       },
       {
         id: 'duration',
-        question: 'How long do you need to camp or stay?',
+        question: 'qLongNeedCampStay',
         type: 'single-select',
         options: [
-          { label: '1–2 nights', value: '1–2 nights' },
-          { label: 'A few days (up to a week)', value: 'a few days up to a week' },
-          { label: '1–4 weeks', value: '1–4 weeks' },
-          { label: 'More than a month', value: 'more than a month' },
+          option('o12Nights', '1–2 nights'),
+          option('oFewDaysUpWeek', 'a few days up to a week'),
+          option('o14Weeks', '1–4 weeks'),
+          option('oMoreThanMonth', 'more than a month'),
         ],
       },
       STATE_STEP,
@@ -481,32 +450,31 @@ export const CATEGORY_WIZARDS: CategoryWizardConfig[] = [
   },
   {
     id: 'free_goods_donation',
-    label: 'Free Goods & Donations',
     icon: 'Gift',
-    description: 'Free clothing, furniture, household items, and donation programs',
+    description: 'descFreeGoodsDonation',
     steps: [
       {
         id: 'goods-type',
-        question: 'What types of goods are you looking for?',
+        question: 'qTypesGoods',
         type: 'multi-select',
         options: [
-          { label: 'Clothing and shoes', value: 'clothing and shoes' },
-          { label: 'Furniture and home goods', value: 'furniture and home goods' },
-          { label: 'Baby and children items', value: 'baby and children items' },
-          { label: 'Electronics and appliances', value: 'electronics and appliances' },
-          { label: 'Hygiene and personal care items', value: 'hygiene and personal care items' },
-          { label: 'School supplies', value: 'school supplies' },
+          option('oClothingShoes', 'clothing and shoes'),
+          option('oFurnitureHomeGoods', 'furniture and home goods'),
+          option('oBabyChildrenItems', 'baby and children items'),
+          option('oElectronicsAppliances', 'electronics and appliances'),
+          option('oHygienePersonalCareItems', 'hygiene and personal care items'),
+          option('oSchoolSupplies', 'school supplies'),
         ],
       },
       {
         id: 'household-situation',
-        question: 'Which best describes your current situation?',
+        question: 'qDescribesCurrentSituation',
         type: 'single-select',
         options: [
-          { label: 'Setting up a new home', value: 'setting up a new home' },
-          { label: 'Lost belongings (fire, flood, disaster)', value: 'lost belongings due to fire, flood, or disaster' },
-          { label: 'Experiencing financial hardship', value: 'experiencing financial hardship' },
-          { label: 'Transitioning out of shelter or facility', value: 'transitioning out of shelter or a care facility' },
+          option('oSettingUpNewHome', 'setting up a new home'),
+          option('oLostBelongingsFireFloodDisaster', 'lost belongings due to fire, flood, or disaster'),
+          option('oExperiencingFinancialHardship', 'experiencing financial hardship'),
+          option('oTransitioningOutShelterFacility', 'transitioning out of shelter or a care facility'),
         ],
       },
       STATE_STEP,

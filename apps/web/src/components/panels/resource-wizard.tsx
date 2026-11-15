@@ -1,27 +1,73 @@
 'use client'
 
 // apps/web/src/components/panels/resource-wizard.tsx
-// Step-by-step wizard for a given resource category
+// Owner: Jelal Connor / SYNRG SCALING, LLC
+//
+// One Get Help wizard, step by step, in the member's language. Each step:
+//   - its question is the heading; focus moves to it when the wizard opens and after each answer
+//     or Back, and it names the group of options, whose visible hint describes the group;
+//   - its options are rendered by a StepOptions keyed by the step id, so nothing typed (the
+//     filter) carries over to another step; each option answers with its VALUE, never its label;
+//   - a multi-select step's Continue is aria-disabled until something is chosen; pressing it
+//     then says so in the wizard's one always-mounted alert;
+//   - the filter (long lists) has a visible label, and its result is spoken in the always-mounted
+//     status line (announce(): one new node per announcement).
+// Back on the first step and Cancel leave the wizard (the panel returns focus to the card).
 
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { ChevronLeft, Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import type { Locale } from '@/lib/i18n'
 import type { CategoryWizardConfig, WizardStepConfig } from '@/lib/ai/resource-wizard-config'
+import { assistantT } from '@/lib/i18n-assistant'
+import { filterMatches, getHelpT, wizardLabelText } from '@/lib/i18n-get-help'
+import { formatMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
+import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+
+type Answers = Record<string, string | string[]>
 
 interface ResourceWizardProps {
   category: CategoryWizardConfig
-  onComplete: (answers: Record<string, string | string[]>) => void
-  onBack: () => void
+  locale: Locale
+  onComplete: (answers: Answers) => void
+  onCancel: () => void
 }
 
-export function ResourceWizard({ category, onComplete, onBack }: ResourceWizardProps) {
+const CHROME_BUTTON =
+  'inline-flex min-h-6 items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-stone-700 hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23]'
+
+export function ResourceWizard({ category, locale, onComplete, onCancel }: ResourceWizardProps) {
   const [stepIndex, setStepIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({})
-  const [textValue, setTextValue] = useState('')
+  const [answers, setAnswers] = useState<Answers>({})
+  const [status, setStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const [alert, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const questionId = useId()
+  const hintId = useId()
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   const totalSteps = category.steps.length
   const currentStep = category.steps[stepIndex]
+
+  // Opening the wizard, each answer and Back: the member starts the step at its question.
+  useEffect(() => {
+    headingRef.current?.focus()
+  }, [stepIndex])
+
+  function clearRegions() {
+    clearAnnouncement(setStatus)
+    clearAnnouncement(setAlert)
+  }
+
+  function advance(current: Answers) {
+    clearRegions()
+    if (stepIndex + 1 >= totalSteps) {
+      onComplete(current)
+    } else {
+      setStepIndex((i) => i + 1)
+    }
+  }
 
   function handleSingleSelect(value: string) {
     const next = { ...answers, [currentStep.id]: value }
@@ -30,39 +76,26 @@ export function ResourceWizard({ category, onComplete, onBack }: ResourceWizardP
   }
 
   function handleMultiToggle(value: string) {
+    clearAnnouncement(setAlert)
     const existing = (answers[currentStep.id] as string[]) ?? []
-    const updated = existing.includes(value)
-      ? existing.filter((v) => v !== value)
-      : [...existing, value]
+    const updated = existing.includes(value) ? existing.filter((v) => v !== value) : [...existing, value]
     setAnswers((prev) => ({ ...prev, [currentStep.id]: updated }))
-  }
-
-  function handleTextSubmit() {
-    if (!textValue.trim()) return
-    const next = { ...answers, [currentStep.id]: textValue.trim() }
-    setTextValue('')
-    setAnswers(next)
-    advance(next)
   }
 
   function handleMultiSubmit() {
     const selected = (answers[currentStep.id] as string[]) ?? []
-    if (selected.length === 0) return
-    advance(answers)
-  }
-
-  function advance(current: Record<string, string | string[]>) {
-    if (stepIndex + 1 >= totalSteps) {
-      onComplete(current)
-    } else {
-      setStepIndex((i) => i + 1)
+    if (selected.length === 0) {
+      announce(setAlert, getHelpT(locale, 'chooseAtLeastOne'))
+      return
     }
+    advance(answers)
   }
 
   function handleBack() {
     if (stepIndex === 0) {
-      onBack()
+      onCancel()
     } else {
+      clearRegions()
       setStepIndex((i) => i - 1)
     }
   }
@@ -70,99 +103,162 @@ export function ResourceWizard({ category, onComplete, onBack }: ResourceWizardP
   return (
     <div className="max-w-lg mx-auto w-full flex flex-col gap-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleBack}
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-stone-100 transition-colors text-stone-500"
-        >
-          <ChevronLeft className="w-4 h-4" />
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={handleBack} className={CHROME_BUTTON}>
+          <ChevronLeft aria-hidden="true" className="w-4 h-4 rtl:-scale-x-100" />
+          {assistantT(locale, 'flowBack')}
         </button>
-        <div className="flex-1">
-          <p className="text-xs text-stone-400 font-medium uppercase tracking-wide">
-            Step {stepIndex + 1} of {totalSteps}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-stone-600 font-medium">
+            {formatMessage(assistantT(locale, 'flowStep'), {
+              current: formatCount(stepIndex + 1, locale),
+              total: formatCount(totalSteps, locale),
+            })}
           </p>
-          <div className="mt-1.5 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+          <div aria-hidden="true" className="mt-1.5 h-1.5 bg-stone-200 rounded-full overflow-hidden">
             <div
               className="h-full bg-[#4a5d23] rounded-full transition-all duration-300"
               style={{ width: `${((stepIndex + 1) / totalSteps) * 100}%` }}
             />
           </div>
         </div>
+        <button type="button" onClick={onCancel} className={CHROME_BUTTON}>
+          {assistantT(locale, 'flowCancel')}
+        </button>
       </div>
 
       {/* Question */}
-      <h2 className="text-lg font-semibold text-stone-800">{currentStep.question}</h2>
+      <h2 ref={headingRef} id={questionId} tabIndex={-1} className="text-lg font-semibold text-stone-800 outline-none break-words">
+        {getHelpT(locale, currentStep.question)}
+      </h2>
 
       {/* Options */}
       <StepOptions
+        key={currentStep.id}
         step={currentStep}
-        answers={answers}
-        textValue={textValue}
-        onTextChange={setTextValue}
+        locale={locale}
+        questionId={questionId}
+        hintId={hintId}
+        selected={(answers[currentStep.id] as string[] | undefined) ?? []}
         onSingleSelect={handleSingleSelect}
         onMultiToggle={handleMultiToggle}
-        onTextSubmit={handleTextSubmit}
         onMultiSubmit={handleMultiSubmit}
+        onFilterResult={(text) => (text ? announce(setStatus, text) : clearAnnouncement(setStatus))}
       />
+
+      {/* One status line and one alert, always mounted. */}
+      <p role="status" className="sr-only">
+        <AnnouncementText announcement={status} />
+      </p>
+      <p role="alert" className="text-sm font-medium text-red-700">
+        <AnnouncementText announcement={alert} />
+      </p>
     </div>
   )
 }
 
 interface StepOptionsProps {
   step: WizardStepConfig
-  answers: Record<string, string | string[]>
-  textValue: string
-  onTextChange: (v: string) => void
-  onSingleSelect: (v: string) => void
-  onMultiToggle: (v: string) => void
-  onTextSubmit: () => void
+  locale: Locale
+  questionId: string
+  hintId: string
+  selected: string[]
+  onSingleSelect: (value: string) => void
+  onMultiToggle: (value: string) => void
   onMultiSubmit: () => void
+  onFilterResult: (text: string) => void
 }
 
-function StepOptions({
+interface LabelledOption {
+  value: string
+  text: string
+  lang?: 'en'
+}
+
+/** The options a filter query leaves, matched on the words the member reads. */
+export function filterOptions(options: LabelledOption[], query: string): LabelledOption[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return options
+  return options.filter((o) => o.text.toLowerCase().includes(q))
+}
+
+function OptionText({ option }: { option: LabelledOption }) {
+  // A US program name written the same in every language is marked English.
+  return option.lang ? <span lang={option.lang}>{option.text}</span> : <>{option.text}</>
+}
+
+const OPTION_BUTTON =
+  'w-full min-h-6 text-start px-4 py-3 rounded-xl border transition-all text-sm font-medium break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23]'
+
+export function StepOptions({
   step,
-  answers,
-  textValue,
-  onTextChange,
+  locale,
+  questionId,
+  hintId,
+  selected,
   onSingleSelect,
   onMultiToggle,
-  onTextSubmit,
   onMultiSubmit,
+  onFilterResult,
 }: StepOptionsProps) {
-  const selected = (answers[step.id] as string[]) ?? []
+  const filterId = useId()
   const [filterQuery, setFilterQuery] = useState('')
+  const labelled: LabelledOption[] = step.options.map((o) => ({
+    value: o.value,
+    text: wizardLabelText(o.label, locale),
+    lang: o.label.kind === 'assistant' ? o.label.lang : undefined,
+  }))
+  const isManyOptions = labelled.length > 10
+  const visible = isManyOptions ? filterOptions(labelled, filterQuery) : labelled
 
-  const isManyOptions = (step.options?.length ?? 0) > 10
-
-  const filteredOptions = useMemo(() => {
-    if (!isManyOptions || !filterQuery.trim()) return step.options ?? []
-    const q = filterQuery.toLowerCase()
-    return (step.options ?? []).filter((opt) => opt.label.toLowerCase().includes(q))
-  }, [step.options, filterQuery, isManyOptions])
+  function handleFilter(value: string) {
+    setFilterQuery(value)
+    if (!value.trim()) return onFilterResult('')
+    const n = filterOptions(labelled, value).length
+    onFilterResult(n === 0 ? getHelpT(locale, 'filterNone') : filterMatches(n, locale))
+  }
 
   if (step.type === 'single-select') {
     return (
       <div className="flex flex-col gap-2">
+        <p id={hintId} className="text-sm text-stone-600">
+          {getHelpT(locale, 'hintChooseOne')}
+        </p>
         {isManyOptions && (
-          <div className="relative mb-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-            <Input
-              value={filterQuery}
-              onChange={(e) => setFilterQuery(e.target.value)}
-              placeholder="Filter..."
-              className="pl-9 py-2 rounded-xl bg-[#faf9f6] border-stone-200 text-stone-900 placeholder:text-stone-400"
-              autoFocus
-            />
+          <div className="flex flex-col gap-1 mb-1">
+            <label htmlFor={filterId} className="text-sm font-medium text-stone-700">
+              {getHelpT(locale, 'filterLabel')}
+            </label>
+            <div className="relative">
+              <Search aria-hidden="true" className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-600 pointer-events-none" />
+              <Input
+                id={filterId}
+                value={filterQuery}
+                onChange={(e) => handleFilter(e.target.value)}
+                dir="auto"
+                autoComplete="off"
+                className="ps-9 py-2 rounded-xl bg-[#faf9f6] border-stone-500 text-stone-900"
+              />
+            </div>
           </div>
         )}
-        <div className={isManyOptions ? 'max-h-72 overflow-y-auto flex flex-col gap-2 pr-1' : 'flex flex-col gap-2'}>
-          {filteredOptions.map((opt) => (
+        {visible.length === 0 ? (
+          <p className="text-sm text-stone-700">{getHelpT(locale, 'filterNone')}</p>
+        ) : null}
+        <div
+          role="group"
+          aria-labelledby={questionId}
+          aria-describedby={hintId}
+          className={isManyOptions ? 'max-h-72 overflow-y-auto flex flex-col gap-2 pe-1' : 'flex flex-col gap-2'}
+        >
+          {visible.map((opt) => (
             <button
+              type="button"
               key={opt.value}
               onClick={() => onSingleSelect(opt.value)}
-              className="w-full text-left px-4 py-3 rounded-xl border border-stone-200 bg-[#faf9f6] hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee] transition-all text-sm text-stone-700 font-medium"
+              className={cn(OPTION_BUTTON, 'border-stone-500 bg-[#faf9f6] hover:border-[#4a5d23] hover:bg-[#f5f3ee] text-stone-800')}
             >
-              {opt.label}
+              <OptionText option={opt} />
             </button>
           ))}
         </div>
@@ -170,70 +266,58 @@ function StepOptions({
     )
   }
 
-  if (step.type === 'multi-select') {
-    return (
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2">
-          {step.options?.map((opt) => {
-            const isChecked = selected.includes(opt.value)
-            return (
-              <button
-                key={opt.value}
-                onClick={() => onMultiToggle(opt.value)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition-all text-sm font-medium flex items-center gap-3 ${
-                  isChecked
-                    ? 'border-[#4a5d23] bg-[#4a5d23]/5 text-[#4a5d23]'
-                    : 'border-stone-200 bg-[#faf9f6] hover:border-stone-300 text-stone-700'
-                }`}
+  const nothingChosen = selected.length === 0
+  return (
+    <div className="flex flex-col gap-3">
+      <p id={hintId} className="text-sm text-stone-600">
+        {getHelpT(locale, 'hintChooseAll')}
+      </p>
+      <div role="group" aria-labelledby={questionId} aria-describedby={hintId} className="flex flex-col gap-2">
+        {labelled.map((opt) => {
+          const isChecked = selected.includes(opt.value)
+          return (
+            <button
+              type="button"
+              key={opt.value}
+              aria-pressed={isChecked}
+              onClick={() => onMultiToggle(opt.value)}
+              className={cn(
+                OPTION_BUTTON,
+                'flex items-center gap-3',
+                isChecked ? 'border-[#4a5d23] bg-[#4a5d23]/5 text-[#3d4e1c]' : 'border-stone-500 bg-[#faf9f6] hover:border-[#4a5d23] text-stone-800',
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors',
+                  isChecked ? 'border-[#4a5d23] bg-[#4a5d23]' : 'border-stone-500 bg-white',
+                )}
               >
-                <span
-                  className={`w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-colors ${
-                    isChecked ? 'border-[#4a5d23] bg-[#4a5d23]' : 'border-stone-300 bg-white'
-                  }`}
-                >
-                  {isChecked && (
-                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
-                      <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </span>
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-        <Button
-          onClick={onMultiSubmit}
-          disabled={selected.length === 0}
-          className="w-full bg-[#4a5d23] hover:bg-[#3d4e1c] text-white rounded-xl py-3"
-        >
-          Continue
-        </Button>
+                {isChecked && (
+                  <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
+                    <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="min-w-0">
+                <OptionText option={opt} />
+              </span>
+            </button>
+          )
+        })}
       </div>
-    )
-  }
-
-  if (step.type === 'text') {
-    return (
-      <div className="flex flex-col gap-3">
-        <Input
-          value={textValue}
-          onChange={(e) => onTextChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && onTextSubmit()}
-          placeholder={step.placeholder ?? 'Type your answer...'}
-          className="py-3 rounded-xl bg-[#faf9f6] border-stone-200 text-stone-900 placeholder:text-stone-400"
-          autoFocus
-        />
-        <Button
-          onClick={onTextSubmit}
-          disabled={!textValue.trim()}
-          className="w-full bg-[#4a5d23] hover:bg-[#3d4e1c] text-white rounded-xl py-3"
-        >
-          Continue
-        </Button>
-      </div>
-    )
-  }
-
-  return null
+      <button
+        type="button"
+        aria-disabled={nothingChosen}
+        onClick={onMultiSubmit}
+        className={cn(
+          'w-full min-h-6 rounded-xl py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a5d23] focus-visible:ring-offset-2',
+          nothingChosen ? 'bg-stone-200 text-stone-700' : 'bg-[#4a5d23] hover:bg-[#3d4e1c] text-white',
+        )}
+      >
+        {assistantT(locale, 'flowContinue')}
+      </button>
+    </div>
+  )
 }

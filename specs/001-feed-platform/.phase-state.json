@@ -998,6 +998,14 @@
       "migration": null,
       "note": "P6 translations wave 6: Browse Programs (filters with visible labels, category chips via resourceCategoryLabel, state picker names via lib/i18n-us-states.ts with code values, every action, Share to Feed dialog, Saved list, translated failure lines), sign in / sign up / forgot / reset password and the two-factor prompt, and the app / panel error screens in the viewer's language. Signed-out locale: the root layout's one resolver, feed_locale cookie then Accept-Language (lib/request-locale.ts). Supabase calls and redirects identical en/ko (test); failure lines from AuthError.code; Supabase text never shown. New code-only rows auth.signup.failed, auth.guest.failed, auth.password.failed {code, step}; oauth.start.error code-only; AUTH_LOGIN_SUCCESS audit without email. Terms/Privacy row stays English (lang=\"en\", placeholder). Always-mounted alert / status lines, aria-disabled busy buttons, readOnly busy inputs, focus on view change, required/aria-required/autocomplete, 4.5:1 / 3:1, 24px, 360px. Dictionaries lib/i18n-programs.ts (49), lib/i18n-auth.ts (100 + 2 count tables), lib/i18n-errors.ts (2), lib/i18n-us-states.ts (56); 838 native-review rows. 37 mutants red.",
       "pr": 256
+    },
+    "feed-p6-w7-get-help-wizard": {
+      "status": "BUILT_PR_OPEN",
+      "branch": "feature/feed-p6-w7-get-help-wizard",
+      "base": "origin/develop 54c988a",
+      "migration": null,
+      "note": "P6 translations wave 7: the Get Help wizard (12 category cards, every step's question, hint and options, states via usStateName, income ranges via the Assistant's words + formatUsd, Medicaid/Medicare lang=en) in the member's language with lang/dir on the panel. Values pinned to the English-only config; states still sent by English name; en vs ko hand the Assistant the same wizardContext, log rows and message (test). Prompt builder moved unchanged to lib/ai/wizard-prompt.ts; finishing focuses the Assistant's message box. Unreachable free-text step removed. Keyed steps, heading focus, Cancel + Back return focus to the card, role=group + visible hints, aria-pressed, visible filter label + status line, aria-disabled Continue + alert, logical classes, stone-500 borders. No new log event. Dictionary lib/i18n-get-help.ts (168 keys + 1 count table); 677 native-review rows. 22 mutants red.",
+      "pr": null
     }
   }
 }

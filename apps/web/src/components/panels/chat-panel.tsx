@@ -22,6 +22,7 @@ import { useSavedResources, type SaveResourceInput } from '@/hooks/use-saved-res
 import { usePanelContext } from '@/components/layout/feed-shell'
 import type { SystemPromptKey } from '@/lib/ai/system-prompts'
 import { buildExplainRequest, type SafeErrorContext } from '@/lib/ai/error-explainer'
+import { buildWizardPrompt, parseWizardContext } from '@/lib/ai/wizard-prompt'
 import { t, dir, type Locale } from '@/lib/i18n'
 import { useProfileLocale } from '@/hooks/use-profile-locale'
 import { assistantT, type AssistantKey } from '@/lib/i18n-assistant'
@@ -693,55 +694,26 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     if (isLoading) return
     if (wizardSentRef.current) return
 
-    let parsed: { category?: string; answers?: Record<string, string | string[]> } = {}
-    try {
-      parsed = JSON.parse(rawContext)
-    } catch {
-      return
-    }
-
-    const { category, answers } = parsed
-    if (!category || !answers) return
+    const parsed = parseWizardContext(rawContext)
+    if (!parsed) return
 
     wizardSentRef.current = true
 
-    const categoryLabel = category.charAt(0).toUpperCase() + category.slice(1)
-    const lines: string[] = [`I need help finding ${categoryLabel} resources.`]
-
-    // PII MINIMIZATION: only generalized, resource-matching context reaches the
-    // third-party LLM. The allowlist carries the WHAT (assistance need) and the
-    // WHERE (state) — never sensitive personal specifics. Excluded by omission:
-    // insurance status, exact household size, income range, tax filing status,
-    // dependent counts, pregnancy stage, free-text situation, work experience,
-    // contact preference. Those answers stay out of the LLM message entirely;
-    // any eligibility math belongs to the de-identified screening path.
-    const LLM_SAFE_KEYS: Record<string, string> = {
-      'assistance-type': 'Type of help',
-      'care-type': 'Type of help',
-      'waste-type': 'Type of help',
-      'camping-type': 'Type of help',
-      'goods-type': 'Type of help',
-      'legal-issue': 'Type of help',
-      'urgency': 'Urgency',
-      'state': 'State',
-    }
-
-    for (const [key, value] of Object.entries(answers)) {
-      const label = LLM_SAFE_KEYS[key]
-      if (!label) continue // drop everything not on the allowlist
-      const display = Array.isArray(value) ? value.join(', ') : value
-      if (!display) continue
-      lines.push(`- ${label}: ${display}`)
-    }
-
-    lines.push('Please suggest relevant local programs and resources for this need.')
-
-    const prompt = lines.join('\n')
+    // The message is built from the category id and the option values only (never the labels the
+    // member read), so it is the same in every language.
+    const prompt = buildWizardPrompt(parsed.category, parsed.answers)
 
     setPanelParams({ ...panelParams, wizardContext: undefined })
     sendMessage(prompt).finally(() => {
       wizardSentRef.current = false
     })
+    // The wizard has closed (its panel unmounted): focus goes to the message box, and follows to the
+    // conversation's box when the reply replaces the greeting (the effect on showGreeting below).
+    const composer = composerRef.current
+    if (composer && !composer.disabled) {
+      composer.focus()
+      refocusComposerRef.current = true
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panelParams?.wizardContext, isLoading])
 
