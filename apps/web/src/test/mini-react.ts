@@ -6,7 +6,8 @@
 // render when their deps changed (cleanup first), and setState marks the instance for a re-render.
 // Child components in the returned tree are NOT rendered — tests read their props. Out of scope: the
 // ordering of effects ACROSS components (each mount() is one component; React's parent/child commit
-// order is not modelled), context, and concurrent rendering.
+// order is not modelled), context providers (useContext reads the context's default value), and
+// concurrent rendering.
 //
 // Use in a test file:
 //   vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
@@ -78,6 +79,8 @@ export function miniReact(actual: ReactModule): ReactModule {
     useId: () => (current ? slot(() => `mr-${Math.random().toString(36).slice(2, 8)}`).v : actual.useId()),
     useSyncExternalStore: (s: unknown, get: () => unknown, server?: () => unknown) =>
       current ? get() : actual.useSyncExternalStore(s, get, server),
+    // No providers are rendered here: a context reads its default value.
+    useContext: (ctx: { _currentValue?: unknown }) => (current ? ctx._currentValue : actual.useContext(ctx)),
   }
 }
 

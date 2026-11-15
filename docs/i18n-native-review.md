@@ -14,6 +14,7 @@ This list starts with Release 3.5. It itemises, string by string:
   two general failure sentences), `lib/i18n-feed-optins.ts` (the sign-up controls of a post
   card), `lib/i18n-feed-badges.ts` (author badges, the author sheet and its appreciation picker,
   the gifts shelf, the review dialog);
+- the Language section of Settings: `lib/i18n-settings-language.ts`;
 - the hand-written time words in `lib/i18n-intl.ts` (months, weekdays, day periods, "5 minutes
   ago", "In 3 days") for `ht`, `hmn` and `so`;
 - the Arabic petition strings that say "confirmed signature of support" (`مؤكَّد`), listed as a
@@ -1454,6 +1455,51 @@ step in that test, and the test fails until the list below is regenerated.
 | `connection` | am | We're having trouble connecting. Please check your connection and try again. | ለመገናኘት ችግር አጋጥሞናል። እባክዎ ግንኙነትዎን ያረጋግጡ እና እንደገና ይሞክሩ። | 2026-10-11 | machine-drafted, needs native review |
 | `permission` | hmn | You don't have permission to view this right now. Please try again or contact support. | Tam sim no koj tsis muaj cai saib qhov no. Thov sim dua los yog hu rau kev pab. | 2026-10-11 | machine-drafted, needs native review |
 | `connection` | hmn | We're having trouble connecting. Please check your connection and try again. | Peb muaj teeb meem txuas. Thov xyuas koj txoj kev txuas thiab sim dua. | 2026-10-11 | machine-drafted, needs native review |
+
+### `lib/i18n-settings-language.ts`
+
+| Key | Locale | English | Text | Added | Status |
+|---|---|---|---|---|---|
+| `heading` | ht | Preferred Language | Lang ou prefere | 2026-11-14 | machine-drafted, needs native review |
+| `description` | ht | The AI assistant will respond in this language, and translated screens will show it. | Asistan IA a ap reponn nan lang sa a, epi ekran ki tradui yo ap montre l. | 2026-11-14 | machine-drafted, needs native review |
+| `currently` | ht | Currently: {language} | Kounye a: {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | ht | Save | Anrejistre | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | ht | Other language | Lòt lang | 2026-11-14 | machine-drafted, needs native review |
+| `saving` | ht | Saving… | Ap anrejistre… | 2026-11-14 | machine-drafted, needs native review |
+| `saved` | ht | Language saved | Lang lan anrejistre | 2026-11-14 | machine-drafted, needs native review |
+| `savedDevice` | ht | Language saved on this device | Lang lan anrejistre sou aparèy sa a | 2026-11-14 | machine-drafted, needs native review |
+| `deviceOnly` | ht | Saved to this device only. Create an account to sync your preference. | Anrejistre sou aparèy sa a sèlman. Kreye yon kont pou senkronize preferans ou. | 2026-11-14 | machine-drafted, needs native review |
+| `failed` | ht | Your language could not be saved. FEED is still in {language}. Please try again. | Nou pa t kapab anrejistre lang ou. FEED toujou nan {language}. Tanpri eseye ankò. | 2026-11-14 | machine-drafted, needs native review |
+| `heading` | so | Preferred Language | Luqadda aad doorbidayso | 2026-11-14 | machine-drafted, needs native review |
+| `description` | so | The AI assistant will respond in this language, and translated screens will show it. | Kaaliyaha AI-ga wuxuu kugu jawaabi doonaa luqaddan, shaashadaha la turjumayna way ku muujin doonaan. | 2026-11-14 | machine-drafted, needs native review |
+| `currently` | so | Currently: {language} | Hadda: {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | so | Save | Keydi | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | so | Other language | Luqad kale | 2026-11-14 | machine-drafted, needs native review |
+| `saving` | so | Saving… | Waa la keydinayaa… | 2026-11-14 | machine-drafted, needs native review |
+| `saved` | so | Language saved | Luqadda waa la keydiyay | 2026-11-14 | machine-drafted, needs native review |
+| `savedDevice` | so | Language saved on this device | Luqadda waxaa lagu keydiyay qalabkan | 2026-11-14 | machine-drafted, needs native review |
+| `deviceOnly` | so | Saved to this device only. Create an account to sync your preference. | Kaliya qalabkan ayaa lagu keydiyay. Samee akoon si aad doorashadaada u waafajiso. | 2026-11-14 | machine-drafted, needs native review |
+| `failed` | so | Your language could not be saved. FEED is still in {language}. Please try again. | Luqaddaada lama keydin karin. FEED weli waa {language}. Fadlan isku day mar kale. | 2026-11-14 | machine-drafted, needs native review |
+| `heading` | am | Preferred Language | የሚመርጡት ቋንቋ | 2026-11-14 | machine-drafted, needs native review |
+| `description` | am | The AI assistant will respond in this language, and translated screens will show it. | የAI ረዳቱ በዚህ ቋንቋ ይመልሳል፤ የተተረጎሙ ገጾችም በዚህ ቋንቋ ይታያሉ። | 2026-11-14 | machine-drafted, needs native review |
+| `currently` | am | Currently: {language} | አሁን፦ {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | am | Save | አስቀምጥ | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | am | Other language | ሌላ ቋንቋ | 2026-11-14 | machine-drafted, needs native review |
+| `saving` | am | Saving… | በማስቀመጥ ላይ… | 2026-11-14 | machine-drafted, needs native review |
+| `saved` | am | Language saved | ቋንቋው ተቀምጧል | 2026-11-14 | machine-drafted, needs native review |
+| `savedDevice` | am | Language saved on this device | ቋንቋው በዚህ መሣሪያ ላይ ተቀምጧል | 2026-11-14 | machine-drafted, needs native review |
+| `deviceOnly` | am | Saved to this device only. Create an account to sync your preference. | በዚህ መሣሪያ ላይ ብቻ ተቀምጧል። ምርጫዎን ለማመሳሰል መለያ ይፍጠሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `failed` | am | Your language could not be saved. FEED is still in {language}. Please try again. | ቋንቋዎን ማስቀመጥ አልተቻለም። FEED አሁንም በ{language} ነው። እባክዎ እንደገና ይሞክሩ። | 2026-11-14 | machine-drafted, needs native review |
+| `heading` | hmn | Preferred Language | Hom lus koj nyiam | 2026-11-14 | machine-drafted, needs native review |
+| `description` | hmn | The AI assistant will respond in this language, and translated screens will show it. | Tus pab AI yuav teb ua hom lus no, thiab cov nplooj uas txhais lawm yuav tso tawm ua hom lus no. | 2026-11-14 | machine-drafted, needs native review |
+| `currently` | hmn | Currently: {language} | Tam sim no: {language} | 2026-11-14 | machine-drafted, needs native review |
+| `save` | hmn | Save | Khaws | 2026-11-14 | machine-drafted, needs native review |
+| `otherLanguage` | hmn | Other language | Lwm hom lus | 2026-11-14 | machine-drafted, needs native review |
+| `saving` | hmn | Saving… | Tab tom khaws… | 2026-11-14 | machine-drafted, needs native review |
+| `saved` | hmn | Language saved | Tau khaws hom lus lawm | 2026-11-14 | machine-drafted, needs native review |
+| `savedDevice` | hmn | Language saved on this device | Tau khaws hom lus rau ntawm lub cuab yeej no | 2026-11-14 | machine-drafted, needs native review |
+| `deviceOnly` | hmn | Saved to this device only. Create an account to sync your preference. | Tsuas khaws rau ntawm lub cuab yeej no xwb. Tsim ib tug account kom sib txuas koj qhov kev nyiam. | 2026-11-14 | machine-drafted, needs native review |
+| `failed` | hmn | Your language could not be saved. FEED is still in {language}. Please try again. | Khaws tsis tau koj hom lus. FEED tseem yog {language}. Thov sim dua. | 2026-11-14 | machine-drafted, needs native review |
 
 <!-- END GENERATED -->
 

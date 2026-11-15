@@ -366,6 +366,39 @@ group by 1, 2, 3 order by 1 desc, 4 desc;
 
 ---
 
+## Language: saves, profile reads and locale changes
+
+A member's language lives in `profiles.preferred_language` (a guest's in localStorage). The in-memory profile in `AuthProvider` is what every surface reads its locale from (`useProfileLocale`). The `feed_locale` cookie (`apps/web/src/lib/locale-cookie.ts`) lets the server render the next page in that language. These three events show each step, so a language that does not apply, or comes back wrong, can be traced.
+
+| Event | Labels | Meaning |
+|---|---|---|
+| `settings.language.save.complete` / `.error` | `from`, `to`, `scope`, `outcome` | one language save (`withMetric`, so `duration_ms` and `request_id` are columns). `scope`: `account` (the profile row) · `device` (a guest, localStorage). `outcome`: `ok` · `error` (the write answered an error; `error_code` is the SQLSTATE when there is one) · `aborted` (no answer within 12 s; `error_code` = `timeout`) · `no_row` (the update matched no row) · `no_profile` (no profile was in memory and it could not be read, so nothing was written: the screen could not have shown the new language). Every non-`ok` save takes the language back and shows a failure message; `Language saved` shows only when the screen switched. `from` is `none` when nothing was set. |
+| `auth.profile.read` | `trigger`, `outcome`, `had_language`, `duration_ms` | one own-profile read (`get_my_profile`). `trigger`: `INITIAL_SESSION` · `SIGNED_IN` (also fired when a hidden tab becomes visible) · `USER_UPDATED` · `reconcile` · `refresh` · `update` · `language_save` (a save found no profile in memory and read it first). `outcome`: `ok` · `error` · `timeout` · `superseded` (another account's read started, so this one was dropped). A failed or timed-out read keeps the profile already loaded for the same user; a read that lands while a language save is in flight keeps the language on screen. |
+| `i18n.locale_changed` | `from`, `to`, `source` | the locale the app shows, written once per change and once per page load. `source`: `cookie` (page load in the cookie's language) · `boot` (page load with no usable cookie, so English) · `save` (a save applied it, or took it back) · `profile_read` (a profile read brought a supported language) · `fallback` (no supported profile language: device choice, browser or English). `from` is `none` on page load. |
+
+A save with no `i18n.locale_changed` row (`source = save`) after it means the language never reached the screen. A `profile_read` or `fallback` change that goes back to the old language after a save means a read brought a stale value.
+
+Language saves and their outcomes over the last 14 days:
+
+```sql
+select date_trunc('day', created_at)::date as day, event, context->>'outcome' as outcome, context->>'scope' as scope,
+       count(*), round(avg(duration_ms)) as avg_ms
+from public.app_logs
+where event like 'settings.language.save.%' and created_at > now() - interval '14 days'
+group by 1, 2, 3, 4 order by 1 desc, 5 desc;
+```
+
+One member's language story (save, reads, changes), newest first:
+
+```sql
+select created_at, event, context
+from public.app_logs
+where user_id = '<uuid>' and (event like 'settings.language.save.%' or event in ('auth.profile.read', 'i18n.locale_changed'))
+order by created_at desc limit 50;
+```
+
+---
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).

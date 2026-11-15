@@ -16,6 +16,7 @@ vi.mock('@/hooks/use-auth', () => ({ useAuth: () => ({ profile: null }) }))
 import { profileLocale } from './use-profile-locale'
 import { resolveProfileLocale, resolveUserLocale } from '@/lib/i18n'
 import { GUEST_LANGUAGE_KEY } from '@/lib/languages'
+import { rememberDeviceLocale, subscribeDeviceLocale } from '@/lib/device-locale'
 
 /** A browser whose saved guest language and whose own language are both not English. */
 function browser({ stored, language }: { stored: string | null; language: string }) {
@@ -37,6 +38,14 @@ describe('profileLocale', () => {
     expect(resolveUserLocale(null)).toBe('es') // control: the stubs are live, and this path would read them
     expect(profileLocale(null)).toBe('en')
     expect(profileLocale(undefined)).toBe('en')
+  })
+
+  it('until the profile has loaded it is the locale the page was rendered in (the cookie), never storage or the browser', () => {
+    browser({ stored: 'es', language: 'vi-VN' })
+    expect(profileLocale(null, 'ko')).toBe('ko')
+    expect(profileLocale(undefined, 'ar')).toBe('ar')
+    // Once the profile is there, the profile decides.
+    expect(profileLocale({ preferred_language: 'vi' }, 'ko')).toBe('vi')
   })
 
   it('is the profile language when FEED supports it, whatever the browser says', () => {
@@ -87,5 +96,45 @@ describe('the rule is written once', () => {
       .filter((f) => /\bpreferred_language\b/.test(readFileSync(f, 'utf8')) && /resolveUserLocale\(/.test(readFileSync(f, 'utf8')))
       .map((f) => relative(SRC, f))
     expect(readers).toEqual(['lib/i18n.ts'])
+  })
+})
+
+describe('a device choice re-renders every reader', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('rememberDeviceLocale stores the choice, writes the cookie and notifies each subscriber once', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) })
+    const jar = { cookie: '' }
+    vi.stubGlobal('document', jar)
+    vi.stubGlobal('location', { protocol: 'http:' })
+    const calls: string[] = []
+    const off = subscribeDeviceLocale(() => calls.push(store.get(GUEST_LANGUAGE_KEY) ?? ''))
+    rememberDeviceLocale('vi')
+    expect(calls).toEqual(['vi'])
+    expect(jar.cookie).toBe('feed_locale=vi; Path=/; Max-Age=31536000; SameSite=Lax')
+    // 'other' is a choice, not a locale: stored and announced, no cookie.
+    jar.cookie = ''
+    rememberDeviceLocale('other')
+    expect(calls).toEqual(['vi', 'other'])
+    expect(jar.cookie).toBe('')
+    off()
+    rememberDeviceLocale('es')
+    expect(calls).toHaveLength(2)
+  })
+})
+
+describe('portalled content keeps a truthful language', () => {
+  // A source guard, on purpose: Radix portals render nothing without a DOM (renderToStaticMarkup
+  // rejects createPortal, and this repo has no DOM renderer). The assistant's language and the
+  // chat error banner are tested by behaviour: use-chat.locale.test.ts,
+  // components/panels/chat-error-banner.lang.test.ts.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
+
+  it('dialog, sheet, alert-dialog and select content are English unless the caller passes its own lang', () => {
+    for (const f of ['dialog', 'sheet', 'alert-dialog', 'select']) {
+      const src = read(`../components/ui/${f}.tsx`)
+      expect(src, f).toMatch(/lang="en"\s+dir="ltr"\s+\{\.\.\.props\}/)
+    }
   })
 })
