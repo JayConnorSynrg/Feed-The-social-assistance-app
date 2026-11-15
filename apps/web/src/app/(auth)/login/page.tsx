@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, Suspense } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
@@ -16,6 +16,7 @@ import { mfaService } from '@/lib/mfa'
 import { logPredefinedEvent } from '@/lib/audit-logger'
 import { logger } from '@/lib/logger'
 import { safeRelativePath } from '@/lib/safe-redirect'
+import { requiresMfa } from '@/lib/mfa-routes'
 import { t, resolveLocale, dir } from '@/lib/i18n'
 
 function LoginForm() {
@@ -24,6 +25,8 @@ function LoginForm() {
   // Open-redirect guard: sanitize at read time so every router.push(redirectTo)
   // and the propagated OAuth callback URL use a safe same-origin path (CWE-601).
   const redirectTo = safeRelativePath(searchParams.get('redirectTo'), '/')
+  // Step-up: the proxy sends a signed-in session with an unverified factor here from an admin route.
+  const isStepUp = searchParams.get('step') === 'mfa'
   const oauthError = searchParams.get('error')
   const oauthDetail = searchParams.get('detail')
 
@@ -47,6 +50,25 @@ function LoginForm() {
   const turnstileRef = useRef<TurnstileWidgetHandle>(null)
 
   const supabase = createClient()
+
+  // Step-up (/login?step=mfa): show the code prompt for the signed-in session's verified factor,
+  // once. A session that is already aal2 goes straight on; with no verified factor (signed out),
+  // the sign-in form shows as usual.
+  const stepUpChecked = useRef(false)
+  useEffect(() => {
+    if (!isStepUp || stepUpChecked.current) return
+    stepUpChecked.current = true
+    void (async () => {
+      const verifiedFactor = (await mfaService.listFactors()).find((f) => f.status === 'verified')
+      if (!verifiedFactor) return
+      if ((await mfaService.getAssuranceLevel()) === 'aal2') {
+        router.replace(redirectTo)
+        return
+      }
+      setMfaFactorId(verifiedFactor.id)
+      setShowMFA(true)
+    })()
+  }, [isStepUp, redirectTo, router])
 
   // Security hooks
   const { token: csrfToken, validate: validateCsrf } = useCsrfToken()
@@ -218,7 +240,14 @@ function LoginForm() {
     }
   }
 
-  const handleMFASuccess = () => {
+  const handleMFASuccess = async () => {
+    // Admin routes need an aal2 session. A backup code is checked by the app and does not raise the
+    // session to aal2, so an admin destination waits for aal2; otherwise ask for the app code.
+    if (requiresMfa(redirectTo.split(/[?#]/)[0]) && (await mfaService.getAssuranceLevel()) !== 'aal2') {
+      setError('Enter the 6-digit code from your authenticator app to continue.')
+      return
+    }
+    setError(null)
     router.push(redirectTo)
     router.refresh()
   }
@@ -456,6 +485,11 @@ function LoginForm() {
           </>
         ) : (
           <CardContent className="bg-lime-50/30 mx-4 rounded-lg p-4 mt-4">
+            {error && (
+              <p role="alert" className="mb-3 text-sm text-red-900" data-testid="mfa-step-up-error">
+                {error}
+              </p>
+            )}
             {mfaFactorId && (
               <MFAVerify
                 factorId={mfaFactorId}

@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { buildCsp, generateNonce } from '@/lib/csp'
 import { safeRequestId } from '@/lib/request-id'
 import { requiresMfa } from '@/lib/mfa-routes'
+import { safeRelativePath } from '@/lib/safe-redirect'
 
 // Lightweight server-side logger — wraps console.* with structured JSON lines
 // for the proxy runtime's console output.
@@ -101,31 +102,51 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Check MFA assurance level for authenticated users
+  // MFA step-up. A session needs step-up when a verified factor is enrolled (nextLevel aal2) but this
+  // session has not verified it (currentLevel aal1). Only admin surfaces require AAL2
+  // (lib/mfa-routes.ts); members keep using `/` at AAL1.
+  let stepUp: 'needed' | 'not_needed' | 'unknown' = 'not_needed'
   if (user) {
     try {
       const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-      const currentLevel = data?.currentLevel
-      const nextLevel = data?.nextLevel
-
-      // If user has MFA enrolled but hasn't completed verification in this session
-      if (nextLevel === 'aal2' && currentLevel === 'aal1') {
-        // Only admin surfaces require AAL2 (lib/mfa-routes.ts). Members keep using `/` at AAL1.
-        if (requiresMfa(pathname)) {
-          const redirectUrl = new URL('/login', request.url)
-          redirectUrl.searchParams.set('redirectTo', pathname)
-          redirectUrl.searchParams.set('step', 'mfa')
-          log('info', 'proxy.redirect', { reason: 'mfa_required', from: pathname, to: '/login?step=mfa' })
-          return withCsp(NextResponse.redirect(redirectUrl))
-        }
-      }
+      stepUp = data?.nextLevel === 'aal2' && data?.currentLevel === 'aal1' ? 'needed' : 'not_needed'
     } catch (error) {
-      // MFA check failed, continue with normal flow
+      stepUp = 'unknown'
       log('error', 'proxy.mfa.error', {
         pathname: request.nextUrl.pathname,
         error: error instanceof Error ? error.message : String(error),
       })
     }
+  }
+
+  if (requiresMfa(pathname)) {
+    if (stepUp === 'needed') {
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('redirectTo', safeRelativePath(pathname + request.nextUrl.search, '/'))
+      redirectUrl.searchParams.set('step', 'mfa')
+      log('info', 'proxy.redirect', { reason: 'mfa_required', from: pathname, to: '/login?step=mfa' })
+      return withCsp(NextResponse.redirect(redirectUrl))
+    }
+    if (stepUp === 'unknown') {
+      // Fail closed: the assurance level could not be read, so the admin route is not served.
+      // `/` never requires MFA, so this cannot loop.
+      log('warn', 'proxy.redirect', { reason: 'mfa_unknown', from: pathname, to: '/' })
+      return withCsp(NextResponse.redirect(new URL('/', request.url)))
+    }
+  }
+
+  // The MFA code prompt: /login?step=mfa is served to a session that needs step-up. A redirectTo
+  // that is not a same-origin relative path is dropped here (the page sanitizes it again).
+  const isStepUpPrompt = stepUp === 'needed' && pathname === '/login' && request.nextUrl.searchParams.get('step') === 'mfa'
+  if (isStepUpPrompt) {
+    const rawRedirect = request.nextUrl.searchParams.get('redirectTo')
+    if (rawRedirect !== null && safeRelativePath(rawRedirect, '') !== rawRedirect) {
+      const cleanUrl = new URL('/login', request.url)
+      cleanUrl.searchParams.set('step', 'mfa')
+      log('warn', 'proxy.redirect', { reason: 'unsafe_redirect_to', from: pathname, to: '/login?step=mfa' })
+      return withCsp(NextResponse.redirect(cleanUrl))
+    }
+    return withCsp(supabaseResponse)
   }
 
   // Public routes that don't require authentication

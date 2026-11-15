@@ -37,8 +37,9 @@ export function MFAVerify({ factorId, onSuccess, onBack }: MFAVerifyProps) {
     createChallenge()
   }, [factorId])
 
-  const handleVerifyTOTP = async () => {
-    if (!challengeId || code.length !== 6) {
+  // `value` is passed by the 6-digit auto-submit, which runs from the render before `code` updated.
+  const handleVerifyTOTP = async (value: string = code) => {
+    if (!challengeId || value.length !== 6) {
       setError('Please enter a valid 6-digit code')
       return
     }
@@ -47,7 +48,7 @@ export function MFAVerify({ factorId, onSuccess, onBack }: MFAVerifyProps) {
     setError(null)
 
     try {
-      const verified = await mfaService.verifyChallenge(factorId, challengeId, code)
+      const verified = await mfaService.verifyChallenge(factorId, challengeId, value)
 
       if (!verified) {
         // Log failed MFA attempt
@@ -123,7 +124,7 @@ export function MFAVerify({ factorId, onSuccess, onBack }: MFAVerifyProps) {
     // Auto-submit when 6 digits entered
     if (numericValue.length === 6) {
       setTimeout(() => {
-        handleVerifyTOTP()
+        handleVerifyTOTP(numericValue)
       }, 100)
     }
   }
@@ -172,7 +173,7 @@ export function MFAVerify({ factorId, onSuccess, onBack }: MFAVerifyProps) {
           </div>
 
           <Button
-            onClick={handleVerifyTOTP}
+            onClick={() => handleVerifyTOTP()}
             disabled={loading || code.length !== 6 || !challengeId}
             className="w-full bg-green-600 hover:bg-green-700 text-white"
           >

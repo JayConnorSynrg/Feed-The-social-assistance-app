@@ -950,7 +950,8 @@
       "branch": "feature/feed-p2-feed-cutoff",
       "base": "origin/develop 2dad14b",
       "migration": null,
-      "note": "Card view: the Feed sub-tab scrolls with the whole card (owner ruling B): region min-h-full + card scroller pb-6 only when regionScrollsWithCard(panel, subtab); the feed list is no longer a scroll container. Last post bottom gap 0px -> 49px at 360x640, 390x844, 768x1024, 1440x900 (local dev, guest, measured); all other panels and sub-tabs measured identical. safe-area-pb defined once as @utility (padding-bottom: env(safe-area-inset-bottom)) for the mobile nav and its spacer. Proxy MFA list was ['/', '/onboarding', '/settings'] with a bare startsWith, so '/' matched every path; now lib/mfa-routes.ts requiresMfa = (admin) group + /api/admin only, derived-from-disk test."
+      "note": "Card view: the Feed sub-tab scrolls with the whole card (owner ruling B): region min-h-full + card scroller pb-6 only when regionScrollsWithCard(panel, subtab); the feed list is no longer a scroll container. Last post bottom gap 0px -> 49px at 360x640, 390x844, 768x1024, 1440x900 (local dev, guest, measured); all other panels and sub-tabs measured identical. safe-area-pb defined once as @utility (padding-bottom: env(safe-area-inset-bottom)) for the mobile nav and its spacer. Proxy MFA list was ['/', '/onboarding', '/settings'] with a bare startsWith, so '/' matched every path; now lib/mfa-routes.ts requiresMfa = (admin) group + /api/admin only, derived-from-disk test.",
+      "stepUp": "On c320abd: /login?step=mfa served only to an aal1 session with a verified factor; unsafe redirectTo dropped in proxy and page; MFAVerify shown once; aal2 required before navigating to an admin destination; AAL lookup error on an admin route fails closed to /; MFAVerify auto-submit stale-closure fixed."
     }
   }
 }

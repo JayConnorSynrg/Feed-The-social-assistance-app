@@ -9,13 +9,18 @@ import { fileURLToPath } from 'node:url'
 import { NextRequest } from 'next/server'
 
 type Aal = { currentLevel: 'aal1' | 'aal2'; nextLevel: 'aal1' | 'aal2' }
-const state: { aal: Aal } = { aal: { currentLevel: 'aal1', nextLevel: 'aal2' } }
+const state: { aal: Aal | 'error'; signedIn: boolean } = { aal: { currentLevel: 'aal1', nextLevel: 'aal2' }, signedIn: true }
 
 vi.mock('@supabase/ssr', () => ({
   createServerClient: () => ({
     auth: {
-      getUser: async () => ({ data: { user: { id: 'u1', is_anonymous: false } } }),
-      mfa: { getAuthenticatorAssuranceLevel: async () => ({ data: state.aal }) },
+      getUser: async () => ({ data: { user: state.signedIn ? { id: 'u1', is_anonymous: false } : null } }),
+      mfa: {
+        getAuthenticatorAssuranceLevel: async () => {
+          if (state.aal === 'error') throw new Error('aal lookup failed')
+          return { data: state.aal }
+        },
+      },
     },
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { onboarding_completed: true } }) }) }) }),
   }),
@@ -35,7 +40,7 @@ async function hit(path: string) {
 const isMfaRedirect = (r: { status: number; location: string | null }) =>
   r.status === 307 && !!r.location && new URL(r.location).pathname === '/login' && new URL(r.location).searchParams.get('step') === 'mfa'
 
-beforeEach(() => { state.aal = ENROLLED_UNVERIFIED })
+beforeEach(() => { state.aal = ENROLLED_UNVERIFIED; state.signedIn = true })
 
 describe('members are not asked for MFA', () => {
   it.each([['enrolled, unverified', ENROLLED_UNVERIFIED], ['not enrolled', NOT_ENROLLED], ['verified', VERIFIED]])(
@@ -99,4 +104,86 @@ describe('requiresMfa matches exactly the admin routes on disk', () => {
   it('classifies every route', () => {
     for (const r of routes) expect({ url: r.url, mfa: requiresMfa(r.url) }).toEqual({ url: r.url, mfa: r.admin })
   })
+})
+
+describe('MFA step-up prompt at /login?step=mfa', () => {
+  it('is served to an enrolled, unverified session (with and without redirectTo)', async () => {
+    expect(await hit('/login?step=mfa&redirectTo=%2Fmoderation')).toEqual({ status: 200, location: null })
+    expect(await hit('/login?step=mfa')).toEqual({ status: 200, location: null })
+  })
+
+  it('the admin redirect keeps the query, so the code brings the admin back to that view', async () => {
+    const r = await hit('/moderation?tab=businesses')
+    expect(new URL(r.location!).searchParams.get('redirectTo')).toBe('/moderation?tab=businesses')
+  })
+
+  it.each([['not enrolled', NOT_ENROLLED], ['verified', VERIFIED]])('a %s member at /login?step=mfa still goes to /', async (_l, aal) => {
+    state.aal = aal
+    const r = await hit('/login?step=mfa&redirectTo=%2Fmoderation')
+    expect(r.status).toBe(307)
+    expect(new URL(r.location!).pathname).toBe('/')
+  })
+
+  it('an enrolled, unverified member at /login without step=mfa still goes to /', async () => {
+    const r = await hit('/login')
+    expect(new URL(r.location!).pathname).toBe('/')
+  })
+
+  it.each(['//evil.com', 'https://evil.com', '/\\evil', '/\t/evil.com'])('drops an off-origin redirectTo %j', async (bad) => {
+    const r = await hit('/login?step=mfa&redirectTo=' + encodeURIComponent(bad))
+    expect(r.status).toBe(307)
+    const to = new URL(r.location!)
+    expect(to.origin).toBe('http://localhost')
+    expect(to.pathname).toBe('/login')
+    expect(to.searchParams.get('step')).toBe('mfa')
+    expect(to.searchParams.has('redirectTo')).toBe(false)
+    // and the cleaned URL is then served (no loop)
+    expect(await hit(to.pathname + to.search)).toEqual({ status: 200, location: null })
+  })
+})
+
+describe('an unreadable assurance level fails closed', () => {
+  it('an admin route sends to / and / is served', async () => {
+    state.aal = 'error'
+    const r = await hit('/moderation')
+    expect(new URL(r.location!).pathname).toBe('/')
+    expect(await hit('/')).toEqual({ status: 200, location: null })
+  })
+})
+
+describe('no redirect loop from any assurance level and route', () => {
+  const STATES: Array<[string, () => void]> = [
+    ['signed out', () => { state.signedIn = false }],
+    ['not enrolled', () => { state.aal = NOT_ENROLLED }],
+    ['enrolled, unverified', () => { state.aal = ENROLLED_UNVERIFIED }],
+    ['verified', () => { state.aal = VERIFIED }],
+    ['aal lookup error', () => { state.aal = 'error' }],
+  ]
+  const ROUTES = ['/', '/login', '/login?step=mfa', '/login?step=mfa&redirectTo=%2Fmoderation', '/signup', '/onboarding',
+    '/moderation', '/moderation?tab=people', '/federation', '/federation/dashboard', '/federation/directory', '/api/admin/users/x/ban', '/s/post/x']
+
+  for (const [label, setup] of STATES) {
+    it.each(ROUTES)(`${label}: %s settles within 4 hops, and an admin route is served only without a pending step-up`, async (start) => {
+      setup()
+      let path = start
+      const seen = new Set<string>()
+      for (let hop = 0; hop < 4; hop++) {
+        expect(seen.has(path)).toBe(false)
+        seen.add(path)
+        const r = await hit(path)
+        if (r.status !== 307) {
+          // Signed out, the proxy passes /api/* through and the admin handlers answer 401 themselves
+          // (api/admin/users/[id]/{ban,delete}/route.ts); signed-out pages go to /login.
+          if (requiresMfa(path.split('?')[0]) && !(label === 'signed out' && path.startsWith('/api/'))) {
+            expect(['not enrolled', 'verified']).toContain(label)
+          }
+          return
+        }
+        const to = new URL(r.location!)
+        expect(to.origin).toBe('http://localhost')
+        path = to.pathname + to.search
+      }
+      throw new Error(`no terminal response from ${start}`)
+    })
+  }
 })
