@@ -320,7 +320,6 @@ describe('English marks across the member app', () => {
     'components/ui/sheet.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
     'components/ui/alert-dialog.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
     'components/ui/select.tsx': { marks: 1, what: 'portalled content is English unless the caller passes its lang' },
-    'components/panels/chat-panel.tsx': { marks: 1, what: '"Retrying…" inside the translated chat error banner' },
     'components/panels/feed-panel.tsx': { marks: 1, what: 'the safety strip (Release 3, the safety-alert lane)' },
     'components/panels/businesses-panel.tsx': { marks: 2, what: "the data layer's own English text beside a translated sentence (submit failure, photo warning)" },
   }
@@ -337,6 +336,8 @@ describe('English marks across the member app', () => {
     'components/feed/post-image-picker.tsx',
     'components/feed/post-edit-dialog.tsx',
     'components/panels/post-type-wizard.tsx',
+    // P6 W1: the AI Assistant panel ("Retrying…" was its island).
+    'components/panels/chat-panel.tsx',
     'components/feed/follow-error-banner.tsx',
     'components/panels/messages-panel.tsx',
     'components/panels/petitions-panel.tsx',

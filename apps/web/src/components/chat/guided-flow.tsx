@@ -1,9 +1,11 @@
 'use client'
 
 // apps/web/src/components/chat/guided-flow.tsx
-// Interactive guided flow component for structured conversations
+// Interactive guided flow component for structured conversations.
+// Every word is in the viewer's language (lib/i18n-assistant.ts) and the card is marked with it; an
+// option answers with its `value`, so what is sent never depends on the language.
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect, useId, useRef } from 'react'
 import {
   type GuidedFlow,
   type FlowStep,
@@ -14,6 +16,11 @@ import { useChat } from '@/hooks/use-chat'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { assistantT, flowText } from '@/lib/i18n-assistant'
+import { formatMessage } from '@/lib/format-message'
+import { formatCount } from '@/lib/i18n-intl'
 
 interface GuidedFlowComponentProps {
   flow: GuidedFlow
@@ -25,9 +32,25 @@ interface StepComponentProps {
   step: FlowStep
   onAnswer: (answer: string) => void
   isLoading?: boolean
+  locale: Locale
+  /** The id of the step's question heading: the options' group and the input are named by it. */
+  questionId: string
 }
 
-function StepComponent({ step, onAnswer, isLoading }: StepComponentProps) {
+/** An option's words: its decorative emoji (hidden from screen readers) and its label. */
+function OptionText({ option, locale }: { option: NonNullable<FlowStep['options']>[number]; locale: Locale }) {
+  return (
+    <>
+      {option.icon && <span aria-hidden="true" className="me-2">{option.icon}</span>}
+      {flowText(locale, option.label)}
+    </>
+  )
+}
+
+// Mounted once per step (keyed by step id in GuidedFlowComponent), so what was typed or picked on
+// one step never carries into the next.
+export function StepComponent({ step, onAnswer, isLoading, locale, questionId }: StepComponentProps) {
+  const hintId = useId()
   const [textValue, setTextValue] = useState('')
   const [selectedOptions, setSelectedOptions] = useState<string[]>([])
 
@@ -48,15 +71,15 @@ function StepComponent({ step, onAnswer, isLoading }: StepComponentProps) {
 
   if (step.type === 'select') {
     return (
-      <div className="space-y-2">
+      <div role="group" aria-labelledby={questionId} className="space-y-2">
         {step.options?.map(option => (
           <button
             key={option.value}
             onClick={() => onAnswer(option.value)}
             disabled={isLoading}
-            className="w-full p-3 text-left rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
+            className="w-full p-3 text-start rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50"
           >
-            {option.label}
+            <OptionText option={option} locale={locale} />
           </button>
         ))}
       </div>
@@ -65,7 +88,7 @@ function StepComponent({ step, onAnswer, isLoading }: StepComponentProps) {
 
   if (step.type === 'multiselect') {
     return (
-      <div className="space-y-2">
+      <div role="group" aria-labelledby={questionId} className="space-y-2">
         {step.options?.map(option => {
           const isSelected = selectedOptions.includes(option.value)
           return (
@@ -79,34 +102,45 @@ function StepComponent({ step, onAnswer, isLoading }: StepComponentProps) {
                 )
               }}
               disabled={isLoading}
-              className={`w-full p-3 text-left rounded-lg border transition-colors disabled:opacity-50 ${
+              aria-pressed={isSelected}
+              className={`w-full p-3 text-start rounded-lg border transition-colors disabled:opacity-50 ${
                 isSelected
                   ? 'border-primary bg-primary/10'
                   : 'border-border hover:border-primary/50'
               }`}
             >
-              <span className="mr-2">{isSelected ? '☑' : '☐'}</span>
-              {option.label}
+              <span aria-hidden="true" className="me-2">{isSelected ? '☑' : '☐'}</span>
+              <OptionText option={option} locale={locale} />
             </button>
           )
         })}
         {selectedOptions.length > 0 && (
           <Button onClick={() => handleSubmit()} disabled={isLoading} className="w-full mt-4">
-            Continue
+            {assistantT(locale, 'flowContinue')}
           </Button>
         )}
       </div>
     )
   }
 
-  // Text, location, number inputs
+  // Text, location, number inputs. The hint is text on screen (not only a placeholder that vanishes
+  // as the member types) and describes the input.
+  const hint = step.placeholder ? assistantT(locale, step.placeholder) : null
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {hint && (
+        <p id={hintId} className="text-sm text-stone-600">
+          {hint}
+        </p>
+      )}
       <Input
         type={step.type === 'number' ? 'number' : 'text'}
         value={textValue}
         onChange={e => setTextValue(e.target.value)}
-        placeholder={step.placeholder}
+        placeholder={hint ?? undefined}
+        aria-labelledby={questionId}
+        aria-describedby={hint ? hintId : undefined}
+        dir="auto"
         disabled={isLoading}
         min={step.validation?.min}
         max={step.validation?.max}
@@ -119,7 +153,7 @@ function StepComponent({ step, onAnswer, isLoading }: StepComponentProps) {
         disabled={isLoading || (step.validation?.required && !textValue.trim())}
         className="w-full"
       >
-        {isLoading ? 'Processing...' : 'Continue'}
+        {assistantT(locale, isLoading ? 'flowProcessing' : 'flowContinue')}
       </Button>
     </form>
   )
@@ -136,8 +170,16 @@ export function GuidedFlowComponent({
   const [isProcessing, setIsProcessing] = useState(false)
 
   const { sendMessage, messages, isLoading } = useChat({ flow: 'general' })
+  const locale = useProfileLocale()
 
   const currentStep = flow.steps[currentStepIndex]
+  const questionId = useId()
+  // Focus moves to the question whenever the step changes (opening the flow, an answer, Back), so a
+  // keyboard or screen-reader user starts each step at its question.
+  const questionRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    questionRef.current?.focus()
+  }, [currentStepIndex])
   const isLastStep = currentStepIndex === flow.steps.length - 1
 
   const handleAnswer = useCallback(
@@ -199,16 +241,16 @@ export function GuidedFlowComponent({
   const progress = ((currentStepIndex + 1) / flow.steps.length) * 100
 
   return (
-    <Card className="w-full max-w-lg mx-auto">
+    <Card lang={locale} dir={dir(locale)} className="w-full max-w-lg mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between mb-2">
           <CardTitle className="flex items-center gap-2">
-            <span>{flow.icon}</span>
-            <span>{flow.name}</span>
+            <span aria-hidden="true">{flow.icon}</span>
+            <span>{assistantT(locale, flow.name)}</span>
           </CardTitle>
           {onCancel && (
             <Button variant="ghost" size="sm" onClick={onCancel}>
-              Cancel
+              {assistantT(locale, 'flowCancel')}
             </Button>
           )}
         </div>
@@ -221,7 +263,10 @@ export function GuidedFlowComponent({
           />
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Step {currentStepIndex + 1} of {flow.steps.length}
+          {formatMessage(assistantT(locale, 'flowStep'), {
+            current: formatCount(currentStepIndex + 1, locale),
+            total: formatCount(flow.steps.length, locale),
+          })}
         </p>
       </CardHeader>
 
@@ -229,20 +274,25 @@ export function GuidedFlowComponent({
         {aiResponse ? (
           <div className="space-y-4">
             <div className="p-4 bg-muted rounded-lg">
-              <p className="whitespace-pre-wrap text-sm">{aiResponse}</p>
+              <p lang="" dir="auto" className="whitespace-pre-wrap text-sm">{aiResponse}</p>
             </div>
             <Button onClick={() => onComplete?.(answers, aiResponse)} className="w-full">
-              Done
+              {assistantT(locale, 'flowDone')}
             </Button>
           </div>
         ) : (
           <>
-            <h3 className="font-medium mb-4">{currentStep.question}</h3>
+            <h3 ref={questionRef} id={questionId} tabIndex={-1} className="font-medium mb-4 outline-none">
+              {assistantT(locale, currentStep.question)}
+            </h3>
 
             <StepComponent
+              key={currentStep.id}
+              questionId={questionId}
               step={currentStep}
               onAnswer={handleAnswer}
               isLoading={isLoading || isProcessing}
+              locale={locale}
             />
 
             {currentStepIndex > 0 && (
@@ -252,7 +302,8 @@ export function GuidedFlowComponent({
                 disabled={isLoading || isProcessing}
                 className="mt-4"
               >
-                ← Back
+                <span aria-hidden="true" className="inline-block rtl:-scale-x-100">←</span>
+                {assistantT(locale, 'flowBack')}
               </Button>
             )}
           </>
@@ -269,17 +320,18 @@ interface FlowSelectorProps {
 }
 
 export function FlowSelector({ flows, onSelect }: FlowSelectorProps) {
+  const locale = useProfileLocale()
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div lang={locale} dir={dir(locale)} className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {flows.map(flow => (
         <button
           key={flow.id}
           onClick={() => onSelect(flow)}
-          className="p-6 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-colors text-left"
+          className="p-6 rounded-xl border border-border hover:border-primary hover:bg-primary/5 transition-colors text-start"
         >
-          <span className="text-3xl mb-3 block">{flow.icon}</span>
-          <h3 className="font-semibold mb-1">{flow.name}</h3>
-          <p className="text-sm text-muted-foreground">{flow.description}</p>
+          <span aria-hidden="true" className="text-3xl mb-3 block">{flow.icon}</span>
+          <h3 className="font-semibold mb-1">{assistantT(locale, flow.name)}</h3>
+          <p className="text-sm text-muted-foreground">{assistantT(locale, flow.description)}</p>
         </button>
       ))}
     </div>

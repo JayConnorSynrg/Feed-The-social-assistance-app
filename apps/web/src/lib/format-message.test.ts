@@ -71,9 +71,9 @@ describe('one definition in the source tree', () => {
 
   // The files the translation work was told to leave alone: the admin console and post-model.ts.
   // Remove a row when its import is repointed; drop a dictionary's re-export when no row reads it
-  // (lib/i18n-org-forms.ts serves the first three below, lib/i18n-event-forms.ts the other four).
+  // (lib/i18n-org-forms.ts serves the first two below, lib/i18n-event-forms.ts the other four).
+  // P6 W1 repointed admin-shell.tsx.
   const STILL_THROUGH_A_DICTIONARY = [
-    'app/(admin)/moderation/admin-shell.tsx',
     'app/(admin)/moderation/org/[id]/org-admin-shell.tsx',
     'app/(admin)/moderation/orgs-section.tsx',
     'app/(admin)/moderation/event-scheduler.tsx',

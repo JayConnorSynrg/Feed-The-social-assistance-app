@@ -224,7 +224,7 @@ No client write exists to assistance_events, event_checkins, admin_actions or ra
 | Tabs | `visibleTabs(tier, isOrgAdmin)` `:51`; fallback to first entitled tab `:56`; header label `tierLabel(tier) ?? 'Organizer'` `:59` |
 | URL params | `?tab=organizations` and `?org=new|<uuid>` only (`MOD/org-panel-url.ts:13-24`); read once on mount `:134-140`; popstate `:144-164`. `?org` opens the **org setup panel**, it does not set `selectedOrgId`. No other `?tab` value is read |
 | Setup panel owner | `<OrgFormPanel>` rendered once, gated `canManageOrgs` (`:355-371`); `handleOrgSaved` sets notice, bumps `orgListKey`, closes (`:175-182`) |
-| Settings tab | `PlaceholderTab label="Settings"` → "Settings — coming soon" (`:35-41`, `:347-351`) |
+| Settings tab | `PlaceholderTab label="Settings"` → "Settings — coming soon" (`:35-41`, `:347-351`); removed 2026-11-15 (P6 W1) — `?tab=settings` opens the default tab and writes one `admin.deeplink.resolve` `{kind: tab, outcome: invalid}` row |
 
 ### 4.2 Which tabs honour an org id
 

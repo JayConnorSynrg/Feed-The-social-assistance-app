@@ -28,8 +28,9 @@ reads the `profiles` table, not `auth.jwt()`.
 
 The `(admin)` route group (`apps/web/src/app/(admin)/layout.tsx`) admits platform admins OR any
 org admin; the federation sub-tree is platform-admin only. The admin shell shows org admins only
-the Events tab. A "Settings — coming soon" placeholder tab is the natural future home for tier
-config; there is no UI to grant/revoke `is_admin` today.
+the Events tab. A "Settings — coming soon" placeholder tab was here (removed 2026-11-15, P6 W1: a placeholder
+delivers nothing; `?tab=settings` now opens the default tab and writes one `admin.deeplink.resolve`
+row); there is no UI to grant/revoke `is_admin` today.
 
 ---
 

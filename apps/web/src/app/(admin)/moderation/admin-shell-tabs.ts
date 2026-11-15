@@ -21,7 +21,6 @@ export const TAB_ORDER = [
   'businesses',
   'manage',
   'people',
-  'settings',
 ] as const
 
 export type AdminTabId = (typeof TAB_ORDER)[number]
@@ -41,7 +40,6 @@ export function visibleTabs(tier: AdminTier | null, isOrgAdmin: boolean): AdminT
     businesses: isRA,
     manage: isRA,
     people: isRA,
-    settings: isPA,
   }
 
   return TAB_ORDER.filter((t) => rule[t])

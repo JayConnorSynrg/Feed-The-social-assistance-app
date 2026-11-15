@@ -7,7 +7,7 @@
 // panel's `org`) and the hash survive. The `?tab=organizations&org=…` panel deep link still parses.
 
 import { describe, it, expect } from 'vitest'
-import { ORG_ADMIN_TABS, readTabParam, tabParamHref } from './admin-tab-url'
+import { ORG_ADMIN_TABS, invalidTabRow, readTabParam, tabParamHref, withoutTabHref } from './admin-tab-url'
 import { resolveAdminTab, TAB_ORDER, visibleTabs } from './admin-shell-tabs'
 import { readOrgPanelTarget, readsOrganizationsTab } from './org-panel-url'
 
@@ -70,5 +70,21 @@ describe('organization admin page ?tab=', () => {
       expect(readTabParam(`?tab=${t}`, ORG_ADMIN_TABS)).toBe(t)
     }
     expect(readTabParam('?tab=people', ORG_ADMIN_TABS)).toBeNull()
+  })
+})
+
+describe('a ?tab= naming no tab — one row, then the param is dropped', () => {
+  it('the removed Settings tab (or any unknown value) is one invalid row of kind tab', () => {
+    expect(invalidTabRow('?tab=settings', TAB_ORDER)).toEqual({ kind: 'tab', outcome: 'invalid', tab: 'unknown' })
+    expect(invalidTabRow('?tab=nope&org=new', TAB_ORDER)).toEqual({ kind: 'tab', outcome: 'invalid', tab: 'unknown' })
+  })
+  it('a valid, absent or focus-carrying ?tab= writes nothing here (the focus gate writes that link’s row)', () => {
+    expect(invalidTabRow('?tab=people', TAB_ORDER)).toBeNull()
+    expect(invalidTabRow('', TAB_ORDER)).toBeNull()
+    expect(invalidTabRow(`?tab=settings&focus=post:${UUID}`, TAB_ORDER)).toBeNull()
+  })
+  it('withoutTabHref drops only tab, keeping every other param and the hash', () => {
+    expect(withoutTabHref({ pathname: '/moderation', search: '?tab=settings', hash: '' })).toBe('/moderation')
+    expect(withoutTabHref({ pathname: '/moderation', search: '?tab=settings&org=new', hash: '#x' })).toBe('/moderation?org=new#x')
   })
 })

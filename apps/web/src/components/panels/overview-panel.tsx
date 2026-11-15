@@ -1,7 +1,10 @@
 'use client'
 
 // apps/web/src/components/panels/overview-panel.tsx
-// Landing dashboard panel - quick access to all features
+// Landing dashboard panel - quick access to all features.
+// Every word FEED writes here is in the viewer's language (lib/i18n-overview.ts) and the panel is
+// marked with it; the member's name and post excerpts keep their own direction. The date and the
+// ages come from lib/i18n-intl.ts and lib/relative-age.ts.
 
 import React, { useState, useEffect, useCallback } from 'react'
 import {
@@ -21,6 +24,13 @@ import {
 import { useAuth } from '@/hooks/use-auth'
 import { createClient } from '@/lib/supabase/client'
 import { QUERY_TIMEOUT_MS, isQueryTimeout } from '@/lib/vault'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { dir, type Locale } from '@/lib/i18n'
+import { overviewT, type OverviewMessages } from '@/lib/i18n-overview'
+import { splitMessage } from '@/lib/format-message'
+import { dateTimeFormatter } from '@/lib/i18n-intl'
+import { relativeAge } from '@/lib/relative-age'
+import { browserTimeZone } from '@/lib/event-time'
 
 // ============================================
 // INTERFACES
@@ -41,8 +51,10 @@ interface QuickActionCardProps {
 interface RecentActivityItemProps {
   id: string
   type: 'application' | 'resource' | 'document' | 'post' | 'like'
-  title: string
-  time: string
+  /** The start of the member's post (posted) or of the post they liked; null when unreadable. */
+  excerpt: string | null
+  /** When it happened (ISO); shown as an age in the viewer's language. */
+  at: string
   icon: React.ElementType
 }
 
@@ -56,18 +68,22 @@ interface UpcomingReminderItemProps {
 // ============================================
 // WELCOME SECTION
 // ============================================
-function WelcomeSection({ userName }: { userName?: string }) {
-  const currentDate = new Date().toLocaleDateString('en-US', {
+function WelcomeSection({ userName, locale }: { userName?: string; locale: Locale }) {
+  const currentDate = dateTimeFormatter(locale, browserTimeZone(), {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
-  })
+    day: 'numeric',
+  }).format(new Date())
+  const [before, after] = splitMessage(overviewT(locale, 'welcomeBack'), 'name')
 
   return (
     <div className="mb-8">
       <h1 className="text-3xl font-bold text-stone-900 mb-1">
-        Welcome back, {userName || 'Friend'}!
+        {before}
+        {/* The member's own name keeps its own direction and takes no page language. */}
+        {userName ? <bdi lang="" dir="auto">{userName}</bdi> : overviewT(locale, 'friend')}
+        {after}
       </h1>
       <p className="text-sm text-stone-600">
         {currentDate}
@@ -83,7 +99,7 @@ function QuickActionCard({ icon: Icon, iconBg, title, description, onClick }: Qu
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-start p-4 rounded-xl border border-stone-200/50 bg-[#faf9f6] hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee] transition-all text-left group shadow-sm"
+      className="flex flex-col items-start p-4 rounded-xl border border-stone-200/50 bg-[#faf9f6] hover:border-[#4a5d23]/50 hover:bg-[#f5f3ee] transition-all text-start group shadow-sm"
     >
       <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center mb-3`}>
         <Icon className="w-5 h-5" />
@@ -101,7 +117,9 @@ function QuickActionCard({ icon: Icon, iconBg, title, description, onClick }: Qu
 // ============================================
 // RECENT ACTIVITY ITEM
 // ============================================
-function RecentActivityItem({ title, time, icon: Icon }: RecentActivityItemProps) {
+function RecentActivityItem({ type, excerpt, at, icon: Icon, locale }: RecentActivityItemProps & { locale: Locale }) {
+  const key: keyof OverviewMessages = type === 'post' ? 'activityPosted' : 'activityLiked'
+  const [before, after] = splitMessage(overviewT(locale, key), 'excerpt')
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-[#f8f6f1] transition-colors">
       <div className="w-8 h-8 rounded-lg bg-[#4a5d23]/10 flex items-center justify-center flex-shrink-0">
@@ -109,10 +127,18 @@ function RecentActivityItem({ title, time, icon: Icon }: RecentActivityItemProps
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-stone-900 truncate">
-          {title}
+          {excerpt === null ? (
+            overviewT(locale, 'activityLikedPost')
+          ) : (
+            <>
+              {before}
+              <bdi lang="" dir="auto">{excerpt}</bdi>
+              {after}
+            </>
+          )}
         </p>
         <p className="text-xs text-stone-500 mt-0.5">
-          {time}
+          {relativeAge(at, locale)}
         </p>
       </div>
     </div>
@@ -143,17 +169,9 @@ function UpcomingReminderItem({ title, date, type }: UpcomingReminderItemProps) 
   )
 }
 
-// ============================================
-// UTILITY
-// ============================================
-function getRelativeTime(date: Date): string {
-  const now = new Date()
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diffInSeconds < 60) return 'just now'
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
-  return date.toLocaleDateString()
+/** The start of a post, cut for one line of the activity list. */
+function excerptOf(content: string, max: number): string {
+  return `${content.slice(0, max)}${content.length > max ? '...' : ''}`
 }
 
 // ============================================
@@ -164,7 +182,8 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
   const supabase = createClient()
   const [recentActivity, setRecentActivity] = useState<RecentActivityItemProps[]>([])
   const [loading, setLoading] = useState(true)
-  const [activityError, setActivityError] = useState<string | null>(null)
+  const [activityError, setActivityError] = useState<'timeout' | 'failed' | null>(null)
+  const locale = useProfileLocale()
 
   // Fetch real recent activity for the user
   const fetchRecentActivity = useCallback(async () => {
@@ -189,12 +208,11 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
 
       if (posts) {
         for (const post of posts) {
-          const postTime = post.created_at ? new Date(post.created_at) : new Date()
           activities.push({
             id: `post-${post.id}`,
             type: 'post',
-            title: `Posted: "${post.content.slice(0, 60)}${post.content.length > 60 ? '...' : ''}"`,
-            time: getRelativeTime(postTime),
+            excerpt: excerptOf(post.content, 60),
+            at: post.created_at ?? new Date().toISOString(),
             icon: Newspaper,
           })
         }
@@ -214,13 +232,12 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
 
       if (likes) {
         for (const like of likes) {
-          const postContent = like.post?.content || 'a post'
-          const likeTime = like.created_at ? new Date(like.created_at) : new Date()
+          const postContent = like.post?.content
           activities.push({
             id: `like-${like.post_id}`,
             type: 'like',
-            title: `Liked: "${postContent.slice(0, 50)}${postContent.length > 50 ? '...' : ''}"`,
-            time: getRelativeTime(likeTime),
+            excerpt: postContent ? excerptOf(postContent, 50) : null,
+            at: like.created_at ?? new Date().toISOString(),
             icon: Heart,
           })
         }
@@ -234,11 +251,9 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
 
       setRecentActivity(activities.slice(0, 5))
     } catch (err) {
-      const msg = isQueryTimeout(err)
-        ? 'Activity timed out — please check your connection and retry.'
-        : err instanceof Error ? err.message : 'Failed to load recent activity'
-      console.error('Error fetching recent activity:', msg, err)
-      setActivityError(msg)
+      const kind = isQueryTimeout(err) ? 'timeout' : 'failed'
+      console.error('Error fetching recent activity:', kind, err)
+      setActivityError(kind)
     } finally {
       setLoading(false)
     }
@@ -255,62 +270,62 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
   }
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto">
+    <div lang={locale} dir={dir(locale)} className="h-full flex flex-col overflow-y-auto">
       <div className="max-w-6xl mx-auto w-full px-4 py-6">
         {/* Welcome Section */}
-        <WelcomeSection userName={userName} />
+        <WelcomeSection userName={userName} locale={locale} />
 
         {/* Quick Actions Grid */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-stone-900 mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-semibold text-stone-900 mb-4">{overviewT(locale, 'quickActions')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <QuickActionCard
               icon={Map}
               iconBg="bg-blue-100 text-blue-600"
-              title="Find Resources"
-              description="Discover local food banks, housing assistance, healthcare, and more near you."
+              title={overviewT(locale, 'findResourcesTitle')}
+              description={overviewT(locale, 'findResourcesBody')}
               onClick={() => handleNavigate('map')}
             />
             <QuickActionCard
               icon={MessageSquare}
               iconBg="bg-purple-100 text-purple-600"
-              title="AI Assistant"
-              description="Get personalized help finding resources and applying for benefits."
+              title={overviewT(locale, 'assistantTitle')}
+              description={overviewT(locale, 'assistantBody')}
               onClick={() => handleNavigate('chat')}
             />
             <QuickActionCard
               icon={Search}
               iconBg="bg-amber-100 text-amber-700"
-              title="Browse Programs"
-              description="Explore all available benefits and services by category."
+              title={overviewT(locale, 'programsTitle')}
+              description={overviewT(locale, 'programsBody')}
               onClick={() => handleNavigate('programs')}
             />
             <QuickActionCard
               icon={Compass}
               iconBg="bg-green-100 text-green-600"
-              title="Resource Wizard"
-              description="Guided help finding resources"
+              title={overviewT(locale, 'wizardTitle')}
+              description={overviewT(locale, 'wizardBody')}
               onClick={() => handleNavigate('wizard')}
             />
             <QuickActionCard
               icon={ClipboardList}
               iconBg="bg-orange-100 text-orange-600"
-              title="My Applications"
-              description="Track your benefit applications and see their current status."
+              title={overviewT(locale, 'applicationsTitle')}
+              description={overviewT(locale, 'applicationsBody')}
               onClick={() => handleNavigate('applications')}
             />
             <QuickActionCard
               icon={FolderOpen}
               iconBg="bg-indigo-100 text-indigo-600"
-              title="My Documents"
-              description="Securely store and manage your important documents."
+              title={overviewT(locale, 'documentsTitle')}
+              description={overviewT(locale, 'documentsBody')}
               onClick={() => handleNavigate('documents')}
             />
             <QuickActionCard
               icon={FileText}
               iconBg="bg-teal-100 text-teal-600"
-              title="Apply for Benefits"
-              description="Fill out and submit forms for SNAP, Medicaid, and other programs."
+              title={overviewT(locale, 'applyTitle')}
+              description={overviewT(locale, 'applyBody')}
               onClick={() => handleNavigate('forms')}
             />
           </div>
@@ -320,23 +335,26 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Activity */}
           <div>
-            <h2 className="text-lg font-semibold text-stone-900 mb-4">Recent Activity</h2>
+            <h2 className="text-lg font-semibold text-stone-900 mb-4">{overviewT(locale, 'recentActivity')}</h2>
             <div className="bg-white rounded-2xl border border-stone-200/50 p-4 shadow-sm">
               {loading ? (
-                <div className="text-center py-8">
-                  <Loader2 className="w-5 h-5 mx-auto animate-spin text-stone-400" />
+                <div role="status" className="text-center py-8">
+                  <Loader2 aria-hidden="true" className="w-5 h-5 mx-auto animate-spin text-stone-400" />
+                  <span className="sr-only">{overviewT(locale, 'loadingActivity')}</span>
                 </div>
               ) : activityError ? (
-                <div className="text-center py-8 text-red-600 text-sm">{activityError}</div>
+                <div role="alert" className="text-center py-8 text-red-600 text-sm">
+                  {overviewT(locale, activityError === 'timeout' ? 'activityTimedOut' : 'activityFailed')}
+                </div>
               ) : recentActivity.length > 0 ? (
                 <div className="space-y-2">
                   {recentActivity.map((activity) => (
-                    <RecentActivityItem key={activity.id} {...activity} />
+                    <RecentActivityItem key={activity.id} {...activity} locale={locale} />
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-stone-500 text-sm">
-                  No recent activity yet. Start by exploring resources or posting in the community feed!
+                  {overviewT(locale, 'noActivity')}
                 </div>
               )}
             </div>
@@ -344,10 +362,10 @@ export function OverviewPanel({ userName, onNavigateToPanel }: OverviewPanelProp
 
           {/* Upcoming Reminders */}
           <div>
-            <h2 className="text-lg font-semibold text-stone-900 mb-4">Upcoming Reminders</h2>
+            <h2 className="text-lg font-semibold text-stone-900 mb-4">{overviewT(locale, 'upcomingReminders')}</h2>
             <div className="bg-white rounded-2xl border border-stone-200/50 p-4 shadow-sm">
               <div className="text-center py-8 text-stone-500 text-sm">
-                No upcoming reminders. Reminders will appear here when you have appointments or deadlines.
+                {overviewT(locale, 'noReminders')}
               </div>
             </div>
           </div>

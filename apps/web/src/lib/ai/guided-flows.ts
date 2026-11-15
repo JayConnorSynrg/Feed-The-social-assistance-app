@@ -1,12 +1,27 @@
 // apps/web/src/lib/ai/guided-flows.ts
-// Structured guided flows for FEED AI Assistant
+// Structured guided flows for FEED AI Assistant.
+//
+// The words a member reads (a flow's name and description, each question, option and hint) are
+// keys of lib/i18n-assistant.ts, shown with flowText(locale, …) in the member's language. What a
+// flow SENDS does not change with the language: an option answers with its `value`, and aiPrompt
+// (filled from those values and the member's own typed words) stays as written here.
+
+import type { AssistantKey, FlowText } from '@/lib/i18n-assistant'
+
+export interface FlowOption {
+  /** What the answer is: the same in every language (prompts and screening read it). */
+  value: string
+  label: FlowText
+  /** A decorative emoji shown before the label (hidden from screen readers). */
+  icon?: string
+}
 
 export interface FlowStep {
   id: string
-  question: string
+  question: AssistantKey
   type: 'text' | 'select' | 'multiselect' | 'location' | 'number'
-  options?: { label: string; value: string }[]
-  placeholder?: string
+  options?: FlowOption[]
+  placeholder?: AssistantKey
   validation?: {
     required?: boolean
     min?: number
@@ -19,8 +34,8 @@ export interface FlowStep {
 
 export interface GuidedFlow {
   id: string
-  name: string
-  description: string
+  name: AssistantKey
+  description: AssistantKey
   icon: string
   steps: FlowStep[]
   /**
@@ -38,54 +53,54 @@ export interface GuidedFlow {
 // Resource Finder Flow (P4-T5)
 export const resourceFinderFlow: GuidedFlow = {
   id: 'resource-finder',
-  name: 'Find Resources',
-  description: 'Find food, housing, healthcare, and other resources near you',
+  name: 'rfName',
+  description: 'rfDescription',
   icon: '📍',
   steps: [
     {
       id: 'category',
-      question: 'What type of help are you looking for?',
+      question: 'rfCategoryQ',
       type: 'select',
       options: [
-        { label: '🍎 Food Assistance', value: 'food' },
-        { label: '🏠 Housing & Shelter', value: 'housing' },
-        { label: '🏥 Healthcare', value: 'healthcare' },
-        { label: '💡 Utilities (Electric, Gas, Water)', value: 'utilities' },
-        { label: '👔 Employment & Job Training', value: 'employment' },
-        { label: '👶 Childcare & Family Services', value: 'family' },
-        { label: '⚖️ Legal Aid', value: 'legal' },
-        { label: '🧠 Mental Health', value: 'mental-health' },
-        { label: '📚 Other', value: 'other' },
+        { icon: '🍎', label: 'rfFood', value: 'food' },
+        { icon: '🏠', label: 'rfHousing', value: 'housing' },
+        { icon: '🏥', label: 'rfHealthcare', value: 'healthcare' },
+        { icon: '💡', label: 'rfUtilities', value: 'utilities' },
+        { icon: '👔', label: 'rfEmployment', value: 'employment' },
+        { icon: '👶', label: 'rfFamily', value: 'family' },
+        { icon: '⚖️', label: 'rfLegal', value: 'legal' },
+        { icon: '🧠', label: 'rfMentalHealth', value: 'mental-health' },
+        { icon: '📚', label: 'rfOther', value: 'other' },
       ],
       validation: { required: true },
       next: 'urgency',
     },
     {
       id: 'urgency',
-      question: 'How urgent is your need?',
+      question: 'rfUrgencyQ',
       type: 'select',
       options: [
-        { label: '🚨 Immediate (today)', value: 'immediate' },
-        { label: '📅 This week', value: 'this-week' },
-        { label: '🗓️ Within a month', value: 'month' },
-        { label: '🔍 Just exploring options', value: 'exploring' },
+        { icon: '🚨', label: 'rfImmediate', value: 'immediate' },
+        { icon: '📅', label: 'rfThisWeek', value: 'this-week' },
+        { icon: '🗓️', label: 'rfMonth', value: 'month' },
+        { icon: '🔍', label: 'rfExploring', value: 'exploring' },
       ],
       validation: { required: true },
       next: 'location',
     },
     {
       id: 'location',
-      question: 'What is your zip code or city?',
+      question: 'rfLocationQ',
       type: 'location',
-      placeholder: 'Enter zip code or city name',
+      placeholder: 'rfLocationPh',
       validation: { required: true },
       next: 'additional',
     },
     {
       id: 'additional',
-      question: 'Anything else we should know? (optional)',
+      question: 'rfAdditionalQ',
       type: 'text',
-      placeholder: 'E.g., family size, specific requirements, accessibility needs',
+      placeholder: 'rfAdditionalPh',
       validation: { required: false },
       aiPrompt: `Based on the following information, find relevant resources:
 - Category: {{category}}
@@ -101,8 +116,8 @@ Please provide 2-3 specific resources with names, addresses, contact info, and a
 // Eligibility Checker Flow (P4-T6)
 export const eligibilityCheckerFlow: GuidedFlow = {
   id: 'eligibility-checker',
-  name: 'Check Eligibility',
-  description: 'See what benefits programs you may qualify for',
+  name: 'ecName',
+  description: 'ecDescription',
   icon: '✓',
   // Raw answers (income, pregnancy, household, employment, benefits) are PII.
   // They flow ONLY to the de-identified benefits-screening edge function; the
@@ -112,109 +127,109 @@ export const eligibilityCheckerFlow: GuidedFlow = {
   steps: [
     {
       id: 'household-size',
-      question: 'How many people live in your household (including yourself)?',
+      question: 'ecHouseholdQ',
       type: 'select',
       options: [
-        { label: '1 (just me)', value: '1' },
-        { label: '2', value: '2' },
-        { label: '3', value: '3' },
-        { label: '4', value: '4' },
-        { label: '5', value: '5' },
-        { label: '6+', value: '6+' },
+        { label: 'ecJustMe', value: '1' },
+        { label: { literal: '2' }, value: '2' },
+        { label: { literal: '3' }, value: '3' },
+        { label: { literal: '4' }, value: '4' },
+        { label: { literal: '5' }, value: '5' },
+        { label: { literal: '6+' }, value: '6+' },
       ],
       validation: { required: true },
       next: 'children',
     },
     {
       id: 'children',
-      question: 'Are there any children under 18 in your household?',
+      question: 'ecChildrenQ',
       type: 'select',
       options: [
-        { label: 'Yes', value: 'yes' },
-        { label: 'No', value: 'no' },
+        { label: 'optYes', value: 'yes' },
+        { label: 'optNo', value: 'no' },
       ],
       validation: { required: true },
       next: (answer) => (answer === 'yes' ? 'children-ages' : 'income'),
     },
     {
       id: 'children-ages',
-      question: 'What are the ages of the children?',
+      question: 'ecAgesQ',
       type: 'multiselect',
       options: [
-        { label: 'Under 1 year', value: 'infant' },
-        { label: '1-5 years', value: 'toddler' },
-        { label: '6-12 years', value: 'child' },
-        { label: '13-17 years', value: 'teen' },
+        { label: 'ecAgeInfant', value: 'infant' },
+        { label: 'ecAgeToddler', value: 'toddler' },
+        { label: 'ecAgeChild', value: 'child' },
+        { label: 'ecAgeTeen', value: 'teen' },
       ],
       validation: { required: true },
       next: 'pregnant',
     },
     {
       id: 'pregnant',
-      question: 'Is anyone in the household currently pregnant?',
+      question: 'ecPregnantQ',
       type: 'select',
       options: [
-        { label: 'Yes', value: 'yes' },
-        { label: 'No', value: 'no' },
+        { label: 'optYes', value: 'yes' },
+        { label: 'optNo', value: 'no' },
       ],
       validation: { required: true },
       next: 'income',
     },
     {
       id: 'income',
-      question: 'What is your approximate monthly household income (before taxes)?',
+      question: 'ecIncomeQ',
       type: 'select',
       options: [
-        { label: 'No income', value: '0' },
-        { label: 'Under $1,000', value: 'under-1000' },
-        { label: '$1,000 - $2,000', value: '1000-2000' },
-        { label: '$2,000 - $3,000', value: '2000-3000' },
-        { label: '$3,000 - $4,000', value: '3000-4000' },
-        { label: '$4,000 - $5,000', value: '4000-5000' },
-        { label: 'Over $5,000', value: 'over-5000' },
+        { label: 'ecIncomeNone', value: '0' },
+        { label: { key: 'ecIncomeUnder', usd: { amount: 1000 } }, value: 'under-1000' },
+        { label: { key: 'ecIncomeRange', usd: { from: 1000, to: 2000 } }, value: '1000-2000' },
+        { label: { key: 'ecIncomeRange', usd: { from: 2000, to: 3000 } }, value: '2000-3000' },
+        { label: { key: 'ecIncomeRange', usd: { from: 3000, to: 4000 } }, value: '3000-4000' },
+        { label: { key: 'ecIncomeRange', usd: { from: 4000, to: 5000 } }, value: '4000-5000' },
+        { label: { key: 'ecIncomeOver', usd: { amount: 5000 } }, value: 'over-5000' },
       ],
       validation: { required: true },
       next: 'employment',
     },
     {
       id: 'employment',
-      question: 'What is your current employment status?',
+      question: 'ecEmploymentQ',
       type: 'select',
       options: [
-        { label: 'Employed full-time', value: 'full-time' },
-        { label: 'Employed part-time', value: 'part-time' },
-        { label: 'Self-employed', value: 'self-employed' },
-        { label: 'Unemployed - looking for work', value: 'unemployed-looking' },
-        { label: 'Unemployed - not looking', value: 'unemployed-not-looking' },
-        { label: 'Unable to work (disability)', value: 'disability' },
-        { label: 'Retired', value: 'retired' },
-        { label: 'Student', value: 'student' },
+        { label: 'ecFullTime', value: 'full-time' },
+        { label: 'ecPartTime', value: 'part-time' },
+        { label: 'ecSelfEmployed', value: 'self-employed' },
+        { label: 'ecUnemployedLooking', value: 'unemployed-looking' },
+        { label: 'ecUnemployedNotLooking', value: 'unemployed-not-looking' },
+        { label: 'ecDisability', value: 'disability' },
+        { label: 'ecRetired', value: 'retired' },
+        { label: 'ecStudent', value: 'student' },
       ],
       validation: { required: true },
       next: 'current-benefits',
     },
     {
       id: 'current-benefits',
-      question: 'Are you currently receiving any benefits? (select all that apply)',
+      question: 'ecBenefitsQ',
       type: 'multiselect',
       options: [
-        { label: 'SNAP (Food Stamps)', value: 'snap' },
-        { label: 'Medicaid', value: 'medicaid' },
-        { label: 'Medicare', value: 'medicare' },
-        { label: 'SSI/SSDI', value: 'ssi-ssdi' },
-        { label: 'TANF', value: 'tanf' },
-        { label: 'WIC', value: 'wic' },
-        { label: 'Housing assistance', value: 'housing' },
-        { label: 'None of these', value: 'none' },
+        { label: 'ecSnap', value: 'snap' },
+        { label: 'ecMedicaid', value: 'medicaid' },
+        { label: 'ecMedicare', value: 'medicare' },
+        { label: 'ecSsi', value: 'ssi-ssdi' },
+        { label: 'ecTanf', value: 'tanf' },
+        { label: 'ecWic', value: 'wic' },
+        { label: 'ecHousingAssistance', value: 'housing' },
+        { label: 'ecNone', value: 'none' },
       ],
       validation: { required: true },
       next: 'state',
     },
     {
       id: 'state',
-      question: 'What state do you live in?',
+      question: 'ecStateQ',
       type: 'text',
-      placeholder: 'Enter state name or abbreviation',
+      placeholder: 'ecStatePh',
       validation: { required: true },
       // No aiPrompt: this flow is skipDirectSend. Raw household answers never
       // reach the LLM. Eligibility is computed by the benefits-screening edge
@@ -227,36 +242,36 @@ export const eligibilityCheckerFlow: GuidedFlow = {
 // Form Help Flow (P4-T7)
 export const formHelpFlow: GuidedFlow = {
   id: 'form-help',
-  name: 'Form Help',
-  description: 'Get help understanding and completing benefit applications',
+  name: 'fhName',
+  description: 'fhDescription',
   icon: '📝',
   steps: [
     {
       id: 'form-type',
-      question: 'Which form or application do you need help with?',
+      question: 'fhFormQ',
       type: 'select',
       options: [
-        { label: 'SNAP (Food Stamps) Application', value: 'snap' },
-        { label: 'Medicaid Application', value: 'medicaid' },
-        { label: 'TANF Application', value: 'tanf' },
-        { label: 'Housing Assistance Application', value: 'housing' },
-        { label: 'Unemployment Application', value: 'unemployment' },
-        { label: 'SSI/SSDI Application', value: 'ssi-ssdi' },
-        { label: 'Other form', value: 'other' },
+        { label: 'fhSnap', value: 'snap' },
+        { label: 'fhMedicaid', value: 'medicaid' },
+        { label: 'fhTanf', value: 'tanf' },
+        { label: 'fhHousing', value: 'housing' },
+        { label: 'fhUnemployment', value: 'unemployment' },
+        { label: 'fhSsi', value: 'ssi-ssdi' },
+        { label: 'fhOther', value: 'other' },
       ],
       validation: { required: true },
       next: 'help-type',
     },
     {
       id: 'help-type',
-      question: 'What kind of help do you need?',
+      question: 'fhHelpQ',
       type: 'select',
       options: [
-        { label: 'Understand what documents I need', value: 'documents' },
-        { label: 'Explain what questions mean', value: 'explain' },
-        { label: 'Help with a specific section', value: 'section' },
-        { label: 'Review before I submit', value: 'review' },
-        { label: 'General guidance through the form', value: 'general' },
+        { label: 'fhDocuments', value: 'documents' },
+        { label: 'fhExplain', value: 'explain' },
+        { label: 'fhSection', value: 'section' },
+        { label: 'fhReview', value: 'review' },
+        { label: 'fhGeneral', value: 'general' },
       ],
       validation: { required: true },
       next: (answer) => {
@@ -267,36 +282,36 @@ export const formHelpFlow: GuidedFlow = {
     },
     {
       id: 'section-name',
-      question: 'Which section are you working on?',
+      question: 'fhSectionQ',
       type: 'text',
-      placeholder: 'E.g., "Income", "Household Members", "Assets"',
+      placeholder: 'fhSectionPh',
       validation: { required: true },
       next: 'specific-question',
     },
     {
       id: 'question-text',
-      question: 'What is the question you need help understanding?',
+      question: 'fhQuestionQ',
       type: 'text',
-      placeholder: 'Type or paste the question from the form',
+      placeholder: 'fhQuestionPh',
       validation: { required: true },
       next: 'status',
     },
     {
       id: 'specific-question',
-      question: 'What specific question do you have about this section?',
+      question: 'fhSpecificQ',
       type: 'text',
-      placeholder: "Describe what you're confused about",
+      placeholder: 'fhSpecificPh',
       validation: { required: true },
       next: 'status',
     },
     {
       id: 'status',
-      question: 'Have you already started the application?',
+      question: 'fhStatusQ',
       type: 'select',
       options: [
-        { label: "No, haven't started yet", value: 'not-started' },
-        { label: 'Yes, partway through', value: 'in-progress' },
-        { label: 'Yes, almost done', value: 'almost-done' },
+        { label: 'fhNotStarted', value: 'not-started' },
+        { label: 'fhInProgress', value: 'in-progress' },
+        { label: 'fhAlmostDone', value: 'almost-done' },
       ],
       validation: { required: true },
       aiPrompt: `Help the user with their benefits application:

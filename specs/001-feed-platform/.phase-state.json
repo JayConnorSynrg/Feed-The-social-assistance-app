@@ -962,6 +962,16 @@
       "note": "Admin Moderation > Community: platform admin picks an approved petition and downloads its signatures CSV (POST /api/admin/petitions/[id]/export). Gate is_current_user_admin() before any read; export_petition_signatures paged 1,000 + checked against get_petition_signature_count; one admin_actions petition.export row per PA attempt, file only after the ok row; one admin.petition.export app_logs event. Columns: Full Name, Signed At, Affirmation, Petition Version Hash (IP, user agent, display name dropped server-side). BOM, RFC 4180, formula-safe, id+date file name. 14-locale copy lib/i18n-admin-petitions.ts. Replaces the coming-soon line.",
       "pr": 252,
       "reviewFixRound": "On 000ce36: section lang/dir (F1); status line announces Preparing CSV and is cleared before an error alert, aria-busy on the button only (F2); picker lang=\"\" dir=\"auto\" for member-written titles (F3); dim only without a selection (F4); select border stone-500 (F5); load failure in the always-mounted alert (F6); leading-space formula triggers neutralised (L1); malformed id 400 + one null-target error audit row (L2); approved-only petition read so a PA's own draft cannot be locked (L5). 15 mutants red."
+    },
+    "feed-p6-w1-first-screen-admin-tabs": {
+      "status": "BUILT_PR_OPEN",
+      "branch": "feature/feed-p6-w1-first-screen-admin-tabs",
+      "base": "origin/develop 7540113",
+      "migration": null,
+      "note": "P6 translations wave 1: the AI Assistant landing panel and its guided flows, Home (Overview), and the admin shell header/selector/tab bar in the viewer's language (lib/i18n-assistant.ts 125 keys, lib/i18n-overview.ts 27, lib/i18n-admin-shell.ts 13; 14 locales; 660 native-review rows). Admin shell reads useProfileLocale(). Settings placeholder tab removed; ?tab=settings opens the default tab with one admin.deeplink.resolve {kind: tab, outcome: invalid} row. Options answer with value, prompts unchanged. 24 mutants red.",
+      "pr": 253,
+      "reviewFixRound": "On 9e7a6dc: eligibility never screens an unrecognised state (lib/eligibility-screening.ts unknown_state; translated notice; 2-letter code asked in 14 locales); bubble/placeholder/timestamp contrast; guided flow keyed steps, question focus, Cancel focus return, named option groups, visible hint; resource row wraps at 360px; role=log with whole-reply announcements; IME-safe Enter; isolated model name; QuickTag aria-pressed; tab panel and org selector focus rings. 22 mutants red.",
+      "reviewFixRound2": "On 7659615: streaming assistant bubble inert as a whole; failed empty reply not rendered; flow completion focuses the message box (guest: the opening card). 5 mutants red."
     }
   }
 }
