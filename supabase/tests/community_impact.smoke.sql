@@ -8,7 +8,7 @@
 -- and kept; every test runs in BEGIN ... ROLLBACK. Run as a superuser (the deletion tests SET ROLE supabase_auth_admin
 -- and service_role, as GoTrue and the delete-account function do):
 --   psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d <copy> -f supabase/tests/community_impact.smoke.sql 2>&1 | grep -E 'PASS|FAIL|ERROR'
--- Expected: 68 PASS, 0 FAIL, 0 ERROR.
+-- Expected: every line PASS (count printed by the runner), 0 FAIL, 0 ERROR.
 
 -- smoke helpers for 20261027500000_community_impact_v1 (disposable database feed_smk only)
 CREATE SCHEMA smk;
@@ -41,6 +41,14 @@ END $$;
 CREATE FUNCTION smk.visits(p_occ uuid, p_visits int, p_households int, p_size int DEFAULT 3, p_status text DEFAULT 'confirmed') RETURNS void LANGUAGE sql AS $$
   INSERT INTO public.event_checkins (occurrence_id, household_key, household_size, status, is_anonymous)
   SELECT p_occ, 'hh-' || ((g - 1) % p_households), p_size, p_status, true FROM generate_series(1, p_visits) g $$;
+-- one confirmed visit by an account on its own occurrence (check-ins are unique per occurrence and account)
+CREATE FUNCTION smk.member_visit(p_user uuid, p_size int DEFAULT 1, p_key text DEFAULT NULL) RETURNS void LANGUAGE sql AS $$
+  INSERT INTO public.event_checkins (occurrence_id, user_id, household_key, household_size, status, confirmed_at)
+  VALUES (smk.occ(), p_user, p_key, p_size, 'confirmed', now()) $$;
+-- p_n anonymous walk-ins (organizer_confirm with p_user NULL: no account, no household_key)
+CREATE FUNCTION smk.walkins(p_occ uuid, p_n int, p_size int DEFAULT 1) RETURNS void LANGUAGE sql AS $$
+  INSERT INTO public.event_checkins (occurrence_id, user_id, household_key, household_size, status, is_anonymous, confirmed_at)
+  SELECT p_occ, NULL, NULL, p_size, 'confirmed', true, now() FROM generate_series(1, p_n) $$;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA smk TO anon, authenticated;
 
 \set ON_ERROR_STOP 1
@@ -163,10 +171,10 @@ BEGIN;
 DO $t$ DECLARE oc uuid := smk.occ(); j jsonb; BEGIN
   PERFORM smk.visits(oc, 25, 1, 4);
   j := smk.f('people_served_at_events');
-  PERFORM smk.ok('b3 25 visits / 1 household: suppressed', j->>'suppressed' = 'true', j::text);
+  PERFORM smk.ok('b3 25 visits / 1 household: suppressed, value null', j->>'suppressed' = 'true' AND j->'value' = 'null'::jsonb, j::text);
   DELETE FROM public.event_checkins;
   PERFORM smk.visits(oc, 20, 9, 1);
-  PERFORM smk.ok('b3 20 visits / 9 identities: suppressed', smk.f('people_served_at_events')->>'suppressed' = 'true', smk.f('people_served_at_events')::text);
+  PERFORM smk.ok('b3 20 visits / 9 identities: suppressed, value null', smk.f('people_served_at_events')->>'suppressed' = 'true' AND smk.f('people_served_at_events')->'value' = 'null'::jsonb, smk.f('people_served_at_events')::text);
   PERFORM smk.visits(oc, 1, 1, 1); UPDATE public.event_checkins SET household_key = 'hh-x' WHERE id = (SELECT id FROM public.event_checkins ORDER BY checked_in_at DESC, id LIMIT 1);
   PERFORM smk.ok('b3 [instrument] 21 visits / 10 identities: shown 20 (sum 21)', smk.f('people_served_at_events')->'value' = '20'::jsonb, smk.f('people_served_at_events')::text);
   -- [aim] early check-ins are not confirmed visits: 40 early from 40 households add nothing
@@ -175,7 +183,8 @@ DO $t$ DECLARE oc uuid := smk.occ(); j jsonb; BEGIN
   -- identity fallback: a visit with no household_key and no user counts as its own identity (id::text)
   DELETE FROM public.event_checkins;
   INSERT INTO public.event_checkins (occurrence_id, household_size, status, is_anonymous) SELECT oc, 2, 'confirmed', true FROM generate_series(1, 20);
-  PERFORM smk.ok('b3 20 keyless visits = 20 identities: shown 40', smk.f('people_served_at_events')->'value' = '40'::jsonb, smk.f('people_served_at_events')::text);
+  PERFORM smk.ok('b3 20 anonymous walk-ins (no key, no account) add no identity: suppressed, value null',
+    smk.f('people_served_at_events')->>'suppressed' = 'true' AND smk.f('people_served_at_events')->'value' = 'null'::jsonb, smk.f('people_served_at_events')::text);
 END $t$;
 ROLLBACK;
 
@@ -195,9 +204,10 @@ DO $t$ BEGIN
   PERFORM smk.ok('c  [aim] before: needs_met 13 people / 16 rows -> 15; all four ledger figures shown',
     (SELECT j->'needs_met'->'value' = '15'::jsonb AND j->'petition_signers'->'value' = '10'::jsonb AND j->'alerts_verified'->'value' = '10'::jsonb
             AND j->'member_resources_approved'->'value' = '10'::jsonb FROM c_before), (SELECT j::text FROM c_before));
-  PERFORM smk.ok('c  [aim] the carry trigger is on engagement_events, AFTER DELETE FOR EACH STATEMENT, enabled',
-    (SELECT tgfoid = 'public.community_impact_carry_departed()'::regprocedure AND tgtype = 8 AND tgenabled = 'O'
-       FROM pg_trigger WHERE tgrelid = 'public.engagement_events'::regclass AND tgname = 'trg_community_impact_carry_departed'), 'pg_trigger');
+  PERFORM smk.ok('c  [aim] the carry trigger is on auth.users, BEFORE DELETE FOR EACH ROW, enabled, the only one',
+    (SELECT count(*) = 1 AND bool_and(tgfoid = 'public.community_impact_carry_departed()'::regprocedure AND tgtype = 11 AND tgenabled = 'O'
+                                     AND tgrelid = 'auth.users'::regclass)
+       FROM pg_trigger WHERE tgname = 'trg_community_impact_carry_departed'), 'pg_trigger');
 END $t$;
 -- admin path / member path: GoTrue deletes the auth.users row as supabase_auth_admin
 SELECT set_config('smk.victim', (SELECT id FROM c_one)::text, true);
@@ -206,20 +216,21 @@ DELETE FROM auth.users WHERE id = current_setting('smk.victim')::uuid;
 RESET ROLE;
 DO $t$ BEGIN
   PERFORM smk.ok('c  member deleted (as supabase_auth_admin): RPC JSON identical', (SELECT j FROM c_before) = public.community_impact_summary(), public.community_impact_summary()::text);
-  PERFORM smk.ok('c  rollup: needs_met Sept count 2 / contributors 1, Oct count 1 / contributors 0',
-    (SELECT array_agg(format('%s|%s|%s|%s|%s', metric_id, period_start, period_end, count, contributors) ORDER BY metric_id, period_start) FROM public.community_impact_rollup)
-      = ARRAY['alerts_verified|2026-10-01|2026-11-01|1|1', 'member_resources_approved|2026-10-01|2026-11-01|1|1', 'needs_met|2026-09-01|2026-10-01|2|1',
-              'needs_met|2026-10-01|2026-11-01|1|0', 'petition_signers|2026-10-01|2026-11-01|1|1'],
-    (SELECT string_agg(format('%s|%s|%s|%s', metric_id, period_start, count, contributors), '; ' ORDER BY metric_id, period_start) FROM public.community_impact_rollup));
+  PERFORM smk.ok('c  rollup (metric|month|end|count|contributors|k): needs_met Sept 2/1/1, Oct 1/0/0',
+    (SELECT array_agg(format('%s|%s|%s|%s|%s|%s', metric_id, period_start, period_end, count, contributors, k_contributors) ORDER BY metric_id, period_start) FROM public.community_impact_rollup)
+      = ARRAY['alerts_verified|2026-10-01|2026-11-01|1|1|1', 'member_resources_approved|2026-10-01|2026-11-01|1|1|1', 'needs_met|2026-09-01|2026-10-01|2|1|1',
+              'needs_met|2026-10-01|2026-11-01|1|0|0', 'petition_signers|2026-10-01|2026-11-01|1|1|1'],
+    (SELECT string_agg(format('%s|%s|%s|%s|%s', metric_id, period_start, count, contributors, k_contributors), '; ' ORDER BY metric_id, period_start) FROM public.community_impact_rollup));
   PERFORM smk.ok('c  [aim] the member''s ledger rows are gone (the cascade ran)', (SELECT count(*) = 0 FROM public.engagement_events WHERE actor_id = (SELECT id FROM c_one)), 'live rows');
 END $t$;
 -- guest-cleanup cron statement, verbatim
 DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';
 DO $t$ BEGIN
   PERFORM smk.ok('c  guest deleted by cleanup-anonymous-users: RPC JSON identical', (SELECT j FROM c_before) = public.community_impact_summary(), public.community_impact_summary()::text);
-  PERFORM smk.ok('c  rollup needs_met Oct now count 3 / contributors 1', (SELECT count = 3 AND contributors = 1 FROM public.community_impact_rollup WHERE metric_id = 'needs_met' AND period_start = '2026-10-01'), 'row');
+  PERFORM smk.ok('c  rollup needs_met Oct now count 3 / contributors 1 / k 0 (the guest adds to the value, not to k)',
+    (SELECT count = 3 AND contributors = 1 AND k_contributors = 0 FROM public.community_impact_rollup WHERE metric_id = 'needs_met' AND period_start = '2026-10-01'), 'row');
   PERFORM smk.ok('c  rollup stores no user id (columns)', (SELECT array_agg(attname::text ORDER BY attnum) FROM pg_attribute WHERE attrelid = 'public.community_impact_rollup'::regclass AND attnum > 0 AND NOT attisdropped)
-     = ARRAY['metric_id','period_start','period_end','count','contributors','written_at'], 'six count/period columns');
+     = ARRAY['metric_id','period_start','period_end','count','contributors','k_contributors','written_at'], 'seven count/period columns');
 END $t$;
 ROLLBACK;
 -- [instrument] the same deletion with the carry disabled DOES lower the figure, so (c) can fail
@@ -227,7 +238,7 @@ BEGIN;
 CREATE TEMP TABLE i_one ON COMMIT DROP AS SELECT smk.u() id;
 SELECT smk.crowd('opt_in_completed_seeker', 10, 1), smk.led((SELECT id FROM i_one), 'opt_in_completed_seeker', 5);
 CREATE TEMP TABLE i_before ON COMMIT DROP AS SELECT smk.f('needs_met') j;
-ALTER TABLE public.engagement_events DISABLE TRIGGER trg_community_impact_carry_departed;
+ALTER TABLE auth.users DISABLE TRIGGER trg_community_impact_carry_departed;
 DELETE FROM auth.users WHERE id = (SELECT id FROM i_one);
 DO $t$ BEGIN PERFORM smk.ok('c  [instrument] carry disabled: the same delete lowers needs_met (15 -> 10)',
   (SELECT j FROM i_before) = '{"value":15,"suppressed":false,"unit":"completions","window":"all_time"}'::jsonb AND smk.f('needs_met')->'value' = '10'::jsonb,
@@ -248,6 +259,20 @@ DELETE FROM auth.users WHERE id = current_setting('smk.victim')::uuid;
 RESET ROLE;
 DO $t$ BEGIN PERFORM smk.ok('c  self-delete shape (profiles first, then auth user): RPC JSON identical', (SELECT j FROM m_before) = public.community_impact_summary(),
   (SELECT count::text || '/' || contributors FROM public.community_impact_rollup WHERE metric_id = 'member_resources_approved')); END $t$;
+ROLLBACK;
+
+-- at exactly k: one member's deletion keeps the figure open only through the carried k
+BEGIN;
+CREATE TEMP TABLE ck ON COMMIT DROP AS SELECT unnest(smk.crowd('opt_in_completed_seeker', 10, 1)) id;
+SELECT smk.led(id, 'petition_signature', 1) FROM ck;
+CREATE TEMP TABLE ck_before ON COMMIT DROP AS SELECT public.community_impact_summary() j;
+DELETE FROM auth.users WHERE id = (SELECT id FROM ck ORDER BY id LIMIT 1);
+DO $t$ BEGIN
+  PERFORM smk.ok('c  [aim] at k=10: needs_met and petition_signers shown 10 before',
+    (SELECT j->'needs_met'->'value' = '10'::jsonb AND j->'petition_signers'->'value' = '10'::jsonb FROM ck_before), 'before');
+  PERFORM smk.ok('c  at k=10, one member deleted (9 live + 1 carried): JSON identical', (SELECT j FROM ck_before) = public.community_impact_summary(),
+    (public.community_impact_summary()->'needs_met')::text);
+END $t$;
 ROLLBACK;
 
 -- ============================== (c2) rows deleted for another reason are not carried ==============================
@@ -289,8 +314,9 @@ CREATE TEMP TABLE c3g ON COMMIT DROP AS SELECT smk.u(true, now() - interval '45 
 SELECT smk.led(id, 'opt_in_completed_seeker', 2) FROM c3g;
 DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';
 DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';
-DO $t$ BEGIN PERFORM smk.ok('c3 cleanup cron x2 on 2 guests (2 rows each): +4 rows, +2 contributors once',
-  (SELECT sum(count) = 16 AND sum(contributors) = 6 FROM public.community_impact_rollup), (SELECT sum(count) || '/' || sum(contributors) FROM public.community_impact_rollup)); END $t$;
+DO $t$ BEGIN PERFORM smk.ok('c3 cleanup cron x2 on 2 guests (2 rows each): +4 rows, +2 contributors once, k stays 4 (members only)',
+  (SELECT sum(count) = 16 AND sum(contributors) = 6 AND sum(k_contributors) = 4 FROM public.community_impact_rollup),
+  (SELECT sum(count) || '/' || sum(contributors) || '/' || sum(k_contributors) FROM public.community_impact_rollup)); END $t$;
 -- [instrument] the totals check sees an extra carry: a fabricated duplicate breaks the equality
 DO $t$ BEGIN PERFORM smk.ok('c3 [instrument] the equality detects a double count (16+1 <> 16)', NOT ((SELECT sum(count) + 1 FROM public.community_impact_rollup) = 16), 'arith'); END $t$;
 ROLLBACK;
@@ -377,5 +403,122 @@ DO $t$ DECLARE j jsonb; o uuid; e uuid; d0 jsonb; BEGIN
      = CASE WHEN EXISTS (SELECT 1 FROM public.resources WHERE status='approved' AND zip_code='05401' AND name <> 'g1') THEN 0 ELSE 1 END, 'delta');
   PERFORM smk.ok('g  [aim] orgs: +2 (g org ok, g org 3); inactive and pending excluded', (j->'organizations_listed'->>'value')::int - (d0->'organizations_listed'->>'value')::int = 2, 'delta');
   PERFORM smk.ok('g  [aim] event dates: +1 (in 30 days); day 31 and yesterday excluded', (j->'event_dates_next_30_days'->>'value')::int - (d0->'event_dates_next_30_days'->>'value')::int = 1, 'delta');
+END $t$;
+ROLLBACK;
+
+-- ============================== (p2) anonymous walk-ins open nothing and reveal nothing ==============================
+-- review finding P2: one organizer's walk-ins passed both floors alone, then size-1 steps exposed another household's size
+BEGIN;
+DO $t$ DECLARE oc uuid := smk.occ(); j jsonb; changed int := 0; BEGIN
+  PERFORM smk.member_visit(smk.u(), 3);          -- the victim: one member household of 3, at another org's event
+  PERFORM smk.walkins(oc, 19, 1);
+  j := smk.f('people_served_at_events');
+  PERFORM smk.ok('p2 [aim] 20 confirmed visits: 19 walk-ins (no account, no key) + 1 member',
+    (SELECT count(*) = 20 AND count(*) FILTER (WHERE user_id IS NULL AND household_key IS NULL) = 19 FROM public.event_checkins WHERE status = 'confirmed'), 'direct');
+  PERFORM smk.ok('p2 19 walk-ins + 1 member: suppressed, value null', j->>'suppressed' = 'true' AND j->'value' = 'null'::jsonb, j::text);
+  FOR i IN 1..30 LOOP
+    PERFORM smk.walkins(oc, 1, 1);
+    IF smk.f('people_served_at_events') IS DISTINCT FROM j THEN changed := changed + 1; END IF;
+  END LOOP;
+  PERFORM smk.ok('p2 30 more size-1 walk-ins, one at a time: the answer never changes (no rounding step to read)', changed = 0, changed || ' changes');
+  -- [instrument] the figure opens once 10 member identities exist, and then the walk-ins are in the value
+  FOR i IN 1..9 LOOP PERFORM smk.member_visit(smk.u(), 1); END LOOP;
+  j := smk.f('people_served_at_events');
+  PERFORM smk.ok('p2 [instrument] + 9 members (10 identities): shown 60 (sum 3 + 49 walk-ins + 9 = 61)', j->'value' = '60'::jsonb, j::text);
+END $t$;
+ROLLBACK;
+
+-- ============================== (p3) a deleted account's visits never become many households ==============================
+-- review finding P3: ON DELETE SET NULL turned one member's 20 visits into 20 identities (id::text) and opened {value:80}
+BEGIN;
+CREATE TEMP TABLE p3m ON COMMIT DROP AS SELECT smk.u() id;
+SELECT smk.member_visit((SELECT id FROM p3m), 4) FROM generate_series(1, 20);
+CREATE TEMP TABLE p3_before ON COMMIT DROP AS SELECT smk.f('people_served_at_events') j;
+SELECT set_config('smk.victim', (SELECT id FROM p3m)::text, true);
+SET LOCAL ROLE supabase_auth_admin;
+DELETE FROM auth.users WHERE id = current_setting('smk.victim')::uuid;
+RESET ROLE;
+DO $t$ BEGIN
+  PERFORM smk.ok('p3 one member, 20 visits: suppressed, value null before', (SELECT j->>'suppressed' = 'true' AND j->'value' = 'null'::jsonb FROM p3_before), (SELECT j::text FROM p3_before));
+  PERFORM smk.ok('p3 after the member deleted the account: still suppressed, value null', smk.f('people_served_at_events')->>'suppressed' = 'true'
+     AND smk.f('people_served_at_events')->'value' = 'null'::jsonb, smk.f('people_served_at_events')::text);
+  PERFORM smk.ok('p3 [aim] the 20 visits stayed, account cleared (user_id NULL)', (SELECT count(*) = 20 AND bool_and(user_id IS NULL) FROM public.event_checkins WHERE status = 'confirmed'), 'direct');
+  PERFORM smk.ok('p3 carried identities: exactly 1 (one person, not 20 visits)', (SELECT sum(k_contributors) = 1 AND sum(contributors) = 1 AND sum(count) = 0
+     FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events'), (SELECT string_agg(format('%s|%s|%s', count, contributors, k_contributors), ';') FROM public.community_impact_rollup));
+END $t$;
+ROLLBACK;
+-- deletion never lowers the identity count: multi-row, one statement, two statements, repeats, the guest cron
+BEGIN;
+CREATE TEMP TABLE p3c ON COMMIT DROP AS SELECT smk.u() id FROM generate_series(1, 10);
+CREATE TEMP TABLE p3k ON COMMIT DROP AS SELECT smk.u() id;                                 -- a member whose visits carry a household_key
+CREATE TEMP TABLE p3g ON COMMIT DROP AS SELECT smk.u(true, now() - interval '40 days') id;  -- a guest with visits
+SELECT smk.member_visit(id, 1), smk.member_visit(id, 1) FROM p3c;                           -- 10 identities, 20 visits, sum 20
+SELECT smk.member_visit((SELECT id FROM p3k), 2, 'hh-keyed'), smk.member_visit((SELECT id FROM p3g), 3);
+CREATE TEMP TABLE p3c_before ON COMMIT DROP AS SELECT public.community_impact_summary() j;
+DO $t$ BEGIN PERFORM smk.ok('p3 [aim] before: 23 visits, 11 identities (10 members + 1 key; the guest is none), shown 25 (sum 25)',
+  (SELECT j->'people_served_at_events'->'value' = '25'::jsonb FROM p3c_before), (SELECT (j->'people_served_at_events')::text FROM p3c_before)); END $t$;
+DELETE FROM auth.users WHERE id IN (SELECT id FROM p3c ORDER BY id LIMIT 2);                -- two accounts, one statement
+DO $t$ BEGIN PERFORM smk.ok('p3 two members deleted in one statement: JSON identical; 2 identities carried',
+  (SELECT j FROM p3c_before) = public.community_impact_summary() AND (SELECT sum(k_contributors) = 2 FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events'),
+  (SELECT sum(k_contributors)::text FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events')); END $t$;
+DELETE FROM auth.users WHERE id IN (SELECT id FROM p3c ORDER BY id LIMIT 2);                -- the same delete again
+DELETE FROM auth.users WHERE id = (SELECT id FROM p3c ORDER BY id OFFSET 2 LIMIT 1);
+DELETE FROM auth.users WHERE id = (SELECT id FROM p3c ORDER BY id OFFSET 2 LIMIT 1);        -- and again
+DO $t$ BEGIN PERFORM smk.ok('p3 repeat + a third member in its own statement twice: JSON identical; 3 identities carried',
+  (SELECT j FROM p3c_before) = public.community_impact_summary() AND (SELECT sum(k_contributors) = 3 FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events'),
+  (SELECT sum(k_contributors)::text FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events')); END $t$;
+DELETE FROM auth.users WHERE id = (SELECT id FROM p3k);
+DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';
+DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';
+DO $t$ BEGIN
+  PERFORM smk.ok('p3 keyed member + guest (cron x2) deleted: JSON identical', (SELECT j FROM p3c_before) = public.community_impact_summary(), public.community_impact_summary()::text);
+  PERFORM smk.ok('p3 [aim] keyed member carries no identity (its key survives); guest carries contributors 1, k 0',
+    (SELECT sum(k_contributors) = 3 AND sum(contributors) = 4 FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events'),
+    (SELECT sum(contributors) || '/' || sum(k_contributors) FROM public.community_impact_rollup WHERE metric_id = 'people_served_at_events'));
+END $t$;
+ROLLBACK;
+-- [instrument] with the carry disabled, one member's deletion closes the figure, so the p3 checks can fail
+BEGIN;
+CREATE TEMP TABLE p3i ON COMMIT DROP AS SELECT smk.u() id FROM generate_series(1, 10);
+SELECT smk.member_visit(id, 1), smk.member_visit(id, 1) FROM p3i;
+ALTER TABLE auth.users DISABLE TRIGGER trg_community_impact_carry_departed;
+DELETE FROM auth.users WHERE id = (SELECT id FROM p3i ORDER BY id LIMIT 1);
+DO $t$ BEGIN PERFORM smk.ok('p3 [instrument] carry disabled: deleting 1 of 10 members suppresses the figure (identities 10 -> 9)',
+  smk.f('people_served_at_events')->>'suppressed' = 'true', smk.f('people_served_at_events')::text); END $t$;
+ROLLBACK;
+
+-- ============================== (sybil) guest accounts add to values, never to k ==============================
+BEGIN;
+DO $t$ DECLARE j jsonb; g uuid; BEGIN
+  PERFORM smk.crowd('opt_in_completed_seeker', 9, 1);
+  FOR i IN 1..20 LOOP g := smk.u(true, now() - interval '40 days'); PERFORM smk.led(g, 'opt_in_completed_seeker', 1); END LOOP;
+  j := smk.f('needs_met');
+  PERFORM smk.ok('sybil 9 members + 20 guests (29 people, n=29): needs_met suppressed, value null', j->>'suppressed' = 'true' AND j->'value' = 'null'::jsonb, j::text);
+  PERFORM smk.crowd('opt_in_completed_seeker', 1, 1);
+  j := smk.f('needs_met');
+  PERFORM smk.ok('sybil [instrument] + 1 member (k=10): shown 30, the guests'' rows are in the value', j->'value' = '30'::jsonb, j::text);
+  PERFORM smk.crowd('petition_signature', 9, 1);
+  FOR i IN 1..20 LOOP g := smk.u(true, now() - interval '40 days'); PERFORM smk.led(g, 'petition_signature', 1); END LOOP;
+  PERFORM smk.ok('sybil 9 member + 20 guest signers: petition_signers suppressed, value null',
+    smk.f('petition_signers')->>'suppressed' = 'true' AND smk.f('petition_signers')->'value' = 'null'::jsonb, smk.f('petition_signers')::text);
+  PERFORM smk.crowd('petition_signature', 1, 1);
+  PERFORM smk.ok('sybil [instrument] + 1 member signer: shown 30 distinct signers', smk.f('petition_signers')->'value' = '30'::jsonb, smk.f('petition_signers')::text);
+  -- events: 9 member visits + 11 guest visits = 20 visits, 9 identities
+  FOR i IN 1..9 LOOP PERFORM smk.member_visit(smk.u(), 1); END LOOP;
+  FOR i IN 1..11 LOOP PERFORM smk.member_visit(smk.u(true, now() - interval '40 days'), 1); END LOOP;
+  j := smk.f('people_served_at_events');
+  PERFORM smk.ok('sybil 9 member + 11 guest visits: people_served suppressed, value null', j->>'suppressed' = 'true' AND j->'value' = 'null'::jsonb, j::text);
+  -- [aim] the guest filter reads auth.users.is_anonymous: one guest upgraded to a member makes 10 identities
+  UPDATE auth.users SET is_anonymous = false WHERE id = (SELECT c.user_id FROM public.event_checkins c JOIN auth.users u ON u.id = c.user_id WHERE u.is_anonymous LIMIT 1);
+  j := smk.f('people_served_at_events');
+  PERFORM smk.ok('sybil [aim] one guest becomes a member: 10 identities, shown 20', j->'value' = '20'::jsonb, j::text);
+END $t$;
+CREATE TEMP TABLE sy_before ON COMMIT DROP AS SELECT public.community_impact_summary() j;
+DELETE FROM auth.users WHERE is_anonymous IS TRUE AND created_at < now() - interval '30 days';   -- the nightly guest cleanup
+DO $t$ BEGIN
+  PERFORM smk.ok('sybil cleanup cron deletes every guest: JSON identical (values and k unchanged)', (SELECT j FROM sy_before) = public.community_impact_summary(), public.community_impact_summary()::text);
+  PERFORM smk.ok('sybil [aim] the cron removed 50 guests; their rows carried with k 0',
+    (SELECT count(*) = 0 FROM auth.users WHERE is_anonymous) AND (SELECT sum(k_contributors) = 0 AND sum(contributors) = 50 FROM public.community_impact_rollup),
+    (SELECT sum(count) || '/' || sum(contributors) || '/' || sum(k_contributors) FROM public.community_impact_rollup));
 END $t$;
 ROLLBACK;

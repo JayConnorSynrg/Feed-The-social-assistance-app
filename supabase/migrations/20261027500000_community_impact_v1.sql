@@ -5,14 +5,22 @@
 -- distinct people contribute (rounded down to a multiple of 5), and no figure falls when an account is deleted.
 -- Contract: specs/impact-metrics-contract.md (sections 1-4 are this file's spec; section 6 its proof).
 --
+-- Who counts toward k (the "contributors" of a people figure): distinct member accounts. A guest account
+-- (auth.users.is_anonymous) adds to every value and to no k, so fake guest accounts cannot open a figure. For
+-- people_served_at_events an identity is a confirmed visit's household_key, or else its member account; a visit
+-- with neither (an anonymous walk-in, or a visit whose account was deleted) adds to the visits and the sum, never to
+-- the identities.
+--
 -- What this migration does
---   (A) community_impact_rollup: counts carried from ledger rows lost to an account deletion. Counts only (no user
---       id, no target id); RLS on with no policy and no client grant, so it is read only through the RPC.
---   (B) community_impact_carry_departed(): one statement-level AFTER DELETE trigger on engagement_events. It carries
---       the rows whose actor no longer exists in auth.users (an account deletion's cascade) and nothing else. Every
---       deletion path ends in DELETE FROM auth.users (the member's delete-account function, the admin delete route,
---       the nightly cleanup-anonymous-users job), and that cascade removes all of one account's rows in one
---       statement, so each row and each account is carried exactly once. A failure inside the carry is logged
+--   (A) community_impact_rollup: what an account deletion would otherwise take away, per figure and month: carried
+--       rows (count), carried accounts (contributors) and carried member accounts (k_contributors). Counts only (no
+--       user id, no target id); RLS on with no policy and no client grant, so it is read only through the RPC.
+--   (B) community_impact_carry_departed(): one row-level BEFORE DELETE trigger on auth.users, the only writer. Every
+--       deletion path is a DELETE FROM auth.users (the member's delete-account function, the admin delete route, the
+--       nightly cleanup-anonymous-users job). The trigger runs once per deleted account, before the cascades, while the
+--       account's ledger rows, its check-ins and its is_anonymous flag are still readable; it carries the ledger rows
+--       the cascade will remove and, for a member, the event identity that ON DELETE SET NULL will erase. A delete that
+--       finds no row runs no trigger, so a repeated delete adds nothing. A failure inside the carry is logged
 --       (log_engagement_failure 'impact_carry') and never blocks the deletion.
 --   (C) community_impact_summary(): SECURITY DEFINER, STABLE, pinned search_path, no arguments; anon and
 --       authenticated may call it, PUBLIC may not. Suppression and rounding happen here; a suppressed figure's
@@ -27,26 +35,29 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
--- Preflight, before anything changes: every object and column this file reads, the two foreign-key behaviours the
+-- Preflight, before anything changes: every object and column this file reads, the foreign-key behaviours the
 -- deletion invariant rests on, and the absence of everything it creates. Anything missing or shaped otherwise: one
 -- refusal naming every item (SQLSTATE 55000), nothing applied.
 DO $preflight$
 DECLARE v_missing text[] := '{}'; v_col text[]; v_fk text[];
 BEGIN
   IF to_regclass('auth.users') IS NULL THEN v_missing := v_missing || 'relation auth.users'::text; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('auth.users') AND attname = 'is_anonymous'
+                  AND atttypid = 'boolean'::regtype AND attnum > 0 AND NOT attisdropped) THEN
+    v_missing := v_missing || 'column auth.users.is_anonymous (boolean)'::text; END IF;
   FOREACH v_col SLICE 1 IN ARRAY ARRAY[
     ['engagement_events', 'actor_id'], ['engagement_events', 'kind'], ['engagement_events', 'created_at'],
     ['event_checkins', 'status'], ['event_checkins', 'household_size'], ['event_checkins', 'household_key'],
-    ['event_checkins', 'user_id'], ['event_occurrences', 'event_id'], ['event_occurrences', 'status'],
-    ['event_occurrences', 'starts_at'], ['assistance_events', 'is_active'], ['resources', 'status'],
-    ['resources', 'source'], ['resources', 'zip_code'], ['organizations', 'is_active'], ['organizations', 'status'],
-    ['snap_retailers', 'id'], ['app_logs', 'event']] LOOP
+    ['event_checkins', 'user_id'], ['event_checkins', 'checked_in_at'], ['event_occurrences', 'event_id'],
+    ['event_occurrences', 'status'], ['event_occurrences', 'starts_at'], ['assistance_events', 'is_active'],
+    ['resources', 'status'], ['resources', 'source'], ['resources', 'zip_code'], ['organizations', 'is_active'],
+    ['organizations', 'status'], ['snap_retailers', 'id'], ['app_logs', 'event']] LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('public.' || v_col[1]) AND attname = v_col[2]
                     AND attnum > 0 AND NOT attisdropped) THEN
       v_missing := v_missing || format('column public.%s.%s', v_col[1], v_col[2]); END IF;
   END LOOP;
-  -- engagement_events.actor_id must CASCADE from auth.users (the carry reads the cascade); event_checkins.user_id must
-  -- SET NULL (people_served_at_events needs no carry only because check-ins outlive the account)
+  -- engagement_events.actor_id must CASCADE from auth.users (the carry counts the rows the cascade removes);
+  -- event_checkins.user_id must SET NULL (visits outlive the account; only the member identity is carried)
   FOREACH v_fk SLICE 1 IN ARRAY ARRAY[['engagement_events', 'actor_id', 'c'], ['event_checkins', 'user_id', 'n']] LOOP
     IF NOT EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
                     WHERE c.contype = 'f' AND c.conrelid = to_regclass('public.' || v_fk[1]) AND cardinality(c.conkey) = 1
@@ -54,6 +65,10 @@ BEGIN
       v_missing := v_missing || format('foreign key public.%s.%s -> auth.users ON DELETE %s', v_fk[1], v_fk[2],
                                        CASE v_fk[3] WHEN 'c' THEN 'CASCADE' ELSE 'SET NULL' END); END IF;
   END LOOP;
+  -- a BEFORE DELETE row trigger on auth.users could cancel a deletion after the carry ran (a carry with no deletion)
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = to_regclass('auth.users') AND NOT tgisinternal
+              AND tgtype & 11 = 11) THEN                                    -- ROW (1) + BEFORE (2) + DELETE (8)
+    v_missing := v_missing || 'no BEFORE DELETE row trigger on auth.users yet (this file adds the only one)'::text; END IF;
   IF to_regprocedure('public.log_engagement_failure(text,text)') IS NULL THEN
     v_missing := v_missing || 'function public.log_engagement_failure(text,text)'::text; END IF;
   IF to_regtype('public.resource_source') IS NULL
@@ -79,66 +94,79 @@ $preflight$;
 -- (2) Core table: carried counts. No user id, no target id.
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.community_impact_rollup (
-  metric_id     text        NOT NULL,
-  period_start  date        NOT NULL,   -- first day of the UTC month of the carried rows' created_at
-  period_end    date        NOT NULL,   -- first day of the next month (exclusive)
-  count         bigint      NOT NULL DEFAULT 0 CHECK (count >= 0),
-  contributors  bigint      NOT NULL DEFAULT 0 CHECK (contributors >= 0),
-  written_at    timestamptz NOT NULL DEFAULT now(),
+  metric_id       text        NOT NULL,
+  period_start    date        NOT NULL,   -- first day of the UTC month of the carried rows / visits
+  period_end      date        NOT NULL,   -- first day of the next month (exclusive)
+  count           bigint      NOT NULL DEFAULT 0 CHECK (count >= 0),            -- carried ledger rows
+  contributors    bigint      NOT NULL DEFAULT 0 CHECK (contributors >= 0),     -- carried accounts (guests included)
+  k_contributors  bigint      NOT NULL DEFAULT 0 CHECK (k_contributors >= 0),   -- carried member accounts / identities
+  written_at      timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (metric_id, period_start),
-  CHECK (metric_id IN ('petition_signers', 'needs_met', 'alerts_verified', 'member_resources_approved')),
-  CHECK (period_end > period_start)
+  CHECK (metric_id IN ('petition_signers', 'needs_met', 'alerts_verified', 'member_resources_approved', 'people_served_at_events')),
+  CHECK (period_end > period_start),
+  CHECK (k_contributors <= contributors)
 );
 COMMENT ON TABLE public.community_impact_rollup IS
-  'Counts carried from engagement_events rows lost to an account deletion (written only by community_impact_carry_departed). Read only through community_impact_summary(). specs/impact-metrics-contract.md section 3.';
+  'What an account deletion would take from the impact figures: carried ledger rows, accounts and member accounts (k), per figure and month. Written only by community_impact_carry_departed (BEFORE DELETE on auth.users); read only through community_impact_summary(). specs/impact-metrics-contract.md section 3.';
 
 -- ---------------------------------------------------------------------------
--- (3a) The carry: runs in the deleting transaction, after the cascade removed the rows.
+-- (3a) The carry: once per deleted account, before its cascades.
 -- ---------------------------------------------------------------------------
 CREATE FUNCTION public.community_impact_carry_departed()
   RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
+DECLARE
+  v_member constant boolean := OLD.is_anonymous IS NOT TRUE;   -- a guest adds to values, never to k
 BEGIN
   BEGIN
-    WITH departed AS (
-      -- rows of a carried kind whose actor is gone: inside the auth.users cascade the parent row is already
-      -- invisible, so this is exactly the rows lost to an account deletion (a direct delete of a live actor's row
-      -- is not carried)
-      SELECT CASE g.kind WHEN 'petition_signature'      THEN 'petition_signers'
+    WITH mine AS (
+      -- the ledger rows ON DELETE CASCADE is about to remove
+      SELECT CASE e.kind WHEN 'petition_signature'      THEN 'petition_signers'
                          WHEN 'opt_in_completed_seeker' THEN 'needs_met'
                          WHEN 'safety_alert_verified'   THEN 'alerts_verified'
                          WHEN 'resource_approved'       THEN 'member_resources_approved' END AS metric_id,
-             g.actor_id,
-             date_trunc('month', g.created_at AT TIME ZONE 'UTC')::date AS period_start
-        FROM gone g
-       WHERE g.kind IN ('petition_signature', 'opt_in_completed_seeker', 'safety_alert_verified', 'resource_approved')
-         AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = g.actor_id)
+             date_trunc('month', e.created_at AT TIME ZONE 'UTC')::date AS period_start
+        FROM public.engagement_events e
+       WHERE e.actor_id = OLD.id
+         AND e.kind IN ('petition_signature', 'opt_in_completed_seeker', 'safety_alert_verified', 'resource_approved')
     ), per_month AS (
-      SELECT metric_id, period_start, count(*) AS n FROM departed GROUP BY metric_id, period_start
+      SELECT metric_id, period_start, count(*) AS n FROM mine GROUP BY metric_id, period_start
     ), first_month AS (
-      -- each account counts once per figure, in the month of its earliest carried row of that kind
-      SELECT metric_id, actor_id, min(period_start) AS period_start FROM departed GROUP BY metric_id, actor_id
-    ), people AS (
-      SELECT metric_id, period_start, count(*) AS d FROM first_month GROUP BY metric_id, period_start
+      -- the account counts once per figure, in the month of its earliest row of that kind
+      SELECT metric_id, min(period_start) AS period_start FROM mine GROUP BY metric_id
+    ), ledger AS (
+      SELECT m.metric_id, m.period_start, m.n, (f.metric_id IS NOT NULL)::int AS d
+        FROM per_month m LEFT JOIN first_month f USING (metric_id, period_start)
+    ), event_identity AS (
+      -- the account's own identity at events (a confirmed visit with no household_key): ON DELETE SET NULL erases it,
+      -- the visits and their sum stay
+      SELECT 'people_served_at_events'::text AS metric_id,
+             date_trunc('month', min(c.checked_in_at) AT TIME ZONE 'UTC')::date AS period_start, 0::bigint AS n, 1 AS d
+        FROM public.event_checkins c
+       WHERE c.user_id = OLD.id AND c.status = 'confirmed' AND c.household_key IS NULL
+      HAVING count(*) > 0
+    ), carried AS (
+      SELECT metric_id, period_start, n, d FROM ledger
+      UNION ALL SELECT metric_id, period_start, n, d FROM event_identity
     )
-    INSERT INTO public.community_impact_rollup AS r (metric_id, period_start, period_end, count, contributors)
-    SELECT m.metric_id, m.period_start, (m.period_start + interval '1 month')::date, m.n, coalesce(p.d, 0)
-      FROM per_month m LEFT JOIN people p USING (metric_id, period_start)
+    INSERT INTO public.community_impact_rollup AS r (metric_id, period_start, period_end, count, contributors, k_contributors)
+    SELECT metric_id, period_start, (period_start + interval '1 month')::date, n, d, CASE WHEN v_member THEN d ELSE 0 END
+      FROM carried
     ON CONFLICT (metric_id, period_start) DO UPDATE
-      SET count        = r.count + EXCLUDED.count,
-          contributors = r.contributors + EXCLUDED.contributors,
-          written_at   = now();
+      SET count          = r.count + EXCLUDED.count,
+          contributors   = r.contributors + EXCLUDED.contributors,
+          k_contributors = r.k_contributors + EXCLUDED.k_contributors,
+          written_at     = now();
   EXCEPTION WHEN OTHERS THEN
     PERFORM public.log_engagement_failure('impact_carry', SQLERRM);
   END;
-  RETURN NULL;
+  RETURN OLD;
 END;
 $fn$;
 
 CREATE TRIGGER trg_community_impact_carry_departed
-  AFTER DELETE ON public.engagement_events
-  REFERENCING OLD TABLE AS gone
-  FOR EACH STATEMENT EXECUTE FUNCTION public.community_impact_carry_departed();
+  BEFORE DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.community_impact_carry_departed();
 
 -- ---------------------------------------------------------------------------
 -- (3b) The read: every figure id always present; suppression and rounding inside.
@@ -147,12 +175,13 @@ CREATE FUNCTION public.community_impact_summary()
   RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp
 AS $fn$
 DECLARE
-  k_people   constant integer := 10;   -- distinct people for a people-derived figure
+  k_people   constant integer := 10;   -- distinct member accounts (or identities) for a people-derived figure
   k_visits   constant integer := 20;   -- confirmed visits for the household sum
   v          jsonb := '{}'::jsonb;
-  n          bigint;
-  d          bigint;
-  h          bigint;   -- distinct check-in identities
+  n          bigint;   -- the figure's value before rounding
+  a          bigint;   -- distinct accounts, guests included (petition_signers' value)
+  d          bigint;   -- distinct member accounts: k
+  h          bigint;   -- distinct identities at events: k
   r          record;
 BEGIN
   -- directory figures: in full, never suppressed
@@ -177,7 +206,8 @@ BEGIN
            WHERE e.is_active AND o.status = 'upcoming' AND o.starts_at >= now() AND o.starts_at < now() + interval '30 days'),
          'suppressed', false, 'unit', 'event_dates', 'window', 'next_30_days'));
 
-  -- ledger figures: live rows + carried counts; k on distinct accounts (live distinct actors + carried contributors)
+  -- ledger figures: value from live rows + carried rows (guests included); k from distinct member accounts, live +
+  -- carried (guests excluded)
   FOR r IN
     SELECT f.metric_id, f.kind, f.unit, f.people_value
       FROM (VALUES ('petition_signers',          'petition_signature',      'people',      true),
@@ -185,19 +215,28 @@ BEGIN
                    ('alerts_verified',           'safety_alert_verified',   'alerts',      false),
                    ('member_resources_approved', 'resource_approved',       'resources',   false)) f(metric_id, kind, unit, people_value)
   LOOP
-    SELECT count(*), count(DISTINCT actor_id) INTO n, d FROM engagement_events WHERE kind = r.kind;
-    SELECT n + coalesce(sum(c.count), 0), d + coalesce(sum(c.contributors), 0) INTO n, d
+    SELECT count(*), count(DISTINCT e.actor_id), count(DISTINCT e.actor_id) FILTER (WHERE u.is_anonymous IS NOT TRUE)
+      INTO n, a, d
+      FROM engagement_events e JOIN auth.users u ON u.id = e.actor_id
+     WHERE e.kind = r.kind;
+    SELECT n + coalesce(sum(c.count), 0), a + coalesce(sum(c.contributors), 0), d + coalesce(sum(c.k_contributors), 0)
+      INTO n, a, d
       FROM community_impact_rollup c WHERE c.metric_id = r.metric_id;
-    IF r.people_value THEN n := d; END IF;   -- petition_signers is the number of distinct signers
+    IF r.people_value THEN n := a; END IF;   -- petition_signers is the number of distinct signers
     v := v || jsonb_build_object(r.metric_id, jsonb_build_object(
            'value', CASE WHEN d >= k_people THEN to_jsonb(n - n % 5) ELSE 'null'::jsonb END,
            'suppressed', d < k_people, 'unit', r.unit, 'window', 'all_time'));
   END LOOP;
 
-  -- people served at events: confirmed visits only; shown at 20 visits from 10 distinct check-in identities
-  SELECT coalesce(sum(household_size), 0), count(*), count(DISTINCT coalesce(household_key, user_id::text, id::text))
+  -- people served at events: every confirmed visit adds to the visits and the sum; identities are household keys and
+  -- member accounts only (live), plus member identities carried at account deletion
+  SELECT coalesce(sum(c.household_size), 0), count(*),
+         count(DISTINCT CASE WHEN c.household_key IS NOT NULL THEN 'k:' || c.household_key
+                             WHEN c.user_id IS NOT NULL AND u.is_anonymous IS NOT TRUE THEN 'u:' || c.user_id::text END)
     INTO n, d, h
-    FROM event_checkins WHERE status = 'confirmed';
+    FROM event_checkins c LEFT JOIN auth.users u ON u.id = c.user_id
+   WHERE c.status = 'confirmed';
+  h := h + coalesce((SELECT sum(k_contributors) FROM community_impact_rollup WHERE metric_id = 'people_served_at_events'), 0);
   v := v || jsonb_build_object('people_served_at_events', jsonb_build_object(
          'value', CASE WHEN d >= k_visits AND h >= k_people THEN to_jsonb(n - n % 5) ELSE 'null'::jsonb END,
          'suppressed', NOT (d >= k_visits AND h >= k_people), 'unit', 'people', 'window', 'all_time'));
