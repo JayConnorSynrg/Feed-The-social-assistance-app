@@ -12,7 +12,7 @@
 
 import { withMetric } from './logger'
 
-export type LanguageSaveOutcome = 'ok' | 'error' | 'aborted' | 'no_row'
+export type LanguageSaveOutcome = 'ok' | 'error' | 'aborted' | 'no_row' | 'no_profile'
 export type LanguageSaveFailure = Exclude<LanguageSaveOutcome, 'ok'>
 
 /** How long an account save may take before it counts as failed. */
@@ -37,6 +37,12 @@ export interface LanguageWriteResult {
 }
 
 export interface AccountLanguageSaveIo {
+  /**
+   * The profile the language goes on: resolves with its current language (null when unset) when a
+   * profile is in memory — reading it first when none is — or `false` when none could be loaded.
+   * Without a profile in memory the screen cannot show a new language, so nothing is written.
+   */
+  ensureProfile: () => Promise<string | null | false>
   /** UPDATE profiles SET preferred_language … WHERE id = me RETURNING id. */
   write: (code: string, signal: AbortSignal) => PromiseLike<LanguageWriteResult>
   /** Puts a language on the in-memory profile (the locale follows). */
@@ -48,18 +54,22 @@ export interface AccountLanguageSaveIo {
 
 /**
  * Saves the account language. Resolves with the outcome; never throws. On 'ok' the in-memory
- * profile holds `to`; on any failure it holds `from` again.
+ * profile holds `to` (the screen switched); on any failure it holds what it held before, and
+ * on 'no_profile' nothing was written.
  */
-export async function saveAccountLanguage(
-  io: AccountLanguageSaveIo,
-  from: string | null,
-  to: string
-): Promise<LanguageSaveOutcome> {
-  io.apply(to)
-  const attrs = { from: from ?? 'none', to, scope: 'account', outcome: 'ok' as LanguageSaveOutcome }
+export async function saveAccountLanguage(io: AccountLanguageSaveIo, to: string): Promise<LanguageSaveOutcome> {
+  const attrs = { from: 'none', to, scope: 'account', outcome: 'ok' as LanguageSaveOutcome }
+  let applied = false
+  let from: string | null = null
   try {
     await withMetric('settings.language.save', attrs, async () => {
       try {
+        const loaded = await io.ensureProfile()
+        if (loaded === false) throw new LanguageSaveError('no_profile')
+        from = loaded
+        attrs.from = from ?? 'none'
+        io.apply(to)
+        applied = true
         await writeWithin(io, to)
       } catch (e) {
         const failure = e instanceof LanguageSaveError ? e : new LanguageSaveError('error', undefined, e instanceof Error ? e.message : undefined)
@@ -68,7 +78,7 @@ export async function saveAccountLanguage(
       }
     })
   } catch {
-    io.apply(from)
+    if (applied) io.apply(from)
     return attrs.outcome
   }
   // Applied again: a profile read that started before the write and answered after it carried

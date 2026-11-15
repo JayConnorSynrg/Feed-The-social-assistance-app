@@ -9,7 +9,14 @@ import { QUERY_TIMEOUT_MS } from '@/lib/vault'
 import { isLocale } from '@/lib/i18n'
 import { writeLocaleCookie } from '@/lib/locale-cookie'
 import { saveAccountLanguage, type AccountLanguageSaveIo, type LanguageSaveOutcome } from '@/lib/language-save'
-import { logProfileRead, nextProfileAfterRead, type ProfileReadOutcome, type ProfileReadTrigger } from '@/lib/profile-read'
+import {
+  logProfileRead,
+  nextProfileAfterRead,
+  withPendingLanguage,
+  type PendingLanguage,
+  type ProfileReadOutcome,
+  type ProfileReadTrigger,
+} from '@/lib/profile-read'
 import type { ProfileOrigin } from '@/lib/locale-change'
 
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -129,26 +136,51 @@ async function fetchOwnProfile(
 type SetState<T> = (next: T | ((prev: T) => T)) => void
 
 /**
- * The account language save's IO (lib/language-save.ts): one UPDATE … RETURNING id on the member's
- * own row (an update that matches no row returns no row, and so fails), the language put on the
- * in-memory profile, and the cookie once the save has succeeded. No profile re-read: the profile
- * in memory is updated in place, so every surface switches without waiting for get_my_profile.
+ * What a finished own-profile read for `userId` does to the in-memory profile: it replaces it, or
+ * — when it failed — keeps the profile already loaded for that user (lib/profile-read.ts). A read
+ * that lands while a language save for that user is in flight keeps the language on screen, and
+ * leaves the origin 'save' so the cookie is not rewritten to the old language.
  */
-export function accountLanguageIo(
-  supabase: Pick<ReturnType<typeof createClient>, 'from'>,
-  userId: string,
+function applyProfileRead(
   setProfile: SetState<Profile | null>,
+  setProfileOrigin: SetState<ProfileOrigin>,
+  pending: PendingLanguage | null,
+  read: Profile | null,
+  userId: string
+): void {
+  const saving = pending !== null && pending.userId === userId
+  setProfile((prev) => withPendingLanguage(nextProfileAfterRead(prev, read, userId), saving ? pending : null))
+  setProfileOrigin(saving ? 'save' : 'read')
+}
+
+/**
+ * The account language save's IO (lib/language-save.ts): a profile in memory to put the language
+ * on (read first when there is none), one UPDATE … RETURNING id on the member's own row (an update
+ * that matches no row returns no row, and so fails), the language put on the in-memory profile —
+ * no re-read, so every surface switches at once — and the cookie once the save has succeeded,
+ * only while the save's user is still the one signed in.
+ */
+export function accountLanguageIo(deps: {
+  supabase: Pick<ReturnType<typeof createClient>, 'from'>
+  userId: string
+  setProfile: SetState<Profile | null>
   setProfileOrigin: SetState<ProfileOrigin>
-): AccountLanguageSaveIo {
+  ensureProfile: () => Promise<string | null | false>
+  isCurrentUser: () => boolean
+  pending: { current: PendingLanguage | null }
+}): AccountLanguageSaveIo {
+  const { supabase, userId, setProfile, setProfileOrigin, pending } = deps
   return {
+    ensureProfile: deps.ensureProfile,
     write: (code, signal) =>
       supabase.from('profiles').update({ preferred_language: code }).eq('id', userId).select('id').abortSignal(signal),
     apply: (code) => {
+      pending.current = { userId, code }
       setProfile((p) => (p && p.id === userId ? ({ ...p, preferred_language: code } as Profile) : p))
       setProfileOrigin('save')
     },
     remember: (code) => {
-      if (isLocale(code)) writeLocaleCookie(code)
+      if (isLocale(code) && deps.isCurrentUser()) writeLocaleCookie(code)
     },
   }
 }
@@ -169,6 +201,13 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileOrigin, setProfileOrigin] = useState<ProfileOrigin>(null)
+  // The language save in flight, if any (applyProfileRead keeps its language on screen).
+  const pendingLanguageRef = useRef<PendingLanguage | null>(null)
+  // The latest profile, for a save started from an older render.
+  const profileRef = useRef<Profile | null>(null)
+  useEffect(() => {
+    profileRef.current = profile
+  })
   // The user id whose background profile read last finished (see profileSettled).
   const [profileSettledFor, setProfileSettledFor] = useState<string | null>(null)
   // The user id the latest background profile read is for (null after sign-out). An older read that
@@ -227,8 +266,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
             logProfileRead(trigger, 'superseded', r.profile, r.durationMs)
             return
           }
-          setProfile((prev) => nextProfileAfterRead(prev, r.profile, userId))
-          setProfileOrigin('read')
+          applyProfileRead(setProfile, setProfileOrigin, pendingLanguageRef.current, r.profile, userId)
           logProfileRead(trigger, r.outcome, r.profile, r.durationMs)
         })
         .catch(() => {
@@ -373,8 +411,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
       logProfileRead('refresh', read.outcome, profileData, read.durationMs)
       setUser(newSession.user)
       setSession(newSession)
-      setProfile((prev) => nextProfileAfterRead(prev, profileData, newSession.user.id))
-      setProfileOrigin('read')
+      applyProfileRead(setProfile, setProfileOrigin, pendingLanguageRef.current, profileData, newSession.user.id)
     }
   }, [])
 
@@ -400,8 +437,7 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     ])
     const profileData = read.row ? (Object.assign({}, read.row, coords) as unknown as Profile) : null
     logProfileRead('update', read.outcome, profileData, read.durationMs)
-    setProfile((prev) => nextProfileAfterRead(prev, profileData, user.id))
-    setProfileOrigin('read')
+    applyProfileRead(setProfile, setProfileOrigin, pendingLanguageRef.current, profileData, user.id)
   }, [user])
 
   // Save the account language (lib/language-save.ts): the in-memory profile — and with it every
@@ -411,9 +447,35 @@ export function AuthProvider({ children, initialUser = null }: AuthProviderProps
     const uid = user?.id
     if (!uid) return 'error'
     const supabase = getSupabase()
-    const from = (profile as { preferred_language?: string | null } | null)?.preferred_language ?? null
-    return saveAccountLanguage(accountLanguageIo(supabase, uid, setProfile, setProfileOrigin), from, code)
-  }, [user, profile])
+    const ensureProfile = async (): Promise<string | null | false> => {
+      const held = profileRef.current
+      if (held && held.id === uid) return (held as { preferred_language?: string | null }).preferred_language ?? null
+      // No profile in memory (its read failed or has not answered): read it now. Without one the
+      // screen cannot show the new language, so the save stops here with nothing written.
+      const [read, coords] = await Promise.all([fetchOwnProfile(supabase), fetchCoords(supabase)])
+      const loaded = read.row ? (Object.assign({}, read.row, coords) as unknown as Profile) : null
+      logProfileRead('language_save', read.outcome, loaded, read.durationMs)
+      if (!loaded || readForRef.current !== uid) return false
+      applyProfileRead(setProfile, setProfileOrigin, null, loaded, uid)
+      return (loaded as { preferred_language?: string | null }).preferred_language ?? null
+    }
+    try {
+      return await saveAccountLanguage(
+        accountLanguageIo({
+          supabase,
+          userId: uid,
+          setProfile,
+          setProfileOrigin,
+          ensureProfile,
+          isCurrentUser: () => readForRef.current === uid,
+          pending: pendingLanguageRef,
+        }),
+        code
+      )
+    } finally {
+      if (pendingLanguageRef.current?.userId === uid) pendingLanguageRef.current = null
+    }
+  }, [user])
 
   const value: AuthContextType = {
     user,

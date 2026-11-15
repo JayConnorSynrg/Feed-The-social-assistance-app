@@ -33,10 +33,14 @@ vi.mock('./logger', async () => {
 import { saveAccountLanguage, saveDeviceLanguage, type AccountLanguageSaveIo, type LanguageWriteResult } from './language-save'
 
 /** An in-memory profile language, the remembered (cookie) value, and a scripted write. */
-function harness(write: AccountLanguageSaveIo['write'], timeoutMs?: number) {
-  const state = { language: 'en' as string | null, applied: [] as Array<string | null>, remembered: [] as string[] }
+function harness(write: AccountLanguageSaveIo['write'], timeoutMs?: number, start: string | null = 'en') {
+  const state = { language: start, applied: [] as Array<string | null>, remembered: [] as string[], writes: 0 }
   const io: AccountLanguageSaveIo = {
-    write,
+    ensureProfile: async () => state.language,
+    write: (code, signal) => {
+      state.writes += 1
+      return write(code, signal)
+    },
     apply: (code) => {
       state.language = code
       state.applied.push(code)
@@ -60,7 +64,7 @@ describe('saveAccountLanguage', () => {
       seenDuringWrite = state.language
       return { data: [{ id: 'u1' }], error: null }
     })
-    expect(await saveAccountLanguage(io, 'en', 'ko')).toBe('ok')
+    expect(await saveAccountLanguage(io, 'ko')).toBe('ok')
     expect(seenDuringWrite).toBe('ko') // optimistic: every surface switched at once
     expect(state.language).toBe('ko')
     expect(state.remembered).toEqual(['ko'])
@@ -69,7 +73,7 @@ describe('saveAccountLanguage', () => {
 
   it('error: the old language comes back, nothing is remembered, one error row with the SQLSTATE', async () => {
     const { state, io } = harness(answer({ data: null, error: { code: '42501', message: 'permission denied for table profiles' } }))
-    expect(await saveAccountLanguage(io, 'en', 'ko')).toBe('error')
+    expect(await saveAccountLanguage(io, 'ko')).toBe('error')
     expect(state.language).toBe('en')
     expect(state.remembered).toEqual([])
     expect(rows).toHaveLength(1)
@@ -77,8 +81,8 @@ describe('saveAccountLanguage', () => {
   })
 
   it('no_row: an update that matched no row is a failure, not "saved"', async () => {
-    const { state, io } = harness(answer({ data: [], error: null }))
-    expect(await saveAccountLanguage(io, 'es', 'ko')).toBe('no_row')
+    const { state, io } = harness(answer({ data: [], error: null }), undefined, 'es')
+    expect(await saveAccountLanguage(io, 'ko')).toBe('no_row')
     expect(state.language).toBe('es')
     expect(state.remembered).toEqual([])
     expect(rows.map((r) => [r.event, r.context.outcome])).toEqual([['settings.language.save.error', 'no_row']])
@@ -89,8 +93,9 @@ describe('saveAccountLanguage', () => {
     afterEach(() => vi.useRealTimers())
 
     it('aborted: a write that never answers fails at the time limit and the old language comes back', async () => {
-      const { state, io } = harness(() => new Promise<LanguageWriteResult>(() => {}), 1000)
-      const done = saveAccountLanguage(io, null, 'ko')
+      const { state, io } = harness(() => new Promise<LanguageWriteResult>(() => {}), 1000, null)
+      const done = saveAccountLanguage(io, 'ko')
+      await vi.advanceTimersByTimeAsync(0)
       expect(state.language).toBe('ko')
       await vi.advanceTimersByTimeAsync(1000)
       expect(await done).toBe('aborted')
@@ -107,11 +112,34 @@ describe('saveAccountLanguage', () => {
           }),
         1000
       )
-      const done = saveAccountLanguage(io, 'en', 'ko')
+      const done = saveAccountLanguage(io, 'ko')
       await vi.advanceTimersByTimeAsync(1000)
       expect(await done).toBe('aborted')
       expect(state.language).toBe('en')
     })
+  })
+})
+
+describe('no profile in memory', () => {
+  it('no_profile: nothing is written, nothing applied, one error row — the screen could not show it', async () => {
+    const { state, io } = harness(answer({ data: [{ id: 'u1' }], error: null }))
+    io.ensureProfile = async () => false
+    expect(await saveAccountLanguage(io, 'ko')).toBe('no_profile')
+    expect(state.writes).toBe(0)
+    expect(state.applied).toEqual([])
+    expect(state.remembered).toEqual([])
+    expect(rows.map((r) => [r.event, r.context.outcome, r.context.error_code])).toEqual([['settings.language.save.error', 'no_profile', 'no_profile']])
+  })
+
+  it('a profile read first (ensureProfile) gives the language to take back to', async () => {
+    const { state, io } = harness(answer({ data: null, error: { message: 'boom' } }), undefined, null)
+    io.ensureProfile = async () => {
+      state.language = 'vi'
+      return 'vi'
+    }
+    expect(await saveAccountLanguage(io, 'ko')).toBe('error')
+    expect(state.language).toBe('vi')
+    expect(rows[0].context.from).toBe('vi')
   })
 })
 

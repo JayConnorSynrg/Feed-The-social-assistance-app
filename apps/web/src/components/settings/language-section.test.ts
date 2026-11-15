@@ -12,6 +12,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
+// The mini hook runtime drives LanguageSection itself (its state and the select's onChange);
+// outside mount() hooks fall through to React, so renderToStaticMarkup still renders.
+vi.mock('react', async (orig) => (await import('@/test/mini-react')).miniReact(await orig()))
+
 const auth = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
 vi.mock('@/hooks/use-auth', () => ({ useAuth: () => auth.value }))
 vi.mock('@/lib/logger', async () => {
@@ -25,6 +29,7 @@ vi.mock('@/lib/logger', async () => {
 })
 
 import { LanguageSection, SaveStatusLines } from './language-section'
+import { mount, findAll } from '@/test/mini-react'
 import { accountLanguageIo } from '@/providers/auth-provider'
 import { saveAccountLanguage } from '@/lib/language-save'
 import { resolveProfileLocale } from '@/lib/i18n'
@@ -59,7 +64,7 @@ function fakeClient(answer: { data: unknown[] | null; error: { message: string; 
       return { abortSignal: async () => ({ data: null, error: null }) }
     },
   }
-  return { client: client as unknown as Parameters<typeof accountLanguageIo>[0], calls }
+  return { client: client as unknown as Parameters<typeof accountLanguageIo>[0]['supabase'], calls }
 }
 
 /** AuthProvider's state for one member, and its saveLanguage wired as the provider wires it. */
@@ -79,8 +84,15 @@ function member(answer: Parameters<typeof fakeClient>[0]) {
       profile: holder.profile,
       saveLanguage: (code: string) =>
         saveAccountLanguage(
-          accountLanguageIo(client, 'u1', setProfile, setOrigin),
-          (holder.profile as { preferred_language?: string | null } | null)?.preferred_language ?? null,
+          accountLanguageIo({
+            supabase: client,
+            userId: 'u1',
+            setProfile,
+            setProfileOrigin: setOrigin,
+            ensureProfile: async () => (holder.profile as { preferred_language?: string | null } | null)?.preferred_language ?? null,
+            isCurrentUser: () => true,
+            pending: { current: null },
+          }),
           code
         ),
     }
@@ -170,5 +182,43 @@ describe('Settings › Language', () => {
     expect(html).toMatch(/<section lang="vi"/)
     expect(html).toContain('<option value="vi" selected="">')
     expect(html).toContain('Chỉ lưu trên thiết bị này.')
+  })
+})
+
+describe('what the member sees after a choice (the save outcome, mapped to the message)', () => {
+  beforeEach(() => vi.stubGlobal('localStorage', { getItem: () => null }))
+  afterEach(() => vi.unstubAllGlobals())
+
+  /** Mount the section, pick 한국어, and return the message lines as rendered. */
+  async function choose(outcome: string, profileAfter: Record<string, unknown>) {
+    const saveLanguage = vi.fn(async () => {
+      // The provider has applied (ok) or taken back (failure) the language by the time it answers.
+      auth.value = { ...auth.value, profile: profileAfter }
+      return outcome
+    })
+    auth.value = { user: { id: 'u1' }, isAnonymous: false, profile: { id: 'u1', preferred_language: 'en' }, saveLanguage }
+    const m = mount(() => LanguageSection())
+    const select = findAll(m.tree(), (el) => el.type === 'select')[0]
+    ;(select.props.onChange as (e: { target: { value: string } }) => void)({ target: { value: 'ko' } })
+    await m.flush()
+    m.rerender()
+    expect(saveLanguage).toHaveBeenCalledWith('ko')
+    const lines = findAll(m.tree(), (el) => el.type === SaveStatusLines)[0].props as Parameters<typeof SaveStatusLines>[0]
+    return { lines, html: renderToStaticMarkup(createElement(SaveStatusLines, lines)) }
+  }
+
+  it.each(['no_row', 'aborted', 'error', 'no_profile'])('%s: the failure line in the language still in effect, never "Language saved"', async (outcome) => {
+    const { lines, html } = await choose(outcome, { id: 'u1', preferred_language: 'en' })
+    expect(lines.status).toBe('failed')
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('Your language could not be saved. FEED is still in <span lang="en" dir="ltr">English</span>.')
+    expect(html).not.toContain('Language saved')
+  })
+
+  it('ok: "Language saved", in the new language, and no failure line', async () => {
+    const { lines, html } = await choose('ok', { id: 'u1', preferred_language: 'ko' })
+    expect(lines).toMatchObject({ status: 'saved', locale: 'ko', saving: false })
+    expect(html).toContain('언어가 저장되었습니다')
+    expect(html).not.toContain('role="alert"')
   })
 })
