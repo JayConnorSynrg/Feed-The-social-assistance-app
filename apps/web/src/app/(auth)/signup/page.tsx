@@ -1,6 +1,14 @@
 'use client'
 
-import { useState, useRef } from 'react'
+// apps/web/src/app/(auth)/signup/page.tsx
+// Sign up, in the visitor's language (useProfileLocale: the feed_locale cookie, else
+// Accept-Language), with lang/dir on the card's root; words from lib/i18n.ts t() and
+// lib/i18n-auth.ts. A failure line comes from the error's code, never its text; a failed sign-up,
+// resend or guest start writes one auth.signup.failed / auth.guest.failed row with the code only.
+// The Terms of Service / Privacy Policy row stays English (lang="en") until the legal pages exist.
+// The Supabase calls, their arguments and every redirect are the same in every language.
+
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
@@ -14,9 +22,35 @@ import { usePasswordStrength } from '@/hooks/use-password-strength'
 import { TurnstileWidget, type TurnstileWidgetHandle } from '@/components/auth/turnstile-widget'
 import { sanitizeInput } from '@/lib/security'
 import { logger } from '@/lib/logger'
+import { t, dir } from '@/lib/i18n'
+import { authT, passwordFeedbackKey, passwordTooLong, signUpFailureKey, strengthKey, type AuthKey } from '@/lib/i18n-auth'
+import { formatMessage, splitMessage } from '@/lib/format-message'
+import { failureCode } from '@/lib/failure-code'
+import { useProfileLocale } from '@/hooks/use-profile-locale'
+import { cn } from '@/lib/utils'
+import { announce, AnnouncementText, clearAnnouncement, NO_ANNOUNCEMENT, type Announcement } from '@/app/(admin)/moderation/row-focus'
+
+/** The input classes of this page: 3:1 border, readable placeholder. */
+const INPUT = 'bg-white/90 border-stone-500 text-stone-900 placeholder:text-stone-600 focus:border-lime-700 focus:ring-lime-500/20'
+/** A busy or unavailable button keeps focus (aria-disabled) and reads as unavailable in solid colours. */
+const UNAVAILABLE = 'bg-stone-200 text-stone-700 hover:bg-stone-200 cursor-not-allowed'
+
+/** "We've sent a link to {email}…": the address kept whole, left to right, inside the sentence. */
+function WithEmail({ template, email }: { template: string; email: string }) {
+  const [before, after] = splitMessage(template, 'email')
+  return (
+    <>
+      {before}
+      <strong dir="ltr">{email}</strong>
+      {after}
+    </>
+  )
+}
 
 export default function SignupPage() {
   const router = useRouter()
+  const locale = useProfileLocale()
+  const a = (key: AuthKey) => authT(locale, key)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,8 +58,21 @@ export default function SignupPage() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [acceptTerms, setAcceptTerms] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // The one alert region's text (always mounted on each view; one node per failure).
+  const [alertLine, setAlert] = useState<Announcement>(NO_ANNOUNCEMENT)
+  const setError = (text: string | null) => (text ? announce(setAlert, text) : clearAnnouncement(setAlert))
+  // "Check your email": a resend that worked is said in its own always-mounted status line.
+  const [resendStatus, setResendStatus] = useState<Announcement>(NO_ANNOUNCEMENT)
   const [success, setSuccess] = useState(false)
+  // The view switches (form ↔ "Check your email"): focus goes to the new view's heading.
+  const checkEmailRef = useRef<HTMLHeadingElement>(null)
+  const shownView = useRef(success)
+  useEffect(() => {
+    if (shownView.current === success) return
+    shownView.current = success
+    if (success) checkEmailRef.current?.focus()
+    else document.getElementById('email')?.focus()
+  }, [success])
   const [loading, setLoading] = useState(false)
   const [guestLoading, setGuestLoading] = useState(false)
   // Turnstile CAPTCHA token — undefined when no site key is set (no-op).
@@ -40,11 +87,13 @@ export default function SignupPage() {
   const { execute: executeRateLimited, isLimited } = useRateLimitedAction({
     limiterType: 'auth',
     identifier: email || 'anonymous',
-    onRateLimited: () => setError('Too many signup attempts. Please wait 15 minutes before trying again.'),
+    onRateLimited: () => setError(a('signupRateLimited')),
   })
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
+    // The submit button is aria-disabled (not disabled) while busy or locked: a press does nothing.
+    if (loading || isLimited) return
     setError(null)
 
     // SECURITY: Validate CSRF token before any auth action. The token is
@@ -55,23 +104,29 @@ export default function SignupPage() {
     // form was submitted by a cross-origin request or a forged page, not by
     // the legitimate session that generated the token.
     if (!validateCsrf(csrfToken || '')) {
-      setError('Security validation failed. Please refresh the page and try again.')
+      setError(a('securityCheckFailed'))
       return
     }
 
     // Validation
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      setError(a('passwordsMismatch'))
+      return
+    }
+
+    // The limit is in bytes (UTF-8), checked before any call.
+    if (passwordTooLong(password)) {
+      setError(a('passwordTooLong'))
       return
     }
 
     if (!passwordStrength.valid) {
-      setError('Password does not meet security requirements')
+      setError(a('passwordTooWeak'))
       return
     }
 
     if (!acceptTerms) {
-      setError('You must accept the terms of service')
+      setError(a('acceptTermsRequired'))
       return
     }
 
@@ -108,7 +163,8 @@ export default function SignupPage() {
 
         // Detect fake signup (user already exists) - Supabase returns user with empty identities
         if (data.user && data.user.identities && data.user.identities.length === 0) {
-          setError('An account with this email already exists. Please sign in instead.')
+          logger.warn('auth.signup.failed', { code: 'user_already_exists', step: 'signup' })
+          setError(a('accountExists'))
           return
         }
 
@@ -132,7 +188,9 @@ export default function SignupPage() {
           return
         }
         timer.error(err, { step: 'email_signup' })
-        setError(err instanceof Error ? err.message : 'An error occurred')
+        const code = failureCode(err)
+        logger.warn('auth.signup.failed', { code, step: 'signup' })
+        setError(a(signUpFailureKey(code, 'signupFailed', passwordTooLong(password))))
       } finally {
         setLoading(false)
         // Turnstile tokens are single-use — reset so any retry gets a fresh one.
@@ -147,7 +205,7 @@ export default function SignupPage() {
   }
 
   const handleResendConfirmation = async () => {
-    if (!email) return
+    if (!email || loading) return
     setLoading(true)
     setError(null)
 
@@ -163,8 +221,11 @@ export default function SignupPage() {
 
       if (error) throw error
       setError(null)
+      announce(setResendStatus, a('resendSent'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend confirmation email')
+      const code = failureCode(err)
+      logger.warn('auth.signup.failed', { code, step: 'resend' })
+      setError(a(signUpFailureKey(code, 'resendFailed')))
     } finally {
       setLoading(false)
       // Turnstile tokens are single-use — reset so any retry gets a fresh one.
@@ -174,6 +235,7 @@ export default function SignupPage() {
   }
 
   const handleGuestAccess = async () => {
+    if (loading || guestLoading) return
     setError(null)
     setGuestLoading(true)
     try {
@@ -191,13 +253,15 @@ export default function SignupPage() {
         router.refresh()
         return
       }
-      setError(err instanceof Error ? err.message : 'Unable to start guest session')
+      logger.warn('auth.guest.failed', { code: failureCode(err), step: 'signup' })
+      setError(a('guestFailed'))
     } finally {
       setGuestLoading(false)
     }
   }
 
   const handleOAuthSignup = async (provider: 'google' | 'apple') => {
+    if (loading) return
     setError(null)
     setLoading(true)
 
@@ -213,11 +277,12 @@ export default function SignupPage() {
       })
 
       if (error) {
-        logger.error('oauth.start.error', error, { provider })
+        // Code only: the provider's message is neither stored nor shown.
+        logger.error('oauth.start.error', { code: failureCode(error) }, { provider })
         throw error
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch {
+      setError(a('oauthStartFailed'))
       setLoading(false)
     }
   }
@@ -225,6 +290,8 @@ export default function SignupPage() {
   if (success) {
     return (
       <div
+        lang={locale}
+        dir={dir(locale)}
         className="min-h-screen flex items-center justify-center p-4 relative"
         style={{
           backgroundImage: 'url(/images/wheat-field-bg.jpg)',
@@ -237,49 +304,52 @@ export default function SignupPage() {
 
         <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold text-lime-800">Check Your Email</CardTitle>
-            <CardDescription className="text-stone-600">
-              We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click the link to verify your account.
+            <CardTitle className="text-2xl font-bold text-lime-800">
+              <span ref={checkEmailRef} tabIndex={-1} className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-lime-700">{a('checkEmailTitle')}</span>
+            </CardTitle>
+            <CardDescription className="text-stone-700 break-words">
+              <WithEmail template={a('checkEmailSent')} email={email} />
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
-            {error && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-                {error}
-              </div>
-            )}
-            <div className="text-sm text-stone-500 space-y-2">
-              <p>Didn&apos;t receive it? Check your spam/junk folder.</p>
-              <p>Make sure <strong>{email}</strong> is correct.</p>
+            <div role="alert" className={alertLine.text ? 'bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md' : undefined}>
+              <AnnouncementText announcement={alertLine} />
+            </div>
+            <p role="status" className="text-sm text-green-800">
+              <AnnouncementText announcement={resendStatus} />
+            </p>
+            <div className="text-sm text-stone-700 space-y-2 break-words">
+              <p>{a('checkSpam')}</p>
+              <p><WithEmail template={a('confirmEmailCorrect')} email={email} /></p>
             </div>
             <TurnstileWidget
               ref={turnstileRef}
               onVerify={setCaptchaToken}
               onExpireOrError={() => setCaptchaToken(undefined)}
             />
-            <div className="flex gap-2 justify-center">
+            <div className="flex flex-wrap gap-2 justify-center">
               <Button
                 variant="outline"
-                className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
+                className="border-stone-500 bg-white/90 hover:bg-lime-100 text-stone-800"
                 onClick={handleResendConfirmation}
-                disabled={loading}
+                aria-disabled={loading}
               >
-                {loading ? 'Sending...' : 'Resend Email'}
+                {loading ? a('sending') : a('resendEmail')}
               </Button>
               <Button
                 variant="ghost"
-                className="text-stone-500 hover:text-stone-700"
+                className="text-stone-700 hover:text-stone-900"
                 onClick={() => setSuccess(false)}
               >
-                Use Different Email
+                {a('useDifferentEmail')}
               </Button>
             </div>
           </CardContent>
           <CardFooter className="flex justify-center text-sm pt-4">
-            <div className="text-stone-500">
-              Already have an account?{' '}
-              <Link href="/login" className="text-lime-700 font-semibold hover:underline">
-                Sign in
+            <div className="text-stone-700">
+              {a('haveAccount')}{' '}
+              <Link href="/login" className="text-lime-800 font-semibold underline">
+                {t(locale, 'signIn')}
               </Link>
             </div>
           </CardFooter>
@@ -290,6 +360,8 @@ export default function SignupPage() {
 
   return (
     <div
+      lang={locale}
+      dir={dir(locale)}
       className="min-h-screen flex items-center justify-center p-4 relative"
       style={{
         backgroundImage: 'url(/images/wheat-field-bg.jpg)',
@@ -303,98 +375,112 @@ export default function SignupPage() {
 
       <Card className="w-full max-w-md relative z-10 bg-stone-50/95 text-stone-800 backdrop-blur-sm border-lime-200/60 shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-lime-800">Join FEED</CardTitle>
-          <CardDescription className="text-stone-600">
-            Create an account to access community resources and support
+          <CardTitle className="text-2xl font-bold text-lime-800">{a('joinTitle')}</CardTitle>
+          <CardDescription className="text-stone-700">
+            {a('joinSubtitle')}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4 bg-lime-50/30 mx-4 rounded-lg p-4 -mt-2">
-          {error && (
-            <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
-              {error}
-            </div>
-          )}
+          {/* One alert region, always mounted; each failure inserts a new node. */}
+          <div role="alert" className={alertLine.text ? 'bg-red-50 border border-red-700 text-red-800 text-sm p-3 rounded-md' : undefined}>
+            <AnnouncementText announcement={alertLine} />
+          </div>
 
           {isLimited && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm p-3 rounded-md">
-              Too many signup attempts. Please wait 15 minutes before trying again.
+            <div className="bg-amber-50 border border-amber-700 text-amber-800 text-sm p-3 rounded-md">
+              {a('signupRateLimited')}
             </div>
           )}
 
           <form onSubmit={handleSignup} className="space-y-4">
             {/* CSRF Token */}
             <input type="hidden" name="csrf_token" value={csrfToken || ''} />
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label htmlFor="firstName" className="text-sm font-medium text-stone-700">
-                  First Name
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2 min-w-0">
+                <label htmlFor="firstName" className="block text-sm font-medium text-stone-800">
+                  {a('firstName')}
                 </label>
                 <Input
                   id="firstName"
                   type="text"
-                  placeholder="First name"
+                  dir="auto"
+                  autoComplete="given-name"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
-                  disabled={loading}
-                  className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                  aria-required="true"
+                  aria-describedby="firstName-hint"
+                  readOnly={loading}
+                  className={INPUT}
                 />
-                <p className="text-[11px] text-stone-500">Public — shown to the community</p>
+                <p id="firstName-hint" className="text-xs text-stone-700">{a('firstNameHint')}</p>
               </div>
-              <div className="space-y-2">
-                <label htmlFor="lastName" className="text-sm font-medium text-stone-700">
-                  Last Name
+              <div className="space-y-2 min-w-0">
+                <label htmlFor="lastName" className="block text-sm font-medium text-stone-800">
+                  {a('lastName')}
                 </label>
                 <Input
                   id="lastName"
                   type="text"
-                  placeholder="Last name"
+                  dir="auto"
+                  autoComplete="family-name"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  disabled={loading}
-                  className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                  aria-describedby="lastName-hint"
+                  readOnly={loading}
+                  className={INPUT}
                 />
-                <p className="text-[11px] text-stone-500">Private — shared only with a helper you message</p>
+                <p id="lastName-hint" className="text-xs text-stone-700">{a('lastNameHint')}</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium text-stone-700">
-                Email
+              <label htmlFor="email" className="block text-sm font-medium text-stone-800">
+                {t(locale, 'emailLabel')}
               </label>
               <Input
                 id="email"
                 type="email"
+                dir="ltr"
+                autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={loading}
-                className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                aria-required="true"
+                readOnly={loading}
+                className={INPUT}
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium text-stone-700">
-                Password
+              <label htmlFor="password" className="block text-sm font-medium text-stone-800">
+                {t(locale, 'passwordLabel')}
               </label>
               <Input
                 id="password"
                 type="password"
-                placeholder="At least 12 characters"
+                dir="ltr"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={loading}
+                aria-required="true"
+                aria-describedby="password-hint password-strength"
+                readOnly={loading}
                 minLength={12}
-                className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                className={INPUT}
               />
-              {/* Password Strength Indicator */}
-              {password && (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-stone-200 rounded-full overflow-hidden">
+              <p id="password-hint" className="text-xs text-stone-700">{a('signupPasswordHint')}</p>
+              {/* Password strength. The bar is decoration; the line says it. The line is one polite
+                  live region, always mounted, whose text changes only when the strength word
+                  changes — so it speaks once per change, not per keystroke. The block (line and
+                  hints) also describes the field. */}
+              <div id="password-strength" className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {password && (
+                    <div aria-hidden="true" className="flex-1 h-2 bg-stone-200 rounded-full overflow-hidden">
                       <div
                         className="h-full transition-all duration-300"
                         style={{
@@ -403,47 +489,54 @@ export default function SignupPage() {
                         }}
                       />
                     </div>
-                    <span className="text-xs font-medium" style={{ color: passwordStrength.color }}>
-                      {passwordStrength.strength}
-                    </span>
-                  </div>
-                  {passwordStrength.feedback.length > 0 && (
-                    <ul className="text-xs text-stone-500 space-y-0.5 ml-1">
-                      {passwordStrength.feedback.map((msg, i) => (
-                        <li key={i}>• {msg}</li>
-                      ))}
-                    </ul>
                   )}
+                  <span aria-live="polite" aria-atomic="true" className="text-xs font-medium text-stone-800">
+                    {password ? formatMessage(a('passwordStrength'), { strength: a(strengthKey(passwordStrength.strength)) }) : ''}
+                  </span>
                 </div>
-              )}
+                {password && passwordStrength.feedback.length > 0 && (
+                  <ul className="text-xs text-stone-700 space-y-0.5 ms-1">
+                    {passwordStrength.feedback.map((msg) => passwordFeedbackKey(msg)).filter((k): k is AuthKey => k !== null).map((key) => (
+                      <li key={key}>• {a(key)}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium text-stone-700">
-                Confirm Password
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-stone-800">
+                {a('confirmPassword')}
               </label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Confirm your password"
+                dir="ltr"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                disabled={loading}
-                className="bg-white/90 border-lime-300 text-stone-900 placeholder:text-stone-400 focus:border-lime-600 focus:ring-lime-500/20"
+                aria-required="true"
+                readOnly={loading}
+                className={INPUT}
               />
             </div>
 
-            <div className="flex items-start space-x-2">
+            {/* Terms of Service / Privacy Policy: placeholder copy until the legal pages exist, so it
+                stays English and is marked so. */}
+            <div lang="en" dir="ltr" className="flex items-start gap-2">
               <input
                 id="terms"
                 type="checkbox"
                 checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-lime-300"
-                disabled={loading}
+                onChange={(e) => {
+                  if (!loading) setAcceptTerms(e.target.checked)
+                }}
+                aria-required="true"
+                aria-disabled={loading}
+                className="mt-0.5 h-6 w-6 flex-shrink-0 rounded border-stone-500 accent-lime-700"
               />
-              <label htmlFor="terms" className="text-sm text-stone-500">
+              <label htmlFor="terms" className="text-sm text-stone-700">
                 I agree to the{' '}
                 <a href="#terms" className="text-lime-700 hover:underline" onClick={(e) => { e.preventDefault(); alert('Terms of Service coming soon.') }}>
                   Terms of Service
@@ -463,10 +556,13 @@ export default function SignupPage() {
 
             <Button
               type="submit"
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
-              disabled={loading || isLimited || (password.length > 0 && !passwordStrength.valid)}
+              className={cn(
+                'w-full h-auto min-h-9 whitespace-normal bg-green-700 hover:bg-green-800 text-white font-medium',
+                (isLimited || (password.length > 0 && !passwordStrength.valid)) && UNAVAILABLE
+              )}
+              aria-disabled={loading || isLimited || (password.length > 0 && !passwordStrength.valid)}
             >
-              {loading ? 'Creating account...' : isLimited ? 'Locked - Wait 15 minutes' : 'Create Account'}
+              {loading ? a('creatingAccount') : isLimited ? a('lockedWait') : a('createAccount')}
             </Button>
           </form>
 
@@ -475,8 +571,8 @@ export default function SignupPage() {
               <span className="w-full border-t border-lime-300" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-lime-50/80 px-2 text-stone-500">
-                Or continue with
+              <span className="bg-lime-50 px-2 text-stone-700">
+                {a('orContinueWith')}
               </span>
             </div>
           </div>
@@ -484,11 +580,11 @@ export default function SignupPage() {
           <div className="grid grid-cols-2 gap-4">
             <Button
               variant="outline"
-              className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
+              className="border-stone-500 bg-white/90 hover:bg-lime-100 text-stone-800"
               onClick={() => handleOAuthSignup('google')}
-              disabled={loading}
+              aria-disabled={loading}
             >
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="me-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -510,11 +606,11 @@ export default function SignupPage() {
             </Button>
             <Button
               variant="outline"
-              className="border-lime-300 bg-white/90 hover:bg-lime-100 text-stone-700"
+              className="border-stone-500 bg-white/90 hover:bg-lime-100 text-stone-800"
               onClick={() => handleOAuthSignup('apple')}
-              disabled={loading}
+              aria-disabled={loading}
             >
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="me-2 h-4 w-4" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
                   d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"
@@ -531,30 +627,30 @@ export default function SignupPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full border-lime-400 bg-lime-50 hover:bg-lime-100 text-lime-800 font-semibold py-2.5"
+              className="w-full h-auto min-h-9 whitespace-normal border-lime-700 bg-lime-50 hover:bg-lime-100 text-lime-800 font-semibold py-2.5"
               onClick={handleGuestAccess}
-              disabled={loading || guestLoading}
+              aria-disabled={loading || guestLoading}
               data-testid="guest-access-btn"
             >
-              <Eye className="mr-2 h-4 w-4" />
-              {guestLoading ? 'Opening...' : 'Find Help Now — no account needed'}
+              <Eye aria-hidden="true" className="me-2 h-4 w-4" />
+              {guestLoading ? a('opening') : t(locale, 'findHelpNow')}
             </Button>
-            <p className="text-xs text-stone-500 mt-1">Browse map, programs, and community resources instantly</p>
+            <p className="text-xs text-stone-700 mt-1">{a('guestHint')}</p>
           </div>
 
           <div className="relative w-full">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-stone-200" />
+              <span className="w-full border-t border-stone-300" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-stone-50/95 px-2 text-stone-400">or create an account</span>
+              <span className="bg-stone-50 px-2 text-stone-700">{a('orCreateAccount')}</span>
             </div>
           </div>
 
-          <div className="text-stone-500">
-            Already have an account?{' '}
-            <Link href="/login" className="text-lime-700 font-semibold underline hover:text-lime-900">
-              Sign in
+          <div className="text-stone-700">
+            {a('haveAccount')}{' '}
+            <Link href="/login" className="text-lime-800 font-semibold underline hover:text-lime-900">
+              {t(locale, 'signIn')}
             </Link>
           </div>
         </CardFooter>

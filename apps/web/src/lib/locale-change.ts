@@ -7,7 +7,7 @@
 //
 // Sources:
 //   cookie        the page loaded in the language of a valid feed_locale cookie
-//   boot          the page loaded with no usable cookie (English)
+//   boot          the page loaded with no usable cookie (the Accept-Language locale, else English)
 //   save          a save applied the language, or took it back when it failed
 //   profile_read  a profile read brought a supported preferred language
 //   fallback      a profile read (or sign-out) left no supported preferred language, so the

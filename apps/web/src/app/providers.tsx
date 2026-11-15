@@ -12,11 +12,15 @@ export function Providers({
   children,
   initialUser = null,
   initialLocale = null,
+  initialFromCookie = initialLocale !== null,
 }: {
   children: React.ReactNode
   initialUser?: InitialUser | null
-  /** The feed_locale cookie's locale, read by the root layout (null without a valid cookie). */
+  /** The request's locale, read by the root layout (lib/request-locale.ts: the feed_locale cookie,
+   *  else Accept-Language; null when neither names a FEED locale). */
   initialLocale?: Locale | null
+  /** The cookie decided initialLocale (false when Accept-Language did). */
+  initialFromCookie?: boolean
 }) {
   // One app-wide capture for uncaught errors + unhandled rejections -> app_logs.
   useEffect(() => installClientErrorCapture(window), [])
@@ -24,7 +28,7 @@ export function Providers({
   return (
     <AuthProvider initialUser={initialUser}>
       <InitialLocaleContext.Provider value={initialLocale ?? 'en'}>
-        <LocaleSync initialFromCookie={initialLocale !== null} />
+        <LocaleSync initialFromCookie={initialFromCookie} />
         <VaultProvider>
           {children}
         </VaultProvider>

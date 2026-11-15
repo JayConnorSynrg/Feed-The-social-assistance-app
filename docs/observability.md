@@ -455,6 +455,26 @@ Paths that already wrote a row get none added: approve / reject / update of a re
 (`admin.resource.*`, `admin.business.*` via `privilegedRpc` / `withMetric` / `logger.error`), a resource
 save (`admin.resource.save`), and the business reads (`business.pending.fetch`, `business.admin.list.fetch`).
 
+## Sign-in, sign-up and password failures (P6 W6)
+
+Sign in, sign up, forgot / reset password and the two-factor prompt are in the visitor's language
+(`lib/i18n-auth.ts`). A failure shows a translated line chosen from the error's code (Supabase
+`AuthError.code`, else the error's class — `lib/failure-code.ts`); Supabase's own text is neither
+shown nor stored. Where nothing recorded the failure before, one row is written with the code only:
+
+| Event | Labels | When |
+|---|---|---|
+| `auth.signup.failed` | `code`, `step` (`signup` · `resend`) | warn: `auth.signUp` or `auth.resend` failed, or sign-up answered with an existing account (`code` = `user_already_exists`) (`app/(auth)/signup/page.tsx`) |
+| `auth.guest.failed` | `code`, `step` (`login` · `signup`: the page the guest button was on) | warn: `auth.signInAnonymously` failed |
+| `auth.password.failed` | `code`, `step` (`forgot` · `reset`) | warn: `auth.resetPasswordForEmail` or `auth.updateUser({ password })` failed (an abort or the 8-second timeout counts as success, as before) |
+
+Paths that already wrote a row get none added: a refused password sign-in is recorded server-side by
+`/api/auth/check-lockout` (`record_attempt`); an OAuth start failure writes `oauth.start.error`, which
+now carries `provider` and `error_code` only (no `error_message`); the OAuth callback writes its
+`oauth.callback.*` rows. A form's own checks (passwords differ, terms not accepted, CSRF) are not
+failures of a call and write nothing. The `AUTH_LOGIN_SUCCESS` audit row carries `method` only (no
+email address: the audit log is admin-readable).
+
 ## Naming convention
 
 Operations use dot-namespacing (`namespace.verb`), lowercase. Duration is always `duration_ms` (integer).
