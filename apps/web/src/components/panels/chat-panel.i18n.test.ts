@@ -296,13 +296,31 @@ describe('the conversation, for assistive technology and input methods', () => {
   const reply = (over: Record<string, unknown> = {}) => ({ id: 'a1', role: 'assistant', content: 'Bonjour', timestamp: new Date('2026-10-09T19:05:00Z'), model: 'm', isStreaming: false, ...over })
   const mine = { id: 'u1', role: 'user', content: 'Salut', timestamp: new Date('2026-10-09T19:04:00Z') }
 
-  it('the list is a polite log; while a reply streams it is busy and the reply is hidden until complete', () => {
+  it('the list is a polite log; while a reply streams it is busy and its WHOLE bubble is inert', () => {
     const streaming = html('fr', { messages: [mine, reply({ isStreaming: true, content: 'Bon' })] })
     expect(streaming).toMatch(/role="log" aria-live="polite" aria-relevant="additions" aria-busy="true" aria-label="Conversation"/)
-    expect(streaming).toContain('<div lang="" dir="auto" aria-hidden="true" class="text-base">')
+    // One inert element: the assistant bubble, holding the words, the time and the model line.
+    const inert = [...streaming.matchAll(/<div inert=""[^>]*>/g)]
+    expect(inert).toHaveLength(1)
+    expect(inert[0][0]).toContain('bg-muted rounded-es-md')
+    const bubble = streaming.slice(streaming.indexOf(inert[0][0]))
+    expect(bubble.indexOf('Bon')).toBeGreaterThan(0)
+    expect(bubble.indexOf('\u2068m\u2069')).toBeGreaterThan(0)
+    // The member's own bubble is never inert.
+    expect(streaming).toMatch(/<div class="max-w-\[80%\][^"]*bg-brand text-white/)
     const done = html('fr', { messages: [mine, reply()] })
     expect(done).toMatch(/role="log"[^>]*aria-busy="false"/)
-    expect(done).not.toContain('aria-hidden="true" class="text-base"')
+    expect(done).not.toContain('inert=')
+    // Complete: its quick replies are in the bubble and can take focus.
+    expect(done).toContain(assistantT('fr', 'replyFindMore'))
+  })
+
+  it('a failed (empty) reply is not shown: no empty bubble or quick replies beside the error banner', () => {
+    const out = html('es', { messages: [mine, reply({ content: '', isStreaming: false })], error: 'boom' })
+    expect(out).toContain('data-testid="chat-error-banner"')
+    expect(out).not.toContain('bg-muted rounded-es-md')
+    expect(out).not.toContain(assistantT('es', 'replyFindMore'))
+    expect(out).toContain('Salut')
   })
 
   it('a completed reply is a new element in the log (re-keyed), so it is announced once, whole', () => {
@@ -348,5 +366,36 @@ describe('the conversation, for assistive technology and input methods', () => {
     expect(out).toContain('<div class="flex flex-wrap items-start gap-2">')
     expect(out).toContain('<h4 class="font-semibold text-base text-stone-900 break-words">')
     expect(out).toMatch(/<div lang="ru" dir="ltr" class="flex flex-wrap gap-1">/)
+  })
+})
+
+describe('when a guided flow completes, focus is never left on the page body', () => {
+  function completeFlow(authed: boolean) {
+    Object.assign(state, { language: 'en', authed, messages: [] })
+    const m = mount(() => ChatPanel({}))
+    const composer = { focus: vi.fn(), disabled: !authed }
+    const input = findAll(m.tree(), (el) => typeof el.props.onKeyDown === 'function')[0]
+    ;(input.props.ref as { current: unknown }).current = composer
+    const card = findAll(m.tree(), (el) => typeof el.props.buttonRef === 'function')[2]
+    const cardEl = { focus: vi.fn() }
+    ;(card.props.buttonRef as (e: unknown) => void)(cardEl)
+    ;(card.props.onClick as () => void)()
+    m.rerender()
+    const [flow] = findAll(m.tree(), (el) => el.type === GuidedFlowComponent)
+    void (flow.props.onComplete as (a: Record<string, string>, r: string) => Promise<void>)({ 'form-type': 'snap' }, '')
+    m.rerender()
+    return { composer, cardEl }
+  }
+
+  it('a member: focus goes to the message box', () => {
+    const { composer, cardEl } = completeFlow(true)
+    expect(composer.focus).toHaveBeenCalled()
+    expect(cardEl.focus).not.toHaveBeenCalled()
+  })
+
+  it('a guest (message box disabled): focus goes back to the card that opened the flow', () => {
+    const { composer, cardEl } = completeFlow(false)
+    expect(composer.focus).not.toHaveBeenCalled()
+    expect(cardEl.focus).toHaveBeenCalled()
   })
 })

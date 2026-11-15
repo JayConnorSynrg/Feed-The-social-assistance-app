@@ -373,17 +373,19 @@ function ChatMessageView({ message, onQuickReply, onSaveResource, isResourceSave
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+      {/* While a reply streams the WHOLE bubble is inert — its words, time, model line and buttons can
+          neither be read aloud nor take focus. On completion the list re-keys it (one announcement
+          of the whole reply), and since nothing inside could hold focus, none is dropped. */}
       <div
+        inert={message.isStreaming || undefined}
         className={`max-w-[80%] rounded-2xl px-4 py-3 ${
           isUser
             ? 'bg-brand text-white rounded-ee-md'
             : 'bg-muted rounded-es-md'
         }`}
       >
-        {/* The member's or the assistant's own words: their own direction, no page language. While a
-            reply streams it is hidden from assistive technology (the list below re-adds it whole
-            when it completes), so a screen reader never reads it token by token. */}
-        <div lang="" dir="auto" aria-hidden={message.isStreaming ? true : undefined} className="text-base">
+        {/* The member's or the assistant's own words: their own direction, no page language. */}
+        <div lang="" dir="auto" className="text-base">
           {message.content
             ? parseMessageContent(message.content, {
                 onSave: onSaveResource ? handleSave : undefined,
@@ -562,7 +564,14 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   // The state the member typed when it was not one FEED can read (the notice under the cards).
   const [unknownState, setUnknownState] = useState<string | null>(null)
 
+  // When a flow completes, focus goes to the message box (or, when it is disabled for a guest, to
+  // the card that opened the flow) — never left on the page body.
+  const composerRef = useRef<HTMLInputElement>(null)
+  const focusAfterFlowRef = useRef(false)
+  const refocusComposerRef = useRef(false)
+
   const handleFlowComplete = useCallback(async (answers: Record<string, string>, aiResponse: string) => {
+    focusAfterFlowRef.current = true
     setSelectedFlow(null)
     setUnknownState(null)
 
@@ -651,9 +660,20 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
     setSelectedFlow(null)
   }
   useEffect(() => {
-    if (selectedFlow || !returnFocusRef.current) return
-    cardRefs.current[returnFocusRef.current]?.focus()
-    returnFocusRef.current = null
+    if (selectedFlow) return
+    if (returnFocusRef.current) {
+      cardRefs.current[returnFocusRef.current]?.focus()
+      returnFocusRef.current = null
+    } else if (focusAfterFlowRef.current) {
+      focusAfterFlowRef.current = false
+      const composer = composerRef.current
+      if (composer && !composer.disabled) {
+        composer.focus()
+        // The reply the flow sends switches the greeting to the conversation, which mounts the
+        // other message box: focus follows to it (below) instead of dropping to the body.
+        refocusComposerRef.current = true
+      } else if (launcherRef.current) cardRefs.current[launcherRef.current]?.focus()
+    }
   }, [selectedFlow])
 
   // Auto-scroll to bottom on new messages
@@ -780,6 +800,15 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
   // Show greeting or chat thread
   const showGreeting = messages.length === 0
 
+  // After a flow, the greeting's message box held focus; when the conversation replaces it, focus
+  // moves to the conversation's message box (only if it would otherwise be lost).
+  useEffect(() => {
+    if (!refocusComposerRef.current) return
+    refocusComposerRef.current = false
+    const active = typeof document === 'undefined' ? null : document.activeElement
+    if (active === null || active === document.body) composerRef.current?.focus()
+  }, [showGreeting])
+
   // Render guided flow if one is selected
   if (selectedFlow) {
     return (
@@ -866,6 +895,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             )}
             <div className="relative">
               <Input
+                ref={composerRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
@@ -912,7 +942,10 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
             aria-label={assistantT(locale, 'conversation')}
             className="flex-1 overflow-y-auto py-4"
           >
-            {messages.map((msg) => (
+            {/* A reply that ended empty (the request failed) is not shown: it has no words, and the
+                error banner below says what happened — so no empty bubble or quick replies are
+                announced beside it. A retry streams into the same message again. */}
+            {messages.filter((m) => m.role !== 'assistant' || m.isStreaming || m.content).map((msg) => (
               <ChatMessageView
                 key={`${msg.id}${msg.isStreaming ? ':streaming' : ''}`}
                 message={msg}
@@ -951,6 +984,7 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
           <div className="border-t pt-4 space-y-3">
             <div className="relative">
               <Input
+                ref={composerRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()}
