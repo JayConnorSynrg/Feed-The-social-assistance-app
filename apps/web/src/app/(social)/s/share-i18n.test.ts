@@ -74,7 +74,7 @@ import * as serverClient from '@/lib/supabase/server'
 import { messages, type Locale } from '@/lib/i18n'
 import { shareMessages, shareT } from '@/lib/i18n-share'
 import { ogCardAlt } from '@/lib/og-card-kinds'
-import { decodeEntities } from '@/test/markup-text'
+import { decodeEntities, withoutScripts } from '@/test/markup-text'
 import SocialLayout, { generateMetadata as layoutMetadata } from '../layout'
 import SocialNotFound from '../not-found'
 import { t } from '@/lib/i18n'
@@ -330,7 +330,7 @@ describe('Label in Name, all 14 locales', () => {
       const markup = await html(page)
       for (const [, attrs] of markup.matchAll(/<a\b([^>]*)>/g)) expect(attrs, page).not.toContain('aria-label')
       // No placeholder is left unfilled (the JSON-LD script is data, not text).
-      expect(decodeEntities(markup.replace(/<script[\s\S]*?<\/script>/g, ''))).not.toMatch(/\{\w+\}/)
+      expect(decodeEntities(withoutScripts(markup))).not.toMatch(/\{\w+\}/)
     }
   })
 })

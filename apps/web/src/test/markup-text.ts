@@ -18,3 +18,20 @@ export function markupText(s: string): string {
   } while (out !== prev)
   return decodeEntities(out).trim()
 }
+
+/** Removes every <script>…</script> block (any case) by index scanning, so no regex can miss a variant. */
+export function withoutScripts(s: string): string {
+  const lower = s.toLowerCase()
+  let out = ''
+  let i = 0
+  while (i < s.length) {
+    const start = lower.indexOf('<script', i)
+    if (start === -1) { out += s.slice(i); break }
+    out += s.slice(i, start)
+    const end = lower.indexOf('</script', start)
+    if (end === -1) break
+    const close = lower.indexOf('>', end)
+    i = close === -1 ? s.length : close + 1
+  }
+  return out
+}
