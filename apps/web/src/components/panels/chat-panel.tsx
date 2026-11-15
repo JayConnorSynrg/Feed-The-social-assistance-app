@@ -673,7 +673,14 @@ export function ChatPanel({ onNavigateToMap }: ChatPanelProps) {
         // The reply the flow sends switches the greeting to the conversation, which mounts the
         // other message box: focus follows to it (below) instead of dropping to the body.
         refocusComposerRef.current = true
-      } else if (launcherRef.current) cardRefs.current[launcherRef.current]?.focus()
+      } else {
+        // A visitor with no session (the greeting's box is disabled): focus goes back to the card,
+        // and when a message follows (Check Eligibility's result arrives after the screening) the
+        // conversation replaces the greeting and the card with it, so focus follows to the
+        // conversation's box. If nothing follows (a state FEED cannot read), the card keeps it.
+        if (launcherRef.current) cardRefs.current[launcherRef.current]?.focus()
+        refocusComposerRef.current = true
+      }
     }
   }, [selectedFlow])
 
